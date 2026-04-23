@@ -219,6 +219,7 @@ def handle_admin_reset(data):
 # ── 获取安全问题列表 ──────────────────────────────────────
 @socketio.on('get_questions_list')
 def handle_get_questions():
+    print('get_questions_list received')
     emit('questions_list', {'questions': SECURITY_QUESTIONS})
 
 # ── 房间：创建 ────────────────────────────────────────────

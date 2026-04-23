@@ -297,11 +297,22 @@ function switchTab(tab) {
   document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
   document.getElementById('tab-login').classList.toggle('active', tab === 'login');
   document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+  if (tab === 'register') loadQuestions();
 }
 
 function loadQuestions() {
   socket.emit('get_questions_list');
 }
+
+socket.on('questions_list', function(data) {
+  const sel = document.getElementById('reg-question');
+  sel.innerHTML = '<option value="">选择安全问题...</option>';
+  data.questions.forEach(q => {
+    const opt = document.createElement('option');
+    opt.value = q; opt.textContent = q;
+    sel.appendChild(opt);
+  });
+});
 
 function doLogin() {
   const username = document.getElementById('login-username').value.trim();
