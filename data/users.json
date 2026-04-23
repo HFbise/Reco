@@ -5,5 +5,12 @@
     "bio": "你好",
     "security_question": "你的出生城市是？",
     "security_answer": "邢台"
+  },
+  "test": {
+    "screenname": "test",
+    "password": "123456",
+    "bio": "",
+    "security_question": "你的出生城市是？",
+    "security_answer": "1"
   }
 }
