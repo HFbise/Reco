@@ -1,0 +1,17 @@
+{
+  "聊天": [
+    {
+      "username": "admin",
+      "screenname": "寒风",
+      "text": "诶？",
+      "room": "聊天"
+    },
+    {
+      "username": "admin",
+      "screenname": "寒风",
+      "text": "诶？",
+      "room": "聊天",
+      "time": "06:39"
+    }
+  ]
+}

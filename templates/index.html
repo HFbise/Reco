@@ -2,107 +2,630 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <title>聊天室</title>
+  <title>Reco</title>
   <style>
-body {
-  font-family: sans-serif;
-  max-width: 600px;
-  margin: 40px auto;
-  padding: 0 20px;
-  background: #ffffff;
-  color: #000000;
-  transition: background 0.3s, color 0.3s;
-}
-body.dark {
-  background: #1a1a2e;
-  color: #e0e0e0;
-}
-#messages {
-  border: 1px solid #ccc;
-  height: 400px;
-  overflow-y: auto;
-  padding: 10px;
-  margin-bottom: 10px;
-  border-radius: 8px;
-}
-body.dark #messages {
-  border-color: #444;
-  background: #16213e;
-}
-.msg { margin: 8px 0; word-break: break-word; white-space: pre-wrap; }
-.msg span { font-weight: bold; color: #555; }
-body.dark .msg span { color: #aaa; }
-#input-area { display: flex; gap: 8px; }
-#nickname {
-  width: 120px; padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: inherit;
-  color: inherit;
-}
-#msg {
-  flex: 1; padding: 8px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  background: inherit;
-  color: inherit;
-}
-body.dark #nickname, body.dark #msg {
-  border-color: #444;
-}
-button {
-  padding: 8px 16px;
-  background: #4f8ef7;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-#theme-btn {
-  float: right;
-  background: #888;
-  margin-bottom: 8px;
-}
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #f5f5f5; color: #222; transition: background 0.3s, color 0.3s; }
+    body.dark { background: #1a1a2e; color: #e0e0e0; }
+
+    /* ── 顶栏 ── */
+    #topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: #4f8ef7; color: white; }
+    #topbar h1 { font-size: 1.2rem; }
+    #topbar-right { display: flex; gap: 10px; align-items: center; }
+    #topbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+
+    /* ── 主体布局 ── */
+    #app { display: flex; flex-direction: row; height: calc(100vh - 48px); overflow: hidden; }
+    #sidebar { width: 220px; min-width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; overflow-y: auto; }
+    body.dark #sidebar { background: #16213e; border-color: #333; }
+    #chat-area { flex: 1; display: flex; flex-direction: row; min-width: 0; overflow: hidden; }
+    #chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    #members-sidebar { width: 180px; min-width: 180px; background: #fff; border-left: 1px solid #ddd; padding: 12px; overflow-y: auto; }
+    body.dark #members-sidebar { background: #16213e; border-color: #333; }
+    #members-sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+    .member-item { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+    .member-item:hover { background: #f0f0f0; }
+    body.dark .member-item:hover { background: #0f3460; }
+
+    /* ── 侧栏 ── */
+    #sidebar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+    body.dark #sidebar { background: #16213e; border-color: #333; }
+    #sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
+    #room-list { flex: 1; overflow-y: auto; }
+    .room-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
+    .room-item:hover { background: #f0f0f0; }
+    body.dark .room-item:hover { background: #0f3460; }
+    .room-item.active { background: #4f8ef7; color: white; }
+    #create-room-btn { padding: 8px; background: #4f8ef7; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
+
+    /* ── 聊天区 ── */
+    #chat-header { padding: 12px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+    body.dark #chat-header { border-color: #333; }
+    #admin-btn { background: #f0a500; color: white; margin-right: 8px; }
+    #close-room-btn { background: #e74c3c; color: white; }
+    #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+    .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); word-break: break-word; white-space: pre-wrap; }
+    body.dark .msg { background: #16213e; }
+    .msg.mine { align-self: flex-end; background: #4f8ef7; color: white; }
+    .msg.system { align-self: center; background: transparent; box-shadow: none; font-size: 0.8rem; color: #999; }
+    .msg .sender { font-size: 0.75rem; font-weight: bold; margin-bottom: 4px; color: #555; cursor: pointer; }
+    .msg.mine .sender { color: rgba(255,255,255,0.8); }
+    #input-area { padding: 12px 16px; border-top: 1px solid #ddd; display: flex; gap: 8px; }
+    body.dark #input-area { border-color: #333; }
+    #msg-input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 1rem; }
+    body.dark #msg-input { border-color: #444; }
+    #send-btn { padding: 10px 20px; background: #4f8ef7; color: white; border: none; border-radius: 8px; cursor: pointer; }
+    #no-room { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.1rem; min-width: 0; }
+
+    /* ── 弹窗通用 ── */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal.show { display: flex; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; }
+    body.dark .modal-box { background: #16213e; }
+    .modal-box h2 { margin-bottom: 16px; font-size: 1.2rem; }
+    .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 0.95rem; }
+    body.dark .modal-box input, body.dark .modal-box select, body.dark .modal-box textarea { border-color: #444; }
+    .modal-box button { width: 100%; padding: 10px; background: #4f8ef7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; margin-top: 4px; }
+    .modal-box .link-btn { background: none; color: #4f8ef7; font-size: 0.85rem; margin-top: 8px; }
+    .modal-box .danger-btn { background: #e74c3c; }
+    .error-msg { color: #e74c3c; font-size: 0.85rem; margin-bottom: 8px; }
+    .success-msg { color: #2ecc71; font-size: 0.85rem; margin-bottom: 8px; }
+    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+    .tab { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+    .tab.active { background: #4f8ef7; color: white; border-color: #4f8ef7; }
   </style>
 </head>
 <body>
-  <h2>💬 聊天室 <button id="theme-btn" onclick="toggleTheme()">🌙 夜间</button></h2>
-  <div id="messages"></div>
-  <div id="input-area">
-    <input id="nickname" type="text" placeholder="你的名字" />
-    <input id="msg" type="text" placeholder="输入消息..." />
-    <button onclick="sendMessage()">发送</button>
-  </div>
 
-  <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
-  <script>
-    const socket = io();
-    function toggleTheme() {
-  document.body.classList.toggle('dark');
-  const btn = document.getElementById('theme-btn');
-  btn.textContent = document.body.classList.contains('dark') ? '☀️ 白天' : '🌙 夜间';
+<!-- ── 顶栏 ── -->
+<div id="topbar">
+  <h1>Reco</h1>
+  <div id="topbar-right">
+    <span id="topbar-name"></span>
+    <button onclick="openProfile()">我的资料</button>
+    <button onclick="toggleTheme()">🌙</button>
+    <button id="logout-btn" onclick="logout()" style="display:none">登出</button>
+    <button id="login-open-btn" onclick="openAuth()">登录 / 注册</button>
+  </div>
+</div>
+
+<!-- ── 主体 ── -->
+<div id="app">
+  <div id="sidebar">
+    <h3>聊天室</h3>
+    <div id="room-list"></div>
+    <button id="create-room-btn" onclick="openCreateRoom()">＋ 创建房间</button>
+  </div>
+  <div id="chat-area">
+    <div id="no-room">← 选择或创建一个房间</div>
+    <div id="chat-main" style="display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden;">
+      <div id="chat-header">
+        <span id="chat-title"></span>
+        <div id="admin-controls" style="display:none; gap:8px; flex-shrink:0;">
+          <button id="admin-btn" onclick="openSetAdmin()" style="padding:6px 12px; background:#f0a500; color:white; border:none; border-radius:6px; cursor:pointer;">👑 设置管理员</button>
+          <button id="close-room-btn" onclick="confirmCloseRoom()" style="padding:6px 12px; background:#e74c3c; color:white; border:none; border-radius:6px; cursor:pointer;">🗑 关闭房间</button>
+        </div>
+      </div>
+      <div id="messages"></div>
+      <div id="input-area">
+        <input id="msg-input" type="text" placeholder="输入消息..." />
+        <button id="send-btn" onclick="sendMessage()">发送</button>
+      </div>
+    </div>
+    <div id="members-sidebar">
+      <h3>成员</h3>
+      <div id="member-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── 登录/注册弹窗 ── -->
+<div class="modal" id="auth-modal">
+  <div class="modal-box">
+    <div class="tabs">
+      <button class="tab active" id="tab-login" onclick="switchTab('login')">登录</button>
+      <button class="tab" id="tab-register" onclick="switchTab('register')">注册</button>
+    </div>
+
+    <!-- 登录 -->
+    <div id="login-form">
+      <div class="error-msg" id="login-error"></div>
+      <input id="login-username" type="text" placeholder="用户名" />
+      <input id="login-password" type="password" placeholder="密码" />
+      <button onclick="doLogin()">登录</button>
+      <button class="link-btn" onclick="openForgotPassword()">忘记密码？</button>
+    </div>
+
+    <!-- 注册 -->
+    <div id="register-form" style="display:none">
+      <div class="error-msg" id="register-error"></div>
+      <input id="reg-username" type="text" placeholder="用户名（登录用，不可更改）" />
+      <input id="reg-screenname" type="text" placeholder="显示名" />
+      <input id="reg-password" type="password" placeholder="密码（至少6位）" />
+      <textarea id="reg-bio" placeholder="个人简介（可选）" rows="2"></textarea>
+      <select id="reg-question"><option value="">选择安全问题...</option></select>
+      <input id="reg-answer" type="text" placeholder="安全问题答案" />
+      <button onclick="doRegister()">注册</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 忘记密码弹窗 ── -->
+<div class="modal" id="forgot-modal">
+  <div class="modal-box">
+    <h2>找回密码</h2>
+    <div class="error-msg" id="forgot-error"></div>
+    <div class="success-msg" id="forgot-success"></div>
+    <div id="forgot-step1">
+      <input id="forgot-username" type="text" placeholder="输入用户名" />
+      <button onclick="getForgotQuestion()">下一步</button>
+    </div>
+    <div id="forgot-step2" style="display:none">
+      <p id="forgot-question" style="margin-bottom:12px; font-size:0.95rem;"></p>
+      <input id="forgot-answer" type="text" placeholder="输入答案" />
+      <input id="forgot-newpw" type="password" placeholder="新密码（至少6位）" />
+      <button onclick="doResetPassword()">重置密码</button>
+    </div>
+    <button class="link-btn" onclick="closeForgot()">返回登录</button>
+  </div>
+</div>
+
+<!-- ── 个人资料弹窗 ── -->
+<div class="modal" id="profile-modal">
+  <div class="modal-box">
+    <h2>我的资料</h2>
+    <div class="error-msg" id="profile-error"></div>
+    <div class="success-msg" id="profile-success"></div>
+    <input id="profile-screenname" type="text" placeholder="显示名" />
+    <textarea id="profile-bio" placeholder="个人简介" rows="3"></textarea>
+    <button onclick="saveProfile()">保存</button>
+    <button class="link-btn" onclick="openChangePassword()">修改密码</button>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('profile-modal')">关闭</button>
+    <!-- 超级管理员专区 -->
+    <div id="super-admin-area" style="display:none; margin-top:16px; border-top:1px solid #ddd; padding-top:16px;">
+      <h3 style="font-size:0.9rem; margin-bottom:8px;">🔑 超级管理员</h3>
+      <div class="error-msg" id="admin-reset-error"></div>
+      <div class="success-msg" id="admin-reset-success"></div>
+      <input id="admin-reset-target" type="text" placeholder="输入要重置的用户名" />
+      <button class="danger-btn" onclick="doAdminReset()">重置该用户密码</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── 修改密码弹窗 ── -->
+<div class="modal" id="changepw-modal">
+  <div class="modal-box">
+    <h2>修改密码</h2>
+    <div class="error-msg" id="changepw-error"></div>
+    <div class="success-msg" id="changepw-success"></div>
+    <input id="old-password" type="password" placeholder="旧密码" />
+    <input id="new-password" type="password" placeholder="新密码（至少6位）" />
+    <input id="confirm-password" type="password" placeholder="确认新密码" />
+    <button onclick="doChangePassword()">确认修改</button>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('changepw-modal')">取消</button>
+  </div>
+</div>
+
+<!-- ── 查看他人资料弹窗 ── -->
+<div class="modal" id="view-profile-modal">
+  <div class="modal-box">
+    <h2 id="view-screenname"></h2>
+    <p id="view-bio" style="color:#888; font-size:0.95rem; margin-bottom:16px;"></p>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('view-profile-modal')">关闭</button>
+  </div>
+</div>
+
+<!-- ── 创建房间弹窗 ── -->
+<div class="modal" id="create-room-modal">
+  <div class="modal-box">
+    <h2>创建房间</h2>
+    <div class="error-msg" id="create-room-error"></div>
+    <input id="new-room-name" type="text" placeholder="房间名" />
+    <button onclick="doCreateRoom()">创建</button>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('create-room-modal')">取消</button>
+  </div>
+</div>
+
+<!-- ── 设置管理员弹窗 ── -->
+<div class="modal" id="set-admin-modal">
+  <div class="modal-box">
+    <h2>设置管理员</h2>
+    <div class="error-msg" id="set-admin-error"></div>
+    <div class="success-msg" id="set-admin-success"></div>
+    <input id="admin-target" type="text" placeholder="输入用户名" />
+    <button onclick="doSetAdmin()">设为管理员</button>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('set-admin-modal')">取消</button>
+  </div>
+</div>
+<script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+<script>
+const socket = io();
+let currentUser = null;
+let currentRoom = null;
+let isAdmin = false;
+
+// 恢复夜间模式
+if (localStorage.getItem('theme') === 'dark') {
+  document.body.classList.add('dark');
 }
 
-    socket.on('message', function(data) {
-      const div = document.getElementById('messages');
-      const msg = document.createElement('div');
-      msg.className = 'msg';
-      msg.innerHTML = `<span>${data.nickname}：</span>${data.text}`;
-      div.appendChild(msg);
-      div.scrollTop = div.scrollHeight;
-    });
+// 恢复登录状态
+const savedUser = localStorage.getItem('currentUser');
+if (savedUser) {
+  currentUser = JSON.parse(savedUser);
+  document.getElementById('topbar-name').textContent = currentUser.screenname;
+  document.getElementById('login-open-btn').style.display = 'none';
+  document.getElementById('logout-btn').style.display = '';
+}
 
-    function sendMessage() {
-      const nickname = document.getElementById('nickname').value || '匿名';
-      const text = document.getElementById('msg').value;
-      if (!text) return;
-      socket.emit('message', { nickname, text });
-      document.getElementById('msg').value = '';
-    }
+// 启动时获取房间列表
+socket.on('connect', function() {
+  socket.emit('get_rooms');
+});
 
-    document.getElementById('msg').addEventListener('keypress', function(e) {
-      if (e.key === 'Enter') sendMessage();
-    });
-  </script>
+socket.on('rooms_list', function(data) {
+  data.rooms.forEach(room => addRoomToList(room));
+});
+
+socket.on('members_list', function(data) {
+  const list = document.getElementById('member-list');
+  list.innerHTML = '';
+  data.members.forEach(m => {
+    const div = document.createElement('div');
+    div.style.cssText = 'padding:4px 8px; border-radius:6px; cursor:pointer;';
+    div.innerHTML = `${m.is_admin ? '👑 ' : ''}${m.screenname}`;
+    div.onclick = () => viewProfile(m.username);
+    list.appendChild(div);
+  });
+});
+
+// ── 主题 ────────────────────────────────────────────────
+function toggleTheme() {
+  document.body.classList.toggle('dark');
+  localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+}
+
+// ── 弹窗工具 ─────────────────────────────────────────────
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ── 登录/注册 ─────────────────────────────────────────────
+function openAuth() { openModal('auth-modal'); loadQuestions(); }
+
+function switchTab(tab) {
+  document.getElementById('login-form').style.display = tab === 'login' ? '' : 'none';
+  document.getElementById('register-form').style.display = tab === 'register' ? '' : 'none';
+  document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+  document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+}
+
+function loadQuestions() {
+  socket.emit('get_questions_list');
+}
+
+function doLogin() {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  document.getElementById('login-error').textContent = '';
+  socket.emit('login', { username, password });
+}
+
+socket.on('login_result', function(data) {
+  if (!data.success) {
+    document.getElementById('login-error').textContent = data.msg;
+    return;
+  }
+  currentUser = { username: data.username, screenname: data.screenname, is_super_admin: data.is_super_admin };
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  closeModal('auth-modal');
+  document.getElementById('topbar-name').textContent = data.screenname;
+  document.getElementById('login-open-btn').style.display = 'none';
+  document.getElementById('logout-btn').style.display = '';
+});
+
+function doRegister() {
+  const username = document.getElementById('reg-username').value.trim();
+  const screenname = document.getElementById('reg-screenname').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const bio = document.getElementById('reg-bio').value;
+  const security_question = document.getElementById('reg-question').value;
+  const security_answer = document.getElementById('reg-answer').value.trim();
+  document.getElementById('register-error').textContent = '';
+
+  if (!username) { document.getElementById('register-error').textContent = '请输入用户名'; return; }
+  if (!screenname) { document.getElementById('register-error').textContent = '请输入显示名'; return; }
+  if (!password) { document.getElementById('register-error').textContent = '请输入密码'; return; }
+  if (!security_question) { document.getElementById('register-error').textContent = '请选择安全问题'; return; }
+  if (!security_answer) { document.getElementById('register-error').textContent = '请输入安全问题答案'; return; }
+
+  socket.emit('register', { username, screenname, password, bio, security_question, security_answer });
+}
+socket.on('register_result', function(data) {
+  if (!data.success) {
+    document.getElementById('register-error').textContent = data.msg;
+    return;
+  }
+  document.getElementById('register-error').textContent = '';
+  switchTab('login');
+  document.getElementById('login-error').textContent = '';
+  alert('注册成功！请登录');
+});
+
+function logout() {
+  currentUser = null;
+  localStorage.removeItem('currentUser');
+  currentRoom = null;
+  isAdmin = false;
+  document.getElementById('topbar-name').textContent = '';
+  document.getElementById('login-open-btn').style.display = '';
+  document.getElementById('logout-btn').style.display = 'none';
+  document.getElementById('room-list').innerHTML = '';
+  document.getElementById('no-room').style.display = 'flex';
+  document.getElementById('chat-main').style.display = 'none';
+  document.getElementById('messages').innerHTML = '';
+}
+
+// ── 忘记密码 ──────────────────────────────────────────────
+function openForgotPassword() {
+  closeModal('auth-modal');
+  document.getElementById('forgot-step1').style.display = '';
+  document.getElementById('forgot-step2').style.display = 'none';
+  document.getElementById('forgot-error').textContent = '';
+  document.getElementById('forgot-success').textContent = '';
+  openModal('forgot-modal');
+}
+
+function closeForgot() {
+  closeModal('forgot-modal');
+  openModal('auth-modal');
+}
+
+function getForgotQuestion() {
+  const username = document.getElementById('forgot-username').value.trim();
+  socket.emit('get_security_question', { username });
+}
+
+socket.on('security_question_result', function(data) {
+  if (!data.success) {
+    document.getElementById('forgot-error').textContent = data.msg;
+    return;
+  }
+  document.getElementById('forgot-step1').style.display = 'none';
+  document.getElementById('forgot-step2').style.display = '';
+  document.getElementById('forgot-question').textContent = data.question;
+});
+
+function doResetPassword() {
+  const username = document.getElementById('forgot-username').value.trim();
+  const answer = document.getElementById('forgot-answer').value;
+  const new_password = document.getElementById('forgot-newpw').value;
+  socket.emit('reset_password', { username, answer, new_password });
+}
+
+socket.on('reset_password_result', function(data) {
+  if (!data.success) {
+    document.getElementById('forgot-error').textContent = data.msg;
+    return;
+  }
+  document.getElementById('forgot-success').textContent = '密码重置成功！';
+  setTimeout(() => { closeForgot(); }, 1500);
+});
+
+// ── 个人资料 ──────────────────────────────────────────────
+function openProfile() {
+  if (!currentUser) { openAuth(); return; }
+  document.getElementById('profile-screenname').value = currentUser.screenname;
+  document.getElementById('profile-error').textContent = '';
+  document.getElementById('profile-success').textContent = '';
+  document.getElementById('super-admin-area').style.display = currentUser.is_super_admin ? '' : 'none';
+  socket.emit('get_profile', { username: currentUser.username });
+  openModal('profile-modal');
+}
+
+socket.on('profile_result', function(data) {
+  if (data.success) {
+    document.getElementById('profile-bio').value = data.bio;
+  }
+});
+
+function saveProfile() {
+  const screenname = document.getElementById('profile-screenname').value.trim();
+  const bio = document.getElementById('profile-bio').value;
+  if (!screenname) { document.getElementById('profile-error').textContent = '显示名不能为空'; return; }
+  socket.emit('update_profile', { username: currentUser.username, screenname, bio });
+}
+
+socket.on('update_profile_result', function(data) {
+  if (!data.success) {
+    document.getElementById('profile-error').textContent = data.msg;
+    return;
+  }
+  currentUser.screenname = data.screenname;
+  document.getElementById('topbar-name').textContent = data.screenname;
+  document.getElementById('profile-success').textContent = '保存成功！';
+});
+
+// ── 查看他人资料 ──────────────────────────────────────────
+function viewProfile(username) {
+  socket.emit('get_profile', { username });
+  socket._viewingUsername = username;
+  openModal('view-profile-modal');
+}
+
+socket.on('profile_result', function(data) {
+  if (document.getElementById('view-profile-modal').classList.contains('show')) {
+    document.getElementById('view-screenname').textContent = data.screenname || '';
+    document.getElementById('view-bio').textContent = data.bio || '这个人很神秘，什么都没写';
+  } else {
+    if (data.success) document.getElementById('profile-bio').value = data.bio;
+  }
+});
+
+// ── 修改密码 ──────────────────────────────────────────────
+function openChangePassword() {
+  closeModal('profile-modal');
+  document.getElementById('changepw-error').textContent = '';
+  document.getElementById('changepw-success').textContent = '';
+  openModal('changepw-modal');
+}
+
+function doChangePassword() {
+  const old_password = document.getElementById('old-password').value;
+  const new_password = document.getElementById('new-password').value;
+  const confirm = document.getElementById('confirm-password').value;
+  if (new_password !== confirm) { document.getElementById('changepw-error').textContent = '两次密码不一致'; return; }
+  socket.emit('change_password', { username: currentUser.username, old_password, new_password });
+}
+
+socket.on('change_password_result', function(data) {
+  if (!data.success) { document.getElementById('changepw-error').textContent = data.msg; return; }
+  document.getElementById('changepw-success').textContent = '修改成功！';
+  setTimeout(() => closeModal('changepw-modal'), 1500);
+});
+
+// ── 超级管理员重置密码 ────────────────────────────────────
+function doAdminReset() {
+  const target_username = document.getElementById('admin-reset-target').value.trim();
+  socket.emit('admin_reset_password', { requester: currentUser.username, target_username });
+}
+
+socket.on('admin_reset_result', function(data) {
+  if (!data.success) { document.getElementById('admin-reset-error').textContent = data.msg; return; }
+  document.getElementById('admin-reset-success').textContent = data.msg;
+});
+
+// ── 房间 ──────────────────────────────────────────────────
+function openCreateRoom() {
+  if (!currentUser) { openAuth(); return; }
+  document.getElementById('create-room-error').textContent = '';
+  document.getElementById('new-room-name').value = '';
+  openModal('create-room-modal');
+}
+
+function doCreateRoom() {
+  const room = document.getElementById('new-room-name').value.trim();
+  if (!room) return;
+  socket.emit('create_room', { username: currentUser.username, room });
+}
+
+socket.on('create_room_result', function(data) {
+  if (!data.success) { document.getElementById('create-room-error').textContent = data.msg; return; }
+  closeModal('create-room-modal');
+  addRoomToList(data.room);
+  joinRoom(data.room);
+});
+
+function addRoomToList(room) {
+  const list = document.getElementById('room-list');
+  if (document.getElementById('room-' + room)) return;
+  const div = document.createElement('div');
+  div.className = 'room-item';
+  div.id = 'room-' + room;
+  div.textContent = '# ' + room;
+  div.onclick = () => joinRoom(room);
+  list.appendChild(div);
+}
+
+function joinRoom(room) {
+  if (!currentUser) { openAuth(); return; }
+  currentRoom = room;
+  socket.emit('join', { username: currentUser.username, screenname: currentUser.screenname, room });
+  document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
+  const el = document.getElementById('room-' + room);
+  if (el) el.classList.add('active');
+  document.getElementById('chat-title').textContent = '# ' + room;
+  document.getElementById('no-room').style.display = 'none';
+  document.getElementById('chat-main').style.display = 'flex';
+  document.getElementById('chat-main').style.flexDirection = 'column';
+  document.getElementById('messages').innerHTML = '';
+}
+
+socket.on('join_result', function(data) {
+  if (!data.success) { alert(data.msg); return; }
+  isAdmin = data.is_admin || (currentUser && currentUser.is_super_admin);
+  const controls = document.getElementById('admin-controls');
+  controls.style.display = isAdmin ? 'flex' : 'none';
+  socket.emit('get_members', { room: currentRoom });
+});
+
+// ── 消息 ──────────────────────────────────────────────────
+socket.on('message', function(data) {
+  const div = document.getElementById('messages');
+  const msg = document.createElement('div');
+  msg.className = 'msg' + (data.system ? ' system' : (currentUser && data.username === currentUser.username ? ' mine' : ''));
+
+  if (data.system) {
+    msg.textContent = data.text;
+  } else {
+    const sender = document.createElement('div');
+    sender.className = 'sender';
+    sender.textContent = data.screenname;
+    sender.onclick = () => viewProfile(data.username);
+    msg.appendChild(sender);
+    const text = document.createElement('div');
+    text.textContent = data.text;
+    msg.appendChild(text);
+    const time = document.createElement('div');
+    time.style.cssText = 'font-size:0.7rem; opacity:0.6; margin-top:4px; text-align:right;';
+    time.textContent = data.time || '';
+    msg.appendChild(time);
+  }
+
+  div.appendChild(msg);
+  div.scrollTop = div.scrollHeight;
+  if (data.system && currentRoom) {
+  socket.emit('get_members', { room: currentRoom });
+}
+});
+
+function sendMessage() {
+  if (!currentUser) { openAuth(); return; }
+  if (!currentRoom) return;
+  const text = document.getElementById('msg-input').value.trim();
+  if (!text) return;
+  socket.emit('message', { username: currentUser.username, screenname: currentUser.screenname, text, room: currentRoom });
+  document.getElementById('msg-input').value = '';
+}
+
+document.getElementById('msg-input').addEventListener('keypress', e => {
+  if (e.key === 'Enter') sendMessage();
+});
+
+// ── 管理员功能 ────────────────────────────────────────────
+function openSetAdmin() {
+  document.getElementById('set-admin-error').textContent = '';
+  document.getElementById('set-admin-success').textContent = '';
+  document.getElementById('admin-target').value = '';
+  openModal('set-admin-modal');
+}
+
+function doSetAdmin() {
+  const target = document.getElementById('admin-target').value.trim();
+  socket.emit('set_admin', { requester: currentUser.username, target, room: currentRoom });
+}
+
+socket.on('set_admin_result', function(data) {
+  if (!data.success) { document.getElementById('set-admin-error').textContent = data.msg; return; }
+  document.getElementById('set-admin-success').textContent = `${data.target} 已成为管理员`;
+});
+
+function confirmCloseRoom() {
+  console.log('closing room:', currentRoom);
+  if (confirm(`确定关闭房间 "${currentRoom}" 吗？所有人将被踢出。`)) {
+    socket.emit('close_room', { requester: currentUser.username, room: currentRoom });
+  }
+}
+
+socket.on('room_closed', function(data) {
+  const closedRoom = currentRoom;
+  currentRoom = null;
+  isAdmin = false;
+  document.getElementById('no-room').style.display = 'flex';
+  document.getElementById('chat-main').style.display = 'none';
+  document.getElementById('messages').innerHTML = '';
+  const el = document.getElementById('room-' + closedRoom);
+  if (el) el.remove();
+});
+</script>
 </body>
 </html>
