@@ -2,6 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Reco</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -99,14 +100,56 @@
     #create-room-btn:hover { background: #3a7be0; transition: background 0.15s; }
     .voice-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
     .tab:hover { background: rgba(79,142,247,0.15); transition: background 0.15s; }
+
+    /* ── 手机适配 ── */
+    #mobile-menu-btn, #mobile-members-btn { display: none; }
+
+    @media (max-width: 768px) {
+      #mobile-menu-btn, #mobile-members-btn { display: block; }
+      #topbar { padding: 8px 12px; min-height: 48px; flex-wrap: nowrap; }
+      #topbar h1 { font-size: 1rem; }
+      #topbar-right { gap: 6px; }
+      #topbar button { padding: 5px 8px; font-size: 0.82rem; }
+      #topbar-name { display: none; }
+
+      #sidebar {
+        position: fixed; left: 0; top: 48px; bottom: 0; z-index: 50;
+        transform: translateX(-100%); transition: transform 0.25s ease;
+        width: 260px; min-width: 0; box-shadow: 2px 0 12px rgba(0,0,0,0.18);
+      }
+      #sidebar.mobile-open { transform: translateX(0); }
+
+      #members-sidebar {
+        position: fixed; right: 0; top: 48px; bottom: 0; z-index: 50;
+        transform: translateX(100%); transition: transform 0.25s ease;
+        width: 220px; min-width: 0; box-shadow: -2px 0 12px rgba(0,0,0,0.18);
+      }
+      #members-sidebar.mobile-open { transform: translateX(0); }
+
+      #sidebar-overlay {
+        display: none; position: fixed; inset: 0; top: 48px;
+        background: rgba(0,0,0,0.45); z-index: 45;
+      }
+      #sidebar-overlay.show { display: block; }
+
+      #app { height: calc(100vh - 48px); height: calc(100dvh - 48px); }
+      #msg-input { font-size: 16px; }
+      #messages, #room-list, #member-list { -webkit-overflow-scrolling: touch; }
+
+      .modal-box { width: 94vw; max-width: 94vw; padding: 20px 16px; }
+    }
   </style>
 </head>
 <body>
 
 <!-- ── 顶栏 ── -->
 <div id="topbar">
-  <h1>Reco</h1>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <button id="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+    <h1>Reco</h1>
+  </div>
   <div id="topbar-right">
+    <button id="mobile-members-btn" onclick="toggleMembersBar()">👥</button>
     <span id="topbar-name"></span>
     <button onclick="openProfile()">我的资料</button>
     <button onclick="toggleTheme()">🌙</button>
@@ -114,6 +157,9 @@
     <button id="login-open-btn" onclick="openAuth()">登录 / 注册</button>
   </div>
 </div>
+
+<!-- ── 侧栏遮罩（手机用）── -->
+<div id="sidebar-overlay" onclick="closeAllSidebars()"></div>
 
 <!-- ── 主体 ── -->
 <div id="app">
@@ -608,6 +654,7 @@ function joinRoom(room) {
   document.getElementById('chat-main').style.display = 'flex';
   document.getElementById('chat-main').style.flexDirection = 'column';
   document.getElementById('messages').innerHTML = '';
+  closeAllSidebars();
 }
 
 socket.on('join_result', function(data) {
@@ -710,6 +757,10 @@ async function toggleVoice() {
 }
 
 async function joinVoice() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert('语音功能需要 HTTPS 连接，直接用 IP 地址访问时不可用。\n请通过 https:// 地址访问本站。');
+    return;
+  }
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     
@@ -967,6 +1018,29 @@ socket.on('voice_banned', function(data) {
     if (icon) icon.textContent = '🚫';
   }
 });
+
+// ── 手机侧栏切换 ─────────────────────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const isOpen = sidebar.classList.contains('mobile-open');
+  document.getElementById('members-sidebar').classList.remove('mobile-open');
+  sidebar.classList.toggle('mobile-open', !isOpen);
+  document.getElementById('sidebar-overlay').classList.toggle('show', !isOpen);
+}
+
+function toggleMembersBar() {
+  const membersBar = document.getElementById('members-sidebar');
+  const isOpen = membersBar.classList.contains('mobile-open');
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  membersBar.classList.toggle('mobile-open', !isOpen);
+  document.getElementById('sidebar-overlay').classList.toggle('show', !isOpen);
+}
+
+function closeAllSidebars() {
+  document.getElementById('sidebar').classList.remove('mobile-open');
+  document.getElementById('members-sidebar').classList.remove('mobile-open');
+  document.getElementById('sidebar-overlay').classList.remove('show');
+}
 
 </script>
 </body>
