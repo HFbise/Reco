@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import json
 from datetime import datetime
-from flask import Flask, render_template, session
+from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -27,11 +27,41 @@ SECURITY_QUESTIONS = [
 SUPER_ADMIN = "admin"
 DEFAULT_PASSWORD = "reco1234"
 
-# ── 内存中的房间语音状态 ──────────────────────────────────
+# ── 内存状态 ─────────────────────────────────────────────
 rooms_voice = {}
+online_users = {}        # { username: set of sids }
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+
+# ── 在线状态 ─────────────────────────────────────────────
+@socketio.on('user_online')
+def handle_user_online(data):
+    username = data['username']
+    if username not in online_users:
+        online_users[username] = set()
+    online_users[username].add(request.sid)
+    socketio.emit('online_status_changed', {'username': username, 'online': True})
+
+@socketio.on('user_offline')
+def handle_user_offline(data):
+    username = data['username']
+    if username in online_users:
+        online_users[username].discard(request.sid)
+        if not online_users[username]:
+            del online_users[username]
+            socketio.emit('online_status_changed', {'username': username, 'online': False})
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sid = request.sid
+    for username, sids in list(online_users.items()):
+        if sid in sids:
+            sids.discard(sid)
+            if not sids:
+                del online_users[username]
+                socketio.emit('online_status_changed', {'username': username, 'online': False})
+            break
 
 # ── 页面路由 ──────────────────────────────────────────────
 @app.route('/')
@@ -228,6 +258,7 @@ def handle_get_questions():
 def handle_create_room(data):
     username = data['username']
     room = data['room'].strip()
+    password = data.get('password', '').strip() or None
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -236,12 +267,12 @@ def handle_create_room(data):
             emit('create_room_result', {'success': False, 'msg': '房间已存在'})
             conn.close()
             return
-        cur.execute('INSERT INTO rooms (name, admins, members) VALUES (%s, %s, %s)',
-                    (room, [username], []))
+        cur.execute('INSERT INTO rooms (name, admins, members, password) VALUES (%s, %s, %s, %s)',
+                    (room, [username], [], password))
         conn.commit()
         conn.close()
-        emit('create_room_result', {'success': True, 'room': room})
-        emit('new_room_created', {'room': room}, broadcast=True)
+        emit('create_room_result', {'success': True, 'room': room, 'has_password': bool(password)})
+        socketio.emit('new_room_created', {'room': room, 'has_password': bool(password)})
     except Exception as e:
         emit('create_room_result', {'success': False, 'msg': str(e)})
         
@@ -250,7 +281,6 @@ def handle_create_room(data):
 @socketio.on('join')
 def handle_join(data):
     username = data['username']
-    screenname = data['screenname']
     room = data['room'].strip()
     try:
         conn = get_db()
@@ -262,9 +292,23 @@ def handle_join(data):
             conn.close()
             return
 
+        kicked = list(room_data.get('kicked') or [])
+        if username in kicked and username != SUPER_ADMIN:
+            emit('join_result', {'success': False, 'msg': '你已被踢出该房间'})
+            conn.close()
+            return
+
+        room_pw = room_data.get('password')
+        if room_pw and username != SUPER_ADMIN:
+            if data.get('password', '') != room_pw:
+                emit('join_result', {'success': False, 'msg': '密码错误', 'wrong_password': True})
+                conn.close()
+                return
+
         join_room(room)
         members = list(room_data['members'] or [])
-        if username not in members:
+        is_first_join = username not in members
+        if is_first_join:
             members.append(username)
             cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
             conn.commit()
@@ -285,7 +329,6 @@ def handle_join(data):
                 'room': room
             })
 
-        emit('message', {'screenname': '系统', 'text': f"{screenname} 加入了房间", 'system': True}, to=room)
     except Exception as e:
         emit('join_result', {'success': False, 'msg': str(e)})
 
@@ -338,6 +381,8 @@ def handle_set_admin(data):
 # ── 房间：关闭房间 ────────────────────────────────────────
 @socketio.on('close_room')
 def handle_close_room(data):
+    if data['room'] == '大厅':
+        return
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -362,9 +407,13 @@ def handle_get_rooms():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT name FROM rooms')
-        rooms = [r['name'] for r in cur.fetchall()]
+        cur.execute('SELECT name, password FROM rooms')
+        rooms = [{'name': r['name'], 'has_password': bool(r['password'])} for r in cur.fetchall()]
         conn.close()
+        lobby = next((r for r in rooms if r['name'] == '大厅'), None)
+        if lobby:
+            rooms.remove(lobby)
+            rooms.insert(0, lobby)
         emit('rooms_list', {'rooms': rooms})
     except Exception as e:
         emit('rooms_list', {'rooms': []})
@@ -389,12 +438,62 @@ def handle_get_members(data):
                 members.append({
                     'username': username,
                     'screenname': user['screenname'],
-                    'is_admin': username in (room_data['admins'] or [])
+                    'is_admin': username in (room_data['admins'] or []),
+                    'is_online': username in online_users,
+                    'is_super_admin': username == SUPER_ADMIN
                 })
         conn.close()
         emit('members_list', {'members': members})
     except Exception as e:
         emit('members_list', {'members': []})
+
+# ── 踢出房间 ──────────────────────────────────────────────
+@socketio.on('kick_member')
+def handle_kick_member(data):
+    requester = data['requester']
+    target = data['target']
+    room = data['room']
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
+        room_data = cur.fetchone()
+        if not room_data:
+            conn.close()
+            return
+        is_super = requester == SUPER_ADMIN
+        is_admin = requester in (room_data['admins'] or [])
+        if not is_super and not is_admin:
+            emit('kick_result', {'success': False, 'msg': '无权限'})
+            conn.close()
+            return
+        if target == SUPER_ADMIN:
+            emit('kick_result', {'success': False, 'msg': '不能踢出超级管理员'})
+            conn.close()
+            return
+        if not is_super and target in (room_data['admins'] or []):
+            emit('kick_result', {'success': False, 'msg': '不能踢出管理员'})
+            conn.close()
+            return
+        members = list(room_data['members'] or [])
+        if target in members:
+            members.remove(target)
+        kicked = list(room_data.get('kicked') or [])
+        if target not in kicked:
+            kicked.append(target)
+        cur.execute('UPDATE rooms SET members = %s, kicked = %s WHERE name = %s', (members, kicked, room))
+        conn.commit()
+        cur.execute('SELECT screenname FROM users WHERE username = %s', (target,))
+        target_user = cur.fetchone()
+        conn.close()
+        target_screen = target_user['screenname'] if target_user else target
+        if target in online_users:
+            for sid in list(online_users[target]):
+                socketio.emit('kicked_from_room', {'room': room}, to=sid)
+        emit('message', {'screenname': '系统', 'text': f"{target_screen} 被踢出了房间", 'system': True}, to=room)
+        emit('kick_result', {'success': True})
+    except Exception as e:
+        emit('kick_result', {'success': False, 'msg': str(e)})
 
 # ── 语音信令 ──────────────────────────────────────────────
 @socketio.on('voice_join')
@@ -451,6 +550,20 @@ def handle_voice_speaking(data):
     emit('voice_speaking', data, to=data['room'])
 
 # ── 启动 ──────────────────────────────────────────────────
+def ensure_lobby():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT name FROM rooms WHERE name = '大厅'")
+        if not cur.fetchone():
+            cur.execute('INSERT INTO rooms (name, admins, members) VALUES (%s, %s, %s)',
+                        ('大厅', [SUPER_ADMIN], []))
+            conn.commit()
+        conn.close()
+    except Exception as e:
+        print('创建大厅失败:', e)
+
 if __name__ == '__main__':
+    ensure_lobby()
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)
