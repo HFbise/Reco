@@ -302,7 +302,14 @@
       <button id="card-set-super-btn" style="display:none; background:#f0a500" onclick="doCardSetSuper(true)">⭐ 设为超级管理员</button>
       <button id="card-revoke-super-btn" class="danger-btn" style="display:none" onclick="doCardSetSuper(false)">撤销超级管理员</button>
     </div>
-    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('member-card-modal')">关闭</button>
+    <div id="card-voice-volume" style="display:none; border-top:1px solid #ddd; padding-top:12px; margin-top:4px;">
+      <label style="font-size:0.85rem; color:#888; display:block; margin-bottom:6px;">🔊 语音音量</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="range" id="card-volume-slider" min="0" max="150" value="100" style="flex:1" oninput="setCardVoiceVolume(this.value)" />
+        <span id="card-volume-val" style="font-size:0.85rem; min-width:36px;">100%</span>
+      </div>
+    </div>
+    <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('member-card-modal')">关闭</button>
   </div>
 </div>
 
@@ -340,7 +347,8 @@ let currentRoom = null;
 let isAdmin = false;
 let localStream = null;
 let peerConnections = {}; // { username: RTCPeerConnection }
-let audioElements = {}; // { username: HTMLAudioElement }
+let audioElements = {}; // { username: MediaStreamAudioSourceNode }
+let audioGains = {};    // { username: GainNode }
 let inVoice = false;
 let isMuted = false;
 let ignoredUsers = new Set();
@@ -406,6 +414,10 @@ socket.on('members_list', function(data) {
 
 socket.on('new_room_created', function(data) {
   addRoomToList(data.room, data.has_password);
+});
+
+socket.on('voice_members_view', function(data) {
+  data.members.forEach(m => addVoiceMember(m.username, m.screenname));
 });
 
 socket.on('online_status_changed', function(data) {
@@ -610,6 +622,13 @@ function openMemberCard(username) {
   document.getElementById('card-set-super-btn').style.display = canSetSuper ? '' : 'none';
   document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
   document.getElementById('card-actions').style.display = (canSetAdmin || canKick || canSetSuper || canRevokeSuper) ? 'flex' : 'none';
+  const showVolume = inVoice && username !== currentUser?.username && !!audioGains[username];
+  document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
+  if (showVolume) {
+    const vol = Math.round((audioGains[username].gain.value) * 100);
+    document.getElementById('card-volume-slider').value = vol;
+    document.getElementById('card-volume-val').textContent = vol + '%';
+  }
   socket.emit('get_profile', { username });
   openModal('member-card-modal');
 }
@@ -826,6 +845,11 @@ socket.on('kick_result', function(data) {
   closeModal('member-card-modal');
 });
 
+function setCardVoiceVolume(val) {
+  document.getElementById('card-volume-val').textContent = val + '%';
+  if (audioGains[cardTargetUsername]) audioGains[cardTargetUsername].gain.value = val / 100;
+}
+
 function doCardSetSuper(promote) {
   if (!cardTargetUsername) return;
   const label = document.getElementById('card-screenname').textContent;
@@ -922,8 +946,10 @@ function leaveVoice() {
   }
   Object.values(peerConnections).forEach(pc => pc.close());
   peerConnections = {};
-  Object.values(audioElements).forEach(el => el.remove());
+  Object.values(audioElements).forEach(src => { try { src.disconnect(); } catch(e) {} });
   audioElements = {};
+  Object.values(audioGains).forEach(g => { try { g.disconnect(); } catch(e) {} });
+  audioGains = {};
   if (audioContext) { audioContext.close(); audioContext = null; }
   
   inVoice = false;
@@ -946,11 +972,13 @@ async function createPeerConnection(targetUsername) {
   
   pc.ontrack = (event) => {
     if (!audioElements[targetUsername]) {
-      const audio = new Audio();
-      audio.srcObject = event.streams[0];
-      audio.volume = speakerVolume;
-      audio.play();
-      audioElements[targetUsername] = audio;
+      const src = audioContext.createMediaStreamSource(event.streams[0]);
+      const gain = audioContext.createGain();
+      gain.gain.value = speakerVolume;
+      src.connect(gain);
+      gain.connect(audioContext.destination);
+      audioElements[targetUsername] = src;
+      audioGains[targetUsername] = gain;
     }
   };
   
@@ -1037,8 +1065,7 @@ function addVoiceMember(username, screenname) {
   const div = document.createElement('div');
   div.className = 'voice-member';
   div.id = 'vm-' + username;
-  div.innerHTML = `<span class="voice-icon">🎤</span><span>${display}</span>
-    ${username !== currentUser.username ? `<button class="voice-btn" style="margin-left:auto; font-size:0.7rem;" onclick="toggleIgnore('${username}')">拒听</button>` : ''}
+  div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${display}</span>
     ${isAdmin && username !== currentUser.username ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>` : ''}`;
   list.appendChild(div);
   const memberEl = document.getElementById('member-' + username);
@@ -1086,7 +1113,7 @@ function setMicVolume(val) {
 
 function setSpeakerVolume(val) {
   speakerVolume = val / 100;
-  Object.values(audioElements).forEach(el => el.volume = speakerVolume);
+  Object.values(audioGains).forEach(g => g.gain.value = speakerVolume);
 }
 
 function toggleMute() {

@@ -341,6 +341,9 @@ def handle_join(data):
                 'room': room
             })
 
+        if room in rooms_voice and rooms_voice[room].get('voice_members'):
+            emit('voice_members_view', {'members': rooms_voice[room]['voice_members']})
+
     except Exception as e:
         emit('join_result', {'success': False, 'msg': str(e)})
 
