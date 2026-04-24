@@ -359,7 +359,10 @@
 const socket = io();
 let currentUser = null;
 let currentRoom = null;
-let isAdmin = false;
+let isAdmin = false;   // 有任何房间权限（管理员/房主/超管）
+let isOwner = false;   // 是房主
+let isMod = false;     // 是管理员（非房主）
+let memberOwner = '';  // 当前房间房主用户名
 let localStream = null;
 let peerConnections = {}; // { username: RTCPeerConnection }
 let audioElements = {}; // { username: MediaStreamAudioSourceNode }
@@ -425,14 +428,17 @@ function renderMembers(members) {
   list.innerHTML = '';
   memberAdmins.clear();
   memberSuperAdmins.clear();
+  memberOwner = '';
   members.forEach(m => {
     if (m.is_admin) memberAdmins.add(m.username);
     if (m.is_super_admin) memberSuperAdmins.add(m.username);
+    if (m.is_owner) memberOwner = m.username;
     if (document.getElementById('vm-' + m.username)) return;
     const div = document.createElement('div');
     div.className = 'member-item' + (m.is_online ? '' : ' offline');
     div.id = 'member-' + m.username;
-    div.innerHTML = `${m.is_admin ? '👑 ' : ''}${m.screenname}`;
+    const badge = m.is_super_admin ? '⭐ ' : (m.is_owner ? '👑 ' : (m.is_admin ? '🛡 ' : ''));
+    div.innerHTML = `${badge}${m.screenname}`;
     div.onclick = () => openMemberCard(m.username);
     list.appendChild(div);
   });
@@ -550,7 +556,7 @@ function logout() {
   currentUser = null;
   localStorage.removeItem('currentUser');
   currentRoom = null;
-  isAdmin = false;
+  isAdmin = false; isOwner = false; isMod = false; memberOwner = '';
   document.getElementById('topbar-name').textContent = '';
   document.getElementById('login-open-btn').style.display = '';
   document.getElementById('logout-btn').style.display = 'none';
@@ -644,18 +650,34 @@ socket.on('update_profile_result', function(data) {
   document.getElementById('profile-success').textContent = '保存成功！';
 });
 
+// ── 权限层级 ──────────────────────────────────────────────
+function getMyLevel() {
+  if (currentUser?.username === 'admin') return 4;
+  if (currentUser?.is_super_admin) return 3;
+  if (isOwner) return 2;
+  if (isMod) return 1;
+  return 0;
+}
+function getTargetLevel(username) {
+  if (username === 'admin') return 4;
+  if (memberSuperAdmins.has(username)) return 3;
+  if (username === memberOwner) return 2;
+  if (memberAdmins.has(username)) return 1;
+  return 0;
+}
+
 // ── 成员卡片 ──────────────────────────────────────────────
 function openMemberCard(username) {
   cardTargetUsername = username;
   const isSelf = currentUser && username === currentUser.username;
-  const targetIsAdmin = memberAdmins.has(username);
-  const targetIsSuper = memberSuperAdmins.has(username);
-  const canSetAdmin = isAdmin && !isSelf && !targetIsAdmin && !targetIsSuper;
-  const canRemoveAdmin = isAdmin && !isSelf && targetIsAdmin && !targetIsSuper;
-  const canKick = isAdmin && !isSelf && !targetIsSuper && (currentUser?.is_super_admin || !targetIsAdmin);
+  const myLevel = getMyLevel();
+  const tgtLevel = getTargetLevel(username);
+  const canSetAdmin = !isSelf && myLevel >= 2 && tgtLevel === 0;
+  const canRemoveAdmin = !isSelf && myLevel >= 2 && tgtLevel === 1;
+  const canKick = !isSelf && myLevel >= 1 && myLevel > tgtLevel;
   const isGodAdmin = currentUser?.username === 'admin';
-  const canSetSuper = isGodAdmin && !isSelf && !targetIsSuper;
-  const canRevokeSuper = isGodAdmin && !isSelf && targetIsSuper;
+  const canSetSuper = isGodAdmin && !isSelf && tgtLevel < 3;
+  const canRevokeSuper = isGodAdmin && !isSelf && tgtLevel === 3;
   document.getElementById('card-set-admin-btn').style.display = canSetAdmin ? '' : 'none';
   document.getElementById('card-remove-admin-btn').style.display = canRemoveAdmin ? '' : 'none';
   document.getElementById('card-kick-btn').style.display = canKick ? '' : 'none';
@@ -665,7 +687,7 @@ function openMemberCard(username) {
   const showVolume = inVoice && username !== currentUser?.username && !!audioGains[username];
   document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
   if (showVolume) {
-    const vol = Math.round((audioGains[username].gain.value) * 100);
+    const vol = Math.round((audioGains[username].volume ?? 1) * 100);
     document.getElementById('card-volume-slider').value = vol;
     document.getElementById('card-volume-val').textContent = vol + '%';
   }
@@ -815,10 +837,13 @@ socket.on('join_result', function(data) {
     }
     return;
   }
-  isAdmin = data.is_admin || (currentUser && currentUser.is_super_admin);
+  isMod = data.is_admin || false;
+  isOwner = data.is_owner || false;
+  isAdmin = isMod || isOwner || (currentUser && currentUser.is_super_admin);
   const title = document.getElementById('chat-title');
-  title.style.cursor = isAdmin ? 'pointer' : '';
-  title.title = isAdmin ? '点击管理房间' : '';
+  const canManageRoom = isOwner || (currentUser && currentUser.is_super_admin);
+  title.style.cursor = canManageRoom ? 'pointer' : '';
+  title.title = canManageRoom ? '点击管理房间' : '';
   if (data.members) renderMembers(data.members);
 });
 
@@ -897,7 +922,7 @@ socket.on('kick_result', function(data) {
 
 function setCardVoiceVolume(val) {
   document.getElementById('card-volume-val').textContent = val + '%';
-  if (audioGains[cardTargetUsername]) audioGains[cardTargetUsername].gain.value = val / 100;
+  if (audioGains[cardTargetUsername]) audioGains[cardTargetUsername].volume = Math.min(val / 100, 1);
 }
 
 function doCardSetSuper(promote) {
@@ -925,7 +950,7 @@ socket.on('kicked_from_room', function(data) {
 });
 
 function openRoomCard() {
-  if (!isAdmin || !currentRoom) return;
+  if (!(isOwner || (currentUser && currentUser.is_super_admin)) || !currentRoom) return;
   document.getElementById('room-card-title').textContent = '# ' + currentRoom;
   document.getElementById('room-pw-toggle-btn').textContent = roomHasPassword[currentRoom] ? '🔓 取消密码' : '🔒 添加密码';
   document.getElementById('room-pw-set-area').style.display = 'none';
@@ -1070,18 +1095,12 @@ async function createPeerConnection(targetUsername) {
   
   pc.ontrack = (event) => {
     if (!audioElements[targetUsername]) {
-      if (audioContext.state === 'suspended') audioContext.resume();
       const audio = new Audio();
       audio.srcObject = event.streams[0];
-      audio.autoplay = true;
+      audio.volume = Math.min(speakerVolume, 1);
       audio.play().catch(() => {});
-      const src = audioContext.createMediaElementSource(audio);
-      const gain = audioContext.createGain();
-      gain.gain.value = speakerVolume;
-      src.connect(gain);
-      gain.connect(audioContext.destination);
       audioElements[targetUsername] = audio;
-      audioGains[targetUsername] = gain;
+      audioGains[targetUsername] = audio;
     }
   };
   
@@ -1161,15 +1180,27 @@ socket.on('voice_user_left', function(data) {
 });
 
 // ── 语音：UI 更新 ─────────────────────────────────────────
+function canBanUser(username) {
+  if (!currentUser || username === currentUser.username) return false;
+  const myLevel = getMyLevel();
+  const tgtLevel = getTargetLevel(username);
+  return myLevel >= 1 && myLevel > tgtLevel;
+}
+
 function addVoiceMember(username, screenname) {
   const list = document.getElementById('voice-members-list');
   if (document.getElementById('vm-' + username)) return;
   const display = screenname || username;
+  const badge = memberSuperAdmins.has(username) ? '⭐ ' : (username === memberOwner ? '👑 ' : (memberAdmins.has(username) ? '🛡 ' : ''));
   const div = document.createElement('div');
   div.className = 'voice-member';
   div.id = 'vm-' + username;
-  div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${display}</span>
-    ${isAdmin && username !== currentUser.username && username !== 'admin' ? (voiceBanned.has(username) ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="unbanVoice('${username}')">解除禁言</button>` : `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>`) : ''}`;
+  const banBtn = canBanUser(username)
+    ? (voiceBanned.has(username)
+        ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="unbanVoice('${username}')">解除禁言</button>`
+        : `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>`)
+    : '';
+  div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${badge}${display}</span>${banBtn}`;
   list.appendChild(div);
   const memberEl = document.getElementById('member-' + username);
   if (memberEl) memberEl.remove();
@@ -1216,7 +1247,7 @@ function setMicVolume(val) {
 
 function setSpeakerVolume(val) {
   speakerVolume = val / 100;
-  Object.values(audioGains).forEach(g => g.gain.value = speakerVolume);
+  Object.values(audioGains).forEach(a => { if (a) a.volume = Math.min(speakerVolume, 1); });
 }
 
 function toggleMute() {

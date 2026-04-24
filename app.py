@@ -27,6 +27,18 @@ SECURITY_QUESTIONS = [
 SUPER_ADMIN = "admin"
 DEFAULT_PASSWORD = "reco1234"
 
+def get_level(username, room_data):
+    """返回用户在房间内的权限级别: 4=admin, 3=超管, 2=房主, 1=管理员, 0=普通成员"""
+    if username == SUPER_ADMIN:
+        return 4
+    if username in super_admins:
+        return 3
+    if username == (room_data.get('owner') or ''):
+        return 2
+    if username in (room_data.get('admins') or []):
+        return 1
+    return 0
+
 # ── 内存状态 ─────────────────────────────────────────────
 rooms_voice = {}
 online_users = {}        # { username: set of sids }
@@ -279,8 +291,8 @@ def handle_create_room(data):
             emit('create_room_result', {'success': False, 'msg': '房间已存在'})
             conn.close()
             return
-        cur.execute('INSERT INTO rooms (name, admins, members, password) VALUES (%s, %s, %s, %s)',
-                    (room, [username], [], password))
+        cur.execute('INSERT INTO rooms (name, admins, members, password, owner) VALUES (%s, %s, %s, %s, %s)',
+                    (room, [], [], password, username))
         conn.commit()
         conn.close()
         emit('create_room_result', {'success': True, 'room': room, 'has_password': bool(password)})
@@ -325,7 +337,11 @@ def handle_join(data):
             cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
             conn.commit()
 
-        is_admin = username in (room_data['admins'] or [])
+        owner = room_data.get('owner') or ''
+        admins_set = set(room_data['admins'] or [])
+        my_level = get_level(username, room_data)
+        is_owner = (username == owner)
+        is_admin = username in admins_set
 
         # 成员列表（批量查 screenname）
         member_usernames = list(room_data['members'] or [])
@@ -334,19 +350,19 @@ def handle_join(data):
             screennames = {r['username']: r['screenname'] for r in cur.fetchall()}
         else:
             screennames = {}
-        admins_set = set(room_data['admins'] or [])
         members_data = []
         for u in member_usernames:
             members_data.append({
                 'username': u,
                 'screenname': screennames.get(u, u),
                 'is_admin': u in admins_set,
+                'is_owner': u == owner,
                 'is_online': u in online_users,
                 'is_super_admin': u in super_admins
             })
         members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
 
-        emit('join_result', {'success': True, 'room': room, 'is_admin': is_admin, 'members': members_data})
+        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data})
 
         # 历史消息
         cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
@@ -397,7 +413,15 @@ def handle_set_admin(data):
         cur = conn.cursor()
         cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
         room_data = cur.fetchone()
-        if not room_data or data['requester'] not in (room_data['admins'] or []):
+        if not room_data:
+            emit('set_admin_result', {'success': False, 'msg': '无权限'})
+            conn.close()
+            return
+        req_level = get_level(data['requester'], room_data)
+        tgt_level = get_level(data['target'], room_data)
+        remove = data.get('remove', False)
+        # 设/取消管理员需要房主级别(2)以上；目标不能是房主或更高级别
+        if req_level < 2 or tgt_level >= 2:
             emit('set_admin_result', {'success': False, 'msg': '无权限'})
             conn.close()
             return
@@ -406,7 +430,6 @@ def handle_set_admin(data):
             conn.close()
             return
         admins = list(room_data['admins'] or [])
-        remove = data.get('remove', False)
         if remove:
             if data['target'] in admins:
                 admins.remove(data['target'])
@@ -433,9 +456,9 @@ def handle_set_room_password(data):
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT admins FROM rooms WHERE name = %s', (room,))
+        cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
         row = cur.fetchone()
-        if not row or (requester not in (row['admins'] or []) and requester not in super_admins):
+        if not row or get_level(requester, row) < 2:
             emit('set_room_password_result', {'success': False, 'msg': '无权限'})
             conn.close()
             return
@@ -457,7 +480,7 @@ def handle_close_room(data):
         cur = conn.cursor()
         cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
         room_data = cur.fetchone()
-        if not room_data or (data['requester'] not in (room_data['admins'] or []) and data['requester'] not in super_admins):
+        if not room_data or get_level(data['requester'], room_data) < 2:
             emit('close_room_result', {'success': False, 'msg': '无权限'})
             conn.close()
             return
@@ -499,18 +522,24 @@ def handle_get_members(data):
             emit('members_list', {'members': []})
             conn.close()
             return
+        owner = room_data.get('owner') or ''
+        admins_set = set(room_data['admins'] or [])
+        member_usernames = list(room_data['members'] or [])
+        if member_usernames:
+            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', (member_usernames,))
+            screennames = {r['username']: r['screenname'] for r in cur.fetchall()}
+        else:
+            screennames = {}
         members = []
-        for username in (room_data['members'] or []):
-            cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
-            user = cur.fetchone()
-            if user:
-                members.append({
-                    'username': username,
-                    'screenname': user['screenname'],
-                    'is_admin': username in (room_data['admins'] or []),
-                    'is_online': username in online_users,
-                    'is_super_admin': username in super_admins
-                })
+        for username in member_usernames:
+            members.append({
+                'username': username,
+                'screenname': screennames.get(username, username),
+                'is_admin': username in admins_set,
+                'is_owner': username == owner,
+                'is_online': username in online_users,
+                'is_super_admin': username in super_admins
+            })
         members.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
         conn.close()
         emit('members_list', {'members': members})
@@ -531,18 +560,10 @@ def handle_kick_member(data):
         if not room_data:
             conn.close()
             return
-        is_super = requester in super_admins
-        is_admin = requester in (room_data['admins'] or [])
-        if not is_super and not is_admin:
+        req_level = get_level(requester, room_data)
+        tgt_level = get_level(target, room_data)
+        if req_level < 1 or req_level <= tgt_level:
             emit('kick_result', {'success': False, 'msg': '无权限'})
-            conn.close()
-            return
-        if target in super_admins:
-            emit('kick_result', {'success': False, 'msg': '不能踢出超级管理员'})
-            conn.close()
-            return
-        if not is_super and target in (room_data['admins'] or []):
-            emit('kick_result', {'success': False, 'msg': '不能踢出管理员'})
             conn.close()
             return
         members = list(room_data['members'] or [])
@@ -640,9 +661,9 @@ def handle_voice_ban(data):
         cur.execute('SELECT admins FROM rooms WHERE name = %s', (data['room'],))
         room_data = cur.fetchone()
         conn.close()
-        if not room_data or data['requester'] not in (room_data['admins'] or []):
-            return
-        if data['target'] == SUPER_ADMIN:
+        req_level = get_level(data['requester'], room_data)
+        tgt_level = get_level(data['target'], room_data)
+        if req_level < 1 or req_level <= tgt_level:
             return
     except:
         return
@@ -658,10 +679,12 @@ def handle_voice_unban(data):
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT admins FROM rooms WHERE name = %s', (data['room'],))
+        cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
         room_data = cur.fetchone()
         conn.close()
-        if not room_data or data['requester'] not in (room_data['admins'] or []):
+        req_level = get_level(data['requester'], room_data) if room_data else 0
+        tgt_level = get_level(data['target'], room_data) if room_data else 0
+        if not room_data or req_level < 1 or req_level <= tgt_level:
             return
     except:
         return
@@ -681,8 +704,8 @@ def ensure_lobby():
         cur = conn.cursor()
         cur.execute("SELECT name FROM rooms WHERE name = '大厅'")
         if not cur.fetchone():
-            cur.execute('INSERT INTO rooms (name, admins, members) VALUES (%s, %s, %s)',
-                        ('大厅', [SUPER_ADMIN], []))
+            cur.execute('INSERT INTO rooms (name, admins, members, owner) VALUES (%s, %s, %s, %s)',
+                        ('大厅', [], [], SUPER_ADMIN))
             conn.commit()
         conn.close()
     except Exception as e:
