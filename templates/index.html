@@ -174,10 +174,7 @@
     <div id="no-room">请先登录或注册</div>
     <div id="chat-main" style="display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden;">
       <div id="chat-header">
-        <span id="chat-title"></span>
-        <div id="admin-controls" style="display:none; gap:8px; flex-shrink:0;">
-          <button id="close-room-btn" onclick="confirmCloseRoom()" style="padding:6px 12px; background:#e74c3c; color:white; border:none; border-radius:6px; cursor:pointer;">🗑 关闭房间</button>
-        </div>
+        <span id="chat-title" onclick="openRoomCard()"></span>
       </div>
       <div id="messages"></div>
       <div id="input-area">
@@ -310,6 +307,23 @@
       </div>
     </div>
     <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('member-card-modal')">关闭</button>
+  </div>
+</div>
+
+<!-- ── 房间卡片 ── -->
+<div class="modal" id="room-card-modal">
+  <div class="modal-box">
+    <h2 id="room-card-title"></h2>
+    <div id="room-card-admin-btns" style="display:none; flex-direction:column; gap:10px; margin-top:12px;">
+      <button id="room-pw-toggle-btn" onclick="toggleRoomPasswordAction()"></button>
+      <div id="room-pw-set-area" style="display:none; flex-direction:column; gap:6px;">
+        <input id="room-new-pw-input" type="password" placeholder="输入新密码" />
+        <div class="error-msg" id="room-pw-set-error"></div>
+        <button onclick="submitSetRoomPassword()">确认设置</button>
+      </div>
+      <button id="room-card-close-btn" onclick="confirmCloseRoomFromCard()" style="background:#e74c3c; color:white;">🗑 关闭房间</button>
+    </div>
+    <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('room-card-modal')">关闭</button>
   </div>
 </div>
 
@@ -747,6 +761,8 @@ function _submitJoin(room, password) {
   document.getElementById('chat-main').style.display = 'flex';
   document.getElementById('chat-main').style.flexDirection = 'column';
   document.getElementById('messages').innerHTML = '';
+  document.getElementById('voice-members-list').innerHTML = '';
+  document.getElementById('member-list').innerHTML = '';
   closeAllSidebars();
 }
 
@@ -783,9 +799,9 @@ socket.on('join_result', function(data) {
     return;
   }
   isAdmin = data.is_admin || (currentUser && currentUser.is_super_admin);
-  const controls = document.getElementById('admin-controls');
-  controls.style.display = isAdmin ? 'flex' : 'none';
-  document.getElementById('close-room-btn').style.display = currentRoom === '大厅' ? 'none' : '';
+  const title = document.getElementById('chat-title');
+  title.style.cursor = isAdmin ? 'pointer' : '';
+  title.title = isAdmin ? '点击管理房间' : '';
   socket.emit('get_members', { room: currentRoom });
 });
 
@@ -891,8 +907,56 @@ socket.on('kicked_from_room', function(data) {
   document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
 });
 
+function openRoomCard() {
+  if (!isAdmin || !currentRoom) return;
+  document.getElementById('room-card-title').textContent = '# ' + currentRoom;
+  document.getElementById('room-pw-toggle-btn').textContent = roomHasPassword[currentRoom] ? '🔓 取消密码' : '🔒 添加密码';
+  document.getElementById('room-pw-set-area').style.display = 'none';
+  document.getElementById('room-new-pw-input').value = '';
+  document.getElementById('room-pw-set-error').textContent = '';
+  document.getElementById('room-card-close-btn').style.display = currentRoom === '大厅' ? 'none' : '';
+  document.getElementById('room-card-admin-btns').style.display = 'flex';
+  openModal('room-card-modal');
+}
+
+function toggleRoomPasswordAction() {
+  if (roomHasPassword[currentRoom]) {
+    if (confirm(`确定取消"${currentRoom}"的密码吗？`)) {
+      socket.emit('set_room_password', { requester: currentUser.username, room: currentRoom, password: null });
+    }
+  } else {
+    const area = document.getElementById('room-pw-set-area');
+    area.style.display = area.style.display === 'none' ? 'flex' : 'none';
+  }
+}
+
+function submitSetRoomPassword() {
+  const pw = document.getElementById('room-new-pw-input').value.trim();
+  if (!pw) { document.getElementById('room-pw-set-error').textContent = '请输入密码'; return; }
+  socket.emit('set_room_password', { requester: currentUser.username, room: currentRoom, password: pw });
+}
+
+socket.on('set_room_password_result', function(data) {
+  if (!data.success) { document.getElementById('room-pw-set-error').textContent = data.msg; return; }
+  closeModal('room-card-modal');
+});
+
+socket.on('room_password_changed', function(data) {
+  roomHasPassword[data.room] = data.has_password;
+  const el = document.getElementById('room-' + data.room);
+  if (el) el.innerHTML = `# ${data.room}${data.has_password ? '<span style="float:right">🔒</span>' : ''}`;
+  if (!data.has_password) {
+    delete savedRoomPasswords[data.room];
+    localStorage.setItem('roomPasswords', JSON.stringify(savedRoomPasswords));
+  }
+});
+
+function confirmCloseRoomFromCard() {
+  closeModal('room-card-modal');
+  confirmCloseRoom();
+}
+
 function confirmCloseRoom() {
-  console.log('closing room:', currentRoom);
   if (confirm(`确定关闭房间 "${currentRoom}" 吗？所有人将被踢出。`)) {
     socket.emit('close_room', { requester: currentUser.username, room: currentRoom });
   }

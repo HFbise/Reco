@@ -393,6 +393,29 @@ def handle_set_admin(data):
     except Exception as e:
         emit('set_admin_result', {'success': False, 'msg': str(e)})
 
+# ── 房间：设置密码 ────────────────────────────────────────
+@socketio.on('set_room_password')
+def handle_set_room_password(data):
+    room = data['room']
+    requester = data['requester']
+    password = data.get('password') or None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT admins FROM rooms WHERE name = %s', (room,))
+        row = cur.fetchone()
+        if not row or (requester not in (row['admins'] or []) and requester not in super_admins):
+            emit('set_room_password_result', {'success': False, 'msg': '无权限'})
+            conn.close()
+            return
+        cur.execute('UPDATE rooms SET password = %s WHERE name = %s', (password, room))
+        conn.commit()
+        conn.close()
+        emit('set_room_password_result', {'success': True})
+        socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)})
+    except Exception as e:
+        emit('set_room_password_result', {'success': False, 'msg': str(e)})
+
 # ── 房间：关闭房间 ────────────────────────────────────────
 @socketio.on('close_room')
 def handle_close_room(data):
