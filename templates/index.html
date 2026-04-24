@@ -1033,15 +1033,22 @@ async function joinVoice() {
     return;
   }
   try {
+    // AudioContext 必须在 getUserMedia 之前创建，否则 iOS Safari 会切换音频会话导致 ICE 失败
+    audioContext = new AudioContext();
+    await audioContext.resume();
+
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // 克隆一条流给 AudioContext 做说话检测，原始流专给 WebRTC，不互相干扰
-    audioContext = new AudioContext();
-    const analysisStream = localStream.clone();
-    const source = audioContext.createMediaStreamSource(analysisStream);
-    const analyser = audioContext.createAnalyser();
-    source.connect(analyser);
-    detectSpeaking(analyser);
+    // 克隆流给 AudioContext 做说话检测，原始流专给 WebRTC
+    try {
+      const analysisStream = localStream.clone();
+      const source = audioContext.createMediaStreamSource(analysisStream);
+      const analyser = audioContext.createAnalyser();
+      source.connect(analyser);
+      detectSpeaking(analyser);
+    } catch(e) {
+      console.warn('说话检测初始化失败:', e);
+    }
     
     inVoice = true;
     document.getElementById('voice-join-btn').textContent = '📵 离开语音';
