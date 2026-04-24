@@ -187,8 +187,8 @@
         <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
         <div id="voice-members-list"></div>
         <div class="voice-controls" id="voice-controls">
-          <label style="display:none">🎤 麦克风音量</label>
-          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" style="display:none" />
+          <label>🎤 麦克风音量</label>
+          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
           <label>🔊 扬声器音量</label>
           <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
           <button class="voice-btn" id="mute-btn" onclick="toggleMute()">🎤 闭麦</button>
@@ -1033,22 +1033,22 @@ async function joinVoice() {
     return;
   }
   try {
-    // AudioContext 必须在 getUserMedia 之前创建，否则 iOS Safari 会切换音频会话导致 ICE 失败
-    audioContext = new AudioContext();
-    await audioContext.resume();
-
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // 克隆流给 AudioContext 做说话检测，原始流专给 WebRTC
-    try {
-      const analysisStream = localStream.clone();
-      const source = audioContext.createMediaStreamSource(analysisStream);
-      const analyser = audioContext.createAnalyser();
-      source.connect(analyser);
-      detectSpeaking(analyser);
-    } catch(e) {
-      console.warn('说话检测初始化失败:', e);
-    }
+    // 发送侧：与原来一致，通过 AudioContext 处理后发出
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(localStream);
+    const gainNode = audioContext.createGain();
+    micGainNode = gainNode;
+    const dest = audioContext.createMediaStreamDestination();
+    source.connect(gainNode);
+    gainNode.connect(dest);
+    localStream = dest.stream;
+
+    // 说话检测
+    const analyser = audioContext.createAnalyser();
+    source.connect(analyser);
+    detectSpeaking(analyser);
     
     inVoice = true;
     document.getElementById('voice-join-btn').textContent = '📵 离开语音';
@@ -1109,12 +1109,10 @@ async function createPeerConnection(targetUsername) {
 
   pc.oniceconnectionstatechange = () => {
     const el = document.getElementById('vm-' + targetUsername);
-    if (!el) return;
-    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-      el.style.opacity = '';
-    } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-      el.style.opacity = '0.4';
-      el.title = 'ICE 连接失败';
+    if (el) el.style.opacity = '';
+    if (pc.iceConnectionState === 'failed') {
+      if (el) { el.style.opacity = '0.4'; el.title = 'ICE 连接失败'; }
+      alert(`与 ${targetUsername} 的语音连接失败，可能是网络环境不支持点对点连接。`);
     }
   };
 
