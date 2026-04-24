@@ -350,6 +350,95 @@ def handle_get_members(data):
             })
     emit('members_list', {'members': members})
 
+# ── 语音：加入语音频道 ────────────────────────────────────
+@socketio.on('voice_join')
+def handle_voice_join(data):
+    username = data['username']
+    room = data['room']
+    
+    if room not in rooms:
+        return
+    
+    if 'voice_members' not in rooms[room]:
+        rooms[room]['voice_members'] = []
+    
+    if username not in rooms[room]['voice_members']:
+        rooms[room]['voice_members'].append(username)
+    
+    # 告诉房间里其他语音成员有新人加入
+    emit('voice_user_joined', {'username': username}, to=room)
+    # 告诉新人当前语音里有哪些人
+    emit('voice_current_members', {'members': rooms[room]['voice_members']})
+
+# ── 语音：离开语音频道 ────────────────────────────────────
+@socketio.on('voice_leave')
+def handle_voice_leave(data):
+    username = data['username']
+    room = data['room']
+    
+    if room in rooms and 'voice_members' in rooms[room]:
+        if username in rooms[room]['voice_members']:
+            rooms[room]['voice_members'].remove(username)
+    
+    emit('voice_user_left', {'username': username}, to=room)
+
+# ── 语音：WebRTC 信令 ─────────────────────────────────────
+@socketio.on('voice_offer')
+def handle_voice_offer(data):
+    # 转发 offer 给目标用户
+    emit('voice_offer', data, to=data['room'])
+
+@socketio.on('voice_answer')
+def handle_voice_answer(data):
+    emit('voice_answer', data, to=data['room'])
+
+@socketio.on('voice_ice')
+def handle_voice_ice(data):
+    emit('voice_ice', data, to=data['room'])
+
+# ── 语音：闭麦状态同步 ────────────────────────────────────
+@socketio.on('voice_mute_status')
+def handle_voice_mute(data):
+    emit('voice_mute_status', data, to=data['room'])
+
+# ── 语音：禁言 ───────────────────────────────────────────
+@socketio.on('voice_ban')
+def handle_voice_ban(data):
+    requester = data['requester']
+    room = data['room']
+    target = data['target']
+    
+    if room not in rooms or requester not in rooms[room]['admins']:
+        return
+    
+    if 'voice_banned' not in rooms[room]:
+        rooms[room]['voice_banned'] = []
+    
+    if target not in rooms[room]['voice_banned']:
+        rooms[room]['voice_banned'].append(target)
+    
+    emit('voice_banned', {'target': target}, to=room)
+
+# ── 语音：解除禁言 ────────────────────────────────────────
+@socketio.on('voice_unban')
+def handle_voice_unban(data):
+    requester = data['requester']
+    room = data['room']
+    target = data['target']
+    
+    if room not in rooms or requester not in rooms[room]['admins']:
+        return
+    
+    if 'voice_banned' in rooms[room] and target in rooms[room]['voice_banned']:
+        rooms[room]['voice_banned'].remove(target)
+    
+    emit('voice_unbanned', {'target': target}, to=room)
+
+# ── 语音：说话状态 ────────────────────────────────────────
+@socketio.on('voice_speaking')
+def handle_voice_speaking(data):
+    emit('voice_speaking', data, to=data['room'])
+
 # ── 启动 ──────────────────────────────────────────────────
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

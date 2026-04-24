@@ -26,6 +26,20 @@
     .member-item { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
     .member-item:hover { background: #f0f0f0; }
     body.dark .member-item:hover { background: #0f3460; }
+    #voice-section { margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
+  body.dark #voice-section { border-color: #333; }
+  #voice-join-btn { width: 100%; padding: 8px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-bottom: 8px; }
+  #voice-join-btn.in-voice { background: #e74c3c; }
+  #voice-members-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+  .voice-member { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem; }
+  .voice-member.speaking { background: rgba(46, 204, 113, 0.2); }
+  .voice-member .voice-icon { font-size: 0.8rem; }
+  .voice-controls { display: none; flex-direction: column; gap: 6px; padding: 8px 0; }
+  .voice-controls.show { display: flex; }
+  .voice-controls label { font-size: 0.8rem; color: #888; }
+  .voice-controls input[type=range] { width: 100%; }
+  .voice-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; background: #555; color: white; }
+  .voice-btn.active { background: #e74c3c; }
 
     /* ── 侧栏 ── */
     #sidebar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
@@ -114,6 +128,17 @@
       </div>
     </div>
     <div id="members-sidebar">
+      <div id="voice-section">
+        <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
+        <div id="voice-members-list"></div>
+        <div class="voice-controls" id="voice-controls">
+          <label>🎤 麦克风音量</label>
+          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
+          <label>🔊 扬声器音量</label>
+          <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
+          <button class="voice-btn" id="mute-btn" onclick="toggleMute()">🎤 闭麦</button>
+        </div>
+      </div>
       <h3>成员</h3>
       <div id="member-list"></div>
     </div>
@@ -244,6 +269,22 @@ const socket = io();
 let currentUser = null;
 let currentRoom = null;
 let isAdmin = false;
+let localStream = null;
+let peerConnections = {}; // { username: RTCPeerConnection }
+let audioElements = {}; // { username: HTMLAudioElement }
+let inVoice = false;
+let isMuted = false;
+let ignoredUsers = new Set(); // 拒听的用户
+let speakerVolume = 1.0;
+let micGainNode = null;
+let audioContext = null;
+
+const iceServers = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]
+};
 
 // 恢复夜间模式
 if (localStorage.getItem('theme') === 'dark') {
@@ -638,6 +679,278 @@ socket.on('room_closed', function(data) {
   const el = document.getElementById('room-' + closedRoom);
   if (el) el.remove();
 });
+
+// ── 语音：加入/离开 ───────────────────────────────────────
+async function toggleVoice() {
+  if (!currentUser) { openAuth(); return; }
+  if (!currentRoom) { alert('请先进入房间'); return; }
+  
+  if (!inVoice) {
+    await joinVoice();
+  } else {
+    leaveVoice();
+  }
+}
+
+async function joinVoice() {
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // 麦克风音量控制
+    audioContext = new AudioContext();
+    const source = audioContext.createMediaStreamSource(localStream);
+    const gainNode = audioContext.createGain();
+    micGainNode = gainNode;
+    const dest = audioContext.createMediaStreamDestination();
+    source.connect(gainNode);
+    gainNode.connect(dest);
+    localStream = dest.stream;
+    
+    // 说话检测
+    const analyser = audioContext.createAnalyser();
+    source.connect(analyser);
+    detectSpeaking(analyser);
+    
+    inVoice = true;
+    document.getElementById('voice-join-btn').textContent = '📵 离开语音';
+    document.getElementById('voice-join-btn').classList.add('in-voice');
+    document.getElementById('voice-controls').classList.add('show');
+    
+    addVoiceMember(currentUser.username);
+    socket.emit('voice_join', { username: currentUser.username, room: currentRoom });
+  } catch (e) {
+    alert('无法访问麦克风：' + e.message);
+  }
+}
+
+function leaveVoice() {
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.stop());
+    localStream = null;
+  }
+  Object.values(peerConnections).forEach(pc => pc.close());
+  peerConnections = {};
+  Object.values(audioElements).forEach(el => el.remove());
+  audioElements = {};
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  
+  inVoice = false;
+  isMuted = false;
+  document.getElementById('voice-join-btn').textContent = '🎤 加入语音';
+  document.getElementById('voice-join-btn').classList.remove('in-voice');
+  document.getElementById('voice-controls').classList.remove('show');
+  document.getElementById('mute-btn').textContent = '🎤 闭麦';
+  document.getElementById('mute-btn').classList.remove('active');
+  
+  socket.emit('voice_leave', { username: currentUser.username, room: currentRoom });
+}
+
+// ── 语音：WebRTC 连接 ─────────────────────────────────────
+async function createPeerConnection(targetUsername) {
+  const pc = new RTCPeerConnection(iceServers);
+  peerConnections[targetUsername] = pc;
+  
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+  
+  pc.ontrack = (event) => {
+    if (!audioElements[targetUsername]) {
+      const audio = new Audio();
+      audio.srcObject = event.streams[0];
+      audio.volume = speakerVolume;
+      audio.play();
+      audioElements[targetUsername] = audio;
+    }
+  };
+  
+  pc.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit('voice_ice', {
+        room: currentRoom,
+        from: currentUser.username,
+        to: targetUsername,
+        candidate: event.candidate
+      });
+    }
+  };
+  
+  return pc;
+}
+
+// ── 语音：信令处理 ────────────────────────────────────────
+socket.on('voice_current_members', async function(data) {
+  for (const username of data.members) {
+    if (username !== currentUser.username && !peerConnections[username]) {
+      const pc = await createPeerConnection(username);
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('voice_offer', {
+        room: currentRoom,
+        from: currentUser.username,
+        to: username,
+        offer: offer
+      });
+    }
+  }
+});
+
+socket.on('voice_user_joined', async function(data) {
+  if (data.username === currentUser?.username) return;
+  addVoiceMember(data.username);
+});
+
+socket.on('voice_offer', async function(data) {
+  if (data.to !== currentUser?.username || !inVoice) return;
+  const pc = await createPeerConnection(data.from);
+  await pc.setRemoteDescription(new RTCSessionDescription(data.offer));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  socket.emit('voice_answer', {
+    room: currentRoom,
+    from: currentUser.username,
+    to: data.from,
+    answer: answer
+  });
+});
+
+socket.on('voice_answer', async function(data) {
+  if (data.to !== currentUser?.username) return;
+  const pc = peerConnections[data.from];
+  if (pc) await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+});
+
+socket.on('voice_ice', async function(data) {
+  if (data.to !== currentUser?.username) return;
+  const pc = peerConnections[data.from];
+  if (pc) await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+});
+
+socket.on('voice_user_left', function(data) {
+  removeVoiceMember(data.username);
+  if (peerConnections[data.username]) {
+    peerConnections[data.username].close();
+    delete peerConnections[data.username];
+  }
+  if (audioElements[data.username]) {
+    audioElements[data.username].remove();
+    delete audioElements[data.username];
+  }
+});
+
+// ── 语音：UI 更新 ─────────────────────────────────────────
+function addVoiceMember(username) {
+  const list = document.getElementById('voice-members-list');
+  if (document.getElementById('vm-' + username)) return;
+  const div = document.createElement('div');
+  div.className = 'voice-member';
+  div.id = 'vm-' + username;
+  div.innerHTML = `<span class="voice-icon">🎤</span><span>${username}</span>
+    ${username !== currentUser.username ? `<button class="voice-btn" style="margin-left:auto; font-size:0.7rem;" onclick="toggleIgnore('${username}')">拒听</button>` : ''}
+    ${isAdmin && username !== currentUser.username ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>` : ''}`;
+  list.appendChild(div);
+  // 从成员列表移除
+  const memberEl = document.getElementById('member-' + username);
+  if (memberEl) memberEl.remove();
+}
+
+function removeVoiceMember(username) {
+  const el = document.getElementById('vm-' + username);
+  if (el) el.remove();
+  if (currentRoom) socket.emit('get_members', { room: currentRoom });
+}
+
+// ── 语音：说话检测 ────────────────────────────────────────
+function detectSpeaking(analyser) {
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  let speaking = false;
+  
+  setInterval(() => {
+    analyser.getByteFrequencyData(data);
+    const avg = data.reduce((a, b) => a + b) / data.length;
+    const nowSpeaking = avg > 10;
+    
+    if (nowSpeaking !== speaking) {
+      speaking = nowSpeaking;
+      socket.emit('voice_speaking', {
+        room: currentRoom,
+        username: currentUser.username,
+        speaking: speaking
+      });
+      const el = document.getElementById('vm-' + currentUser.username);
+      if (el) el.classList.toggle('speaking', speaking);
+    }
+  }, 100);
+}
+
+socket.on('voice_speaking', function(data) {
+  const el = document.getElementById('vm-' + data.username);
+  if (el) el.classList.toggle('speaking', data.speaking);
+});
+
+// ── 语音：音量控制 ────────────────────────────────────────
+function setMicVolume(val) {
+  if (micGainNode) micGainNode.gain.value = val / 100;
+}
+
+function setSpeakerVolume(val) {
+  speakerVolume = val / 100;
+  Object.values(audioElements).forEach(el => el.volume = speakerVolume);
+}
+
+function toggleMute() {
+  isMuted = !isMuted;
+  if (localStream) {
+    localStream.getTracks().forEach(t => t.enabled = !isMuted);
+  }
+  const btn = document.getElementById('mute-btn');
+  btn.textContent = isMuted ? '🔇 已闭麦' : '🎤 闭麦';
+  btn.classList.toggle('active', isMuted);
+  socket.emit('voice_mute_status', {
+    room: currentRoom,
+    username: currentUser.username,
+    muted: isMuted
+  });
+}
+
+socket.on('voice_mute_status', function(data) {
+  const el = document.getElementById('vm-' + data.username);
+  if (el) {
+    const icon = el.querySelector('.voice-icon');
+    if (icon) icon.textContent = data.muted ? '🔇' : '🎤';
+  }
+});
+
+// ── 语音：拒听 ────────────────────────────────────────────
+function toggleIgnore(username) {
+  if (ignoredUsers.has(username)) {
+    ignoredUsers.delete(username);
+    if (audioElements[username]) audioElements[username].volume = speakerVolume;
+  } else {
+    ignoredUsers.add(username);
+    if (audioElements[username]) audioElements[username].volume = 0;
+  }
+}
+
+// ── 语音：禁言 ────────────────────────────────────────────
+function banVoice(username) {
+  socket.emit('voice_ban', {
+    requester: currentUser.username,
+    room: currentRoom,
+    target: username
+  });
+}
+
+socket.on('voice_banned', function(data) {
+  if (data.target === currentUser?.username) {
+    if (localStream) localStream.getTracks().forEach(t => t.enabled = false);
+    alert('你已被管理员禁言');
+  }
+  const el = document.getElementById('vm-' + data.target);
+  if (el) {
+    const icon = el.querySelector('.voice-icon');
+    if (icon) icon.textContent = '🚫';
+  }
+});
+
 </script>
 </body>
 </html>

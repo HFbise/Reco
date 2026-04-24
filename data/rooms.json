@@ -4,7 +4,14 @@
       "admin"
     ],
     "members": [
-      "admin"
+      "admin",
+      "test"
     ]
+  },
+  "啊": {
+    "admins": [
+      "test"
+    ],
+    "members": []
   }
 }
