@@ -362,7 +362,10 @@ def handle_join(data):
             })
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
-            emit('voice_members_view', {'members': rooms_voice[room]['voice_members']})
+            emit('voice_members_view', {
+                'members': rooms_voice[room]['voice_members'],
+                'banned': rooms_voice[room].get('voice_banned', [])
+            })
 
     except Exception as e:
         emit('join_result', {'success': False, 'msg': str(e)})
@@ -403,13 +406,21 @@ def handle_set_admin(data):
             conn.close()
             return
         admins = list(room_data['admins'] or [])
-        if data['target'] not in admins:
-            admins.append(data['target'])
-            cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
-            conn.commit()
+        remove = data.get('remove', False)
+        if remove:
+            if data['target'] in admins:
+                admins.remove(data['target'])
+                cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
+                conn.commit()
+        else:
+            if data['target'] not in admins:
+                admins.append(data['target'])
+                cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
+                conn.commit()
         conn.close()
-        emit('set_admin_result', {'success': True, 'target': data['target']})
-        emit('message', {'screenname': '系统', 'text': f"{data['target']} 成为了管理员", 'system': True}, to=data['room'])
+        action_text = f"{data['target']} 被取消了管理员" if remove else f"{data['target']} 成为了管理员"
+        emit('set_admin_result', {'success': True, 'target': data['target'], 'remove': remove})
+        emit('message', {'screenname': '系统', 'text': action_text, 'system': True}, to=data['room'])
     except Exception as e:
         emit('set_admin_result', {'success': False, 'msg': str(e)})
 
@@ -631,9 +642,33 @@ def handle_voice_ban(data):
         conn.close()
         if not room_data or data['requester'] not in (room_data['admins'] or []):
             return
+        if data['target'] == SUPER_ADMIN:
+            return
     except:
         return
-    emit('voice_banned', {'target': data['target']}, to=data['room'])
+    room = data['room']
+    if room not in rooms_voice:
+        rooms_voice[room] = {'voice_members': [], 'voice_banned': []}
+    if data['target'] not in rooms_voice[room]['voice_banned']:
+        rooms_voice[room]['voice_banned'].append(data['target'])
+    emit('voice_banned', {'target': data['target']}, to=room)
+
+@socketio.on('voice_unban')
+def handle_voice_unban(data):
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT admins FROM rooms WHERE name = %s', (data['room'],))
+        room_data = cur.fetchone()
+        conn.close()
+        if not room_data or data['requester'] not in (room_data['admins'] or []):
+            return
+    except:
+        return
+    room = data['room']
+    if room in rooms_voice and data['target'] in rooms_voice[room]['voice_banned']:
+        rooms_voice[room]['voice_banned'].remove(data['target'])
+    emit('voice_unbanned', {'target': data['target']}, to=room)
 
 @socketio.on('voice_speaking')
 def handle_voice_speaking(data):

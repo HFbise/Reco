@@ -294,7 +294,8 @@
     <p id="card-username" style="color:#888; font-size:0.82rem; margin-bottom:6px;"></p>
     <p id="card-bio" style="color:#999; font-size:0.95rem; margin-bottom:16px;"></p>
     <div id="card-actions" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #ddd; padding-top:12px; margin-bottom:8px;">
-      <button id="card-set-admin-btn" style="display:none" onclick="doCardSetAdmin()">👑 设为管理员</button>
+      <button id="card-set-admin-btn" style="display:none" onclick="doCardSetAdmin(false)">👑 设为管理员</button>
+      <button id="card-remove-admin-btn" class="danger-btn" style="display:none" onclick="doCardSetAdmin(true)">取消管理员</button>
       <button id="card-kick-btn" class="danger-btn" style="display:none" onclick="doCardKick()">🚪 踢出房间</button>
       <button id="card-set-super-btn" style="display:none; background:#f0a500" onclick="doCardSetSuper(true)">⭐ 设为超级管理员</button>
       <button id="card-revoke-super-btn" class="danger-btn" style="display:none" onclick="doCardSetSuper(false)">撤销超级管理员</button>
@@ -365,6 +366,7 @@ let audioElements = {}; // { username: MediaStreamAudioSourceNode }
 let audioGains = {};    // { username: GainNode }
 let inVoice = false;
 let isMuted = false;
+let voiceBanned = new Set();
 let ignoredUsers = new Set();
 let cardTargetUsername = null;
 let memberAdmins = new Set();
@@ -443,6 +445,7 @@ socket.on('new_room_created', function(data) {
 });
 
 socket.on('voice_members_view', function(data) {
+  (data.banned || []).forEach(u => voiceBanned.add(u));
   data.members.forEach(m => addVoiceMember(m.username, m.screenname));
 });
 
@@ -556,6 +559,9 @@ function logout() {
   document.getElementById('no-room').style.display = 'flex';
   document.getElementById('chat-main').style.display = 'none';
   document.getElementById('messages').innerHTML = '';
+  document.getElementById('member-list').innerHTML = '';
+  document.getElementById('voice-members-list').innerHTML = '';
+  voiceBanned.clear();
 }
 
 // ── 忘记密码 ──────────────────────────────────────────────
@@ -645,15 +651,17 @@ function openMemberCard(username) {
   const targetIsAdmin = memberAdmins.has(username);
   const targetIsSuper = memberSuperAdmins.has(username);
   const canSetAdmin = isAdmin && !isSelf && !targetIsAdmin && !targetIsSuper;
+  const canRemoveAdmin = isAdmin && !isSelf && targetIsAdmin && !targetIsSuper;
   const canKick = isAdmin && !isSelf && !targetIsSuper && (currentUser?.is_super_admin || !targetIsAdmin);
   const isGodAdmin = currentUser?.username === 'admin';
   const canSetSuper = isGodAdmin && !isSelf && !targetIsSuper;
   const canRevokeSuper = isGodAdmin && !isSelf && targetIsSuper;
   document.getElementById('card-set-admin-btn').style.display = canSetAdmin ? '' : 'none';
+  document.getElementById('card-remove-admin-btn').style.display = canRemoveAdmin ? '' : 'none';
   document.getElementById('card-kick-btn').style.display = canKick ? '' : 'none';
   document.getElementById('card-set-super-btn').style.display = canSetSuper ? '' : 'none';
   document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
-  document.getElementById('card-actions').style.display = (canSetAdmin || canKick || canSetSuper || canRevokeSuper) ? 'flex' : 'none';
+  document.getElementById('card-actions').style.display = (canSetAdmin || canRemoveAdmin || canKick || canSetSuper || canRevokeSuper) ? 'flex' : 'none';
   const showVolume = inVoice && username !== currentUser?.username && !!audioGains[username];
   document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
   if (showVolume) {
@@ -771,6 +779,7 @@ function _submitJoin(room, password) {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('voice-members-list').innerHTML = '';
   document.getElementById('member-list').innerHTML = '';
+  voiceBanned.clear();
   closeAllSidebars();
 }
 
@@ -864,9 +873,9 @@ document.getElementById('msg-input').addEventListener('keypress', e => {
 });
 
 // ── 管理员功能 ────────────────────────────────────────────
-function doCardSetAdmin() {
+function doCardSetAdmin(remove) {
   if (!cardTargetUsername || !currentRoom) return;
-  socket.emit('set_admin', { requester: currentUser.username, target: cardTargetUsername, room: currentRoom });
+  socket.emit('set_admin', { requester: currentUser.username, target: cardTargetUsername, room: currentRoom, remove: !!remove });
 }
 
 socket.on('set_admin_result', function(data) {
@@ -1035,7 +1044,7 @@ function leaveVoice() {
   }
   Object.values(peerConnections).forEach(pc => pc.close());
   peerConnections = {};
-  Object.values(audioElements).forEach(src => { try { src.disconnect(); } catch(e) {} });
+  Object.values(audioElements).forEach(audio => { try { audio.pause(); audio.srcObject = null; } catch(e) {} });
   audioElements = {};
   Object.values(audioGains).forEach(g => { try { g.disconnect(); } catch(e) {} });
   audioGains = {};
@@ -1061,12 +1070,17 @@ async function createPeerConnection(targetUsername) {
   
   pc.ontrack = (event) => {
     if (!audioElements[targetUsername]) {
-      const src = audioContext.createMediaStreamSource(event.streams[0]);
+      if (audioContext.state === 'suspended') audioContext.resume();
+      const audio = new Audio();
+      audio.srcObject = event.streams[0];
+      audio.autoplay = true;
+      audio.play().catch(() => {});
+      const src = audioContext.createMediaElementSource(audio);
       const gain = audioContext.createGain();
       gain.gain.value = speakerVolume;
       src.connect(gain);
       gain.connect(audioContext.destination);
-      audioElements[targetUsername] = src;
+      audioElements[targetUsername] = audio;
       audioGains[targetUsername] = gain;
     }
   };
@@ -1141,7 +1155,7 @@ socket.on('voice_user_left', function(data) {
     delete peerConnections[data.username];
   }
   if (audioElements[data.username]) {
-    audioElements[data.username].remove();
+    try { audioElements[data.username].pause(); audioElements[data.username].srcObject = null; } catch(e) {}
     delete audioElements[data.username];
   }
 });
@@ -1155,7 +1169,7 @@ function addVoiceMember(username, screenname) {
   div.className = 'voice-member';
   div.id = 'vm-' + username;
   div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${display}</span>
-    ${isAdmin && username !== currentUser.username ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>` : ''}`;
+    ${isAdmin && username !== currentUser.username && username !== 'admin' ? (voiceBanned.has(username) ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="unbanVoice('${username}')">解除禁言</button>` : `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>`) : ''}`;
   list.appendChild(div);
   const memberEl = document.getElementById('member-' + username);
   if (memberEl) memberEl.remove();
@@ -1249,6 +1263,7 @@ function banVoice(username) {
 }
 
 socket.on('voice_banned', function(data) {
+  voiceBanned.add(data.target);
   if (data.target === currentUser?.username) {
     if (localStream) localStream.getTracks().forEach(t => t.enabled = false);
     alert('你已被管理员禁言');
@@ -1257,8 +1272,29 @@ socket.on('voice_banned', function(data) {
   if (el) {
     const icon = el.querySelector('.voice-icon');
     if (icon) icon.textContent = '🚫';
+    const btn = el.querySelector('.voice-btn');
+    if (btn) { btn.textContent = '解除禁言'; btn.onclick = () => unbanVoice(data.target); }
   }
 });
+
+socket.on('voice_unbanned', function(data) {
+  voiceBanned.delete(data.target);
+  if (data.target === currentUser?.username) {
+    if (localStream) localStream.getTracks().forEach(t => t.enabled = true);
+    alert('你已被解除禁言');
+  }
+  const el = document.getElementById('vm-' + data.target);
+  if (el) {
+    const icon = el.querySelector('.voice-icon');
+    if (icon) icon.textContent = '🎤';
+    const btn = el.querySelector('.voice-btn');
+    if (btn) { btn.textContent = '禁言'; btn.onclick = () => banVoice(data.target); }
+  }
+});
+
+function unbanVoice(username) {
+  socket.emit('voice_unban', { requester: currentUser.username, room: currentRoom, target: username });
+}
 
 // ── 手机侧栏切换 ─────────────────────────────────────────
 function toggleSidebar() {
