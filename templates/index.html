@@ -1035,9 +1035,10 @@ async function joinVoice() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-    // Web Audio 仅用于说话检测，原始流直接用于 WebRTC 传输
+    // 克隆一条流给 AudioContext 做说话检测，原始流专给 WebRTC，不互相干扰
     audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(localStream);
+    const analysisStream = localStream.clone();
+    const source = audioContext.createMediaStreamSource(analysisStream);
     const analyser = audioContext.createAnalyser();
     source.connect(analyser);
     detectSpeaking(analyser);
@@ -1061,7 +1062,7 @@ function leaveVoice() {
   }
   Object.values(peerConnections).forEach(pc => pc.close());
   peerConnections = {};
-  Object.values(audioElements).forEach(audio => { try { audio.pause(); audio.srcObject = null; } catch(e) {} });
+  Object.values(audioElements).forEach(audio => { try { audio.pause(); audio.srcObject = null; if (audio.parentNode) audio.parentNode.removeChild(audio); } catch(e) {} });
   audioElements = {};
   Object.values(audioGains).forEach(g => { try { g.disconnect(); } catch(e) {} });
   audioGains = {};
@@ -1086,16 +1087,30 @@ async function createPeerConnection(targetUsername) {
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
   
   pc.ontrack = (event) => {
-    if (!audioElements[targetUsername]) {
-      const audio = new Audio();
-      audio.srcObject = event.streams[0];
+    if (event.streams && event.streams[0] && !audioElements[targetUsername]) {
+      const audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.setAttribute('playsinline', '');
       audio.volume = Math.min(speakerVolume, 1);
-      audio.play().catch(() => {});
+      audio.srcObject = event.streams[0];
+      document.body.appendChild(audio);
+      audio.play().catch(e => console.warn('audio play blocked:', e));
       audioElements[targetUsername] = audio;
       audioGains[targetUsername] = audio;
     }
   };
-  
+
+  pc.oniceconnectionstatechange = () => {
+    const el = document.getElementById('vm-' + targetUsername);
+    if (!el) return;
+    if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+      el.style.opacity = '';
+    } else if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+      el.style.opacity = '0.4';
+      el.title = 'ICE 连接失败';
+    }
+  };
+
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('voice_ice', {
@@ -1166,7 +1181,7 @@ socket.on('voice_user_left', function(data) {
     delete peerConnections[data.username];
   }
   if (audioElements[data.username]) {
-    try { audioElements[data.username].pause(); audioElements[data.username].srcObject = null; } catch(e) {}
+    try { const a = audioElements[data.username]; a.pause(); a.srcObject = null; if (a.parentNode) a.parentNode.removeChild(a); } catch(e) {}
     delete audioElements[data.username];
   }
 });
