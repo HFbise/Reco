@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from flask import Flask, render_template, session, request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import psycopg2
@@ -337,7 +337,7 @@ def handle_join(data):
                 'username': msg['username'],
                 'screenname': msg['screenname'],
                 'text': msg['text'],
-                'time': msg['time'],
+                'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
                 'room': room
             })
 
@@ -361,7 +361,7 @@ def handle_message(data):
             )
             conn.commit()
             conn.close()
-            data['time'] = datetime.now().strftime('%H:%M')
+            data['time'] = datetime.now(timezone.utc).isoformat()
         except Exception as e:
             print('消息保存失败:', e)
     emit('message', data, to=data['room'])

@@ -798,7 +798,7 @@ socket.on('message', function(data) {
     msg.appendChild(text);
     const time = document.createElement('div');
     time.style.cssText = 'font-size:0.7rem; opacity:0.6; margin-top:4px; text-align:right;';
-    time.textContent = data.time || '';
+    time.textContent = formatMsgTime(data.time);
     msg.appendChild(time);
   }
 
@@ -808,6 +808,13 @@ socket.on('message', function(data) {
   socket.emit('get_members', { room: currentRoom });
 }
 });
+
+function formatMsgTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return ts;
+  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 function sendMessage() {
   if (!currentUser) { openAuth(); return; }
