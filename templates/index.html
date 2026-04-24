@@ -386,12 +386,22 @@ if (savedUser) {
 // 启动时获取房间列表
 socket.on('connect', function() {
   socket.emit('get_rooms');
-  if (currentUser) socket.emit('user_online', { username: currentUser.username });
+  if (currentUser) {
+    socket.emit('user_online', { username: currentUser.username });
+    if (currentRoom) _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+  }
 });
 
 socket.on('rooms_list', function(data) {
   data.rooms.forEach(r => addRoomToList(r.name, r.has_password));
   if (currentUser && !currentRoom) joinRoom('大厅');
+});
+
+// 手机切屏回来时刷新消息
+document.addEventListener('visibilitychange', function() {
+  if (document.visibilityState === 'visible' && currentUser && currentRoom) {
+    _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+  }
 });
 
 socket.on('members_list', function(data) {
