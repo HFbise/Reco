@@ -101,6 +101,8 @@
     .voice-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
     .tab:hover { background: rgba(79,142,247,0.15); transition: background 0.15s; }
 
+    .member-item.offline { opacity: 0.45; }
+
     /* ── 手机适配 ── */
     #mobile-menu-btn, #mobile-members-btn { display: none; }
 
@@ -297,6 +299,8 @@
     <div id="card-actions" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #ddd; padding-top:12px; margin-bottom:8px;">
       <button id="card-set-admin-btn" style="display:none" onclick="doCardSetAdmin()">👑 设为管理员</button>
       <button id="card-kick-btn" class="danger-btn" style="display:none" onclick="doCardKick()">🚪 踢出房间</button>
+      <button id="card-set-super-btn" style="display:none; background:#f0a500" onclick="doCardSetSuper(true)">⭐ 设为超级管理员</button>
+      <button id="card-revoke-super-btn" class="danger-btn" style="display:none" onclick="doCardSetSuper(false)">撤销超级管理员</button>
     </div>
     <button class="link-btn" style="color:#e74c3c" onclick="closeModal('member-card-modal')">关闭</button>
   </div>
@@ -388,12 +392,11 @@ socket.on('members_list', function(data) {
   memberAdmins.clear();
   memberSuperAdmins.clear();
   data.members.forEach(m => {
-    if (!m.is_online) return;
     if (m.is_admin) memberAdmins.add(m.username);
     if (m.is_super_admin) memberSuperAdmins.add(m.username);
     if (document.getElementById('vm-' + m.username)) return;
     const div = document.createElement('div');
-    div.className = 'member-item';
+    div.className = 'member-item' + (m.is_online ? '' : ' offline');
     div.id = 'member-' + m.username;
     div.innerHTML = `${m.is_admin ? '👑 ' : ''}${m.screenname}`;
     div.onclick = () => openMemberCard(m.username);
@@ -406,12 +409,8 @@ socket.on('new_room_created', function(data) {
 });
 
 socket.on('online_status_changed', function(data) {
-  if (!data.online) {
-    const el = document.getElementById('member-' + data.username);
-    if (el) el.remove();
-  } else if (currentRoom) {
-    socket.emit('get_members', { room: currentRoom });
-  }
+  const el = document.getElementById('member-' + data.username);
+  if (el) el.classList.toggle('offline', !data.online);
 });
 
 // ── 主题 ────────────────────────────────────────────────
@@ -603,9 +602,14 @@ function openMemberCard(username) {
   const targetIsSuper = memberSuperAdmins.has(username);
   const canSetAdmin = isAdmin && !isSelf && !targetIsAdmin && !targetIsSuper;
   const canKick = isAdmin && !isSelf && !targetIsSuper && (currentUser?.is_super_admin || !targetIsAdmin);
+  const isGodAdmin = currentUser?.username === 'admin';
+  const canSetSuper = isGodAdmin && !isSelf && !targetIsSuper;
+  const canRevokeSuper = isGodAdmin && !isSelf && targetIsSuper;
   document.getElementById('card-set-admin-btn').style.display = canSetAdmin ? '' : 'none';
   document.getElementById('card-kick-btn').style.display = canKick ? '' : 'none';
-  document.getElementById('card-actions').style.display = (canSetAdmin || canKick) ? 'flex' : 'none';
+  document.getElementById('card-set-super-btn').style.display = canSetSuper ? '' : 'none';
+  document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
+  document.getElementById('card-actions').style.display = (canSetAdmin || canKick || canSetSuper || canRevokeSuper) ? 'flex' : 'none';
   socket.emit('get_profile', { username });
   openModal('member-card-modal');
 }
@@ -822,6 +826,19 @@ socket.on('kick_result', function(data) {
   closeModal('member-card-modal');
 });
 
+function doCardSetSuper(promote) {
+  if (!cardTargetUsername) return;
+  const label = document.getElementById('card-screenname').textContent;
+  const msg = promote ? `确定将「${label}」设为超级管理员？` : `确定撤销「${label}」的超级管理员权限？`;
+  if (!confirm(msg)) return;
+  socket.emit('set_super_admin', { requester: currentUser.username, target: cardTargetUsername, promote });
+}
+
+socket.on('set_super_admin_result', function(data) {
+  if (!data.success) { alert(data.msg); return; }
+  closeModal('member-card-modal');
+});
+
 socket.on('kicked_from_room', function(data) {
   if (data.room !== currentRoom) return;
   currentRoom = null;
@@ -891,8 +908,8 @@ async function joinVoice() {
     document.getElementById('voice-join-btn').classList.add('in-voice');
     document.getElementById('voice-controls').classList.add('show');
     
-    addVoiceMember(currentUser.username);
-    socket.emit('voice_join', { username: currentUser.username, room: currentRoom });
+    addVoiceMember(currentUser.username, currentUser.screenname);
+    socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
   } catch (e) {
     alert('无法访问麦克风：' + e.message);
   }
@@ -953,15 +970,16 @@ async function createPeerConnection(targetUsername) {
 
 // ── 语音：信令处理 ────────────────────────────────────────
 socket.on('voice_current_members', async function(data) {
-  for (const username of data.members) {
-    if (username !== currentUser.username && !peerConnections[username]) {
-      const pc = await createPeerConnection(username);
+  for (const member of data.members) {
+    if (member.username !== currentUser.username && !peerConnections[member.username]) {
+      addVoiceMember(member.username, member.screenname);
+      const pc = await createPeerConnection(member.username);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('voice_offer', {
         room: currentRoom,
         from: currentUser.username,
-        to: username,
+        to: member.username,
         offer: offer
       });
     }
@@ -970,7 +988,7 @@ socket.on('voice_current_members', async function(data) {
 
 socket.on('voice_user_joined', async function(data) {
   if (data.username === currentUser?.username) return;
-  addVoiceMember(data.username);
+  addVoiceMember(data.username, data.screenname);
 });
 
 socket.on('voice_offer', async function(data) {
@@ -1012,17 +1030,17 @@ socket.on('voice_user_left', function(data) {
 });
 
 // ── 语音：UI 更新 ─────────────────────────────────────────
-function addVoiceMember(username) {
+function addVoiceMember(username, screenname) {
   const list = document.getElementById('voice-members-list');
   if (document.getElementById('vm-' + username)) return;
+  const display = screenname || username;
   const div = document.createElement('div');
   div.className = 'voice-member';
   div.id = 'vm-' + username;
-  div.innerHTML = `<span class="voice-icon">🎤</span><span>${username}</span>
+  div.innerHTML = `<span class="voice-icon">🎤</span><span>${display}</span>
     ${username !== currentUser.username ? `<button class="voice-btn" style="margin-left:auto; font-size:0.7rem;" onclick="toggleIgnore('${username}')">拒听</button>` : ''}
     ${isAdmin && username !== currentUser.username ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>` : ''}`;
   list.appendChild(div);
-  // 从成员列表移除
   const memberEl = document.getElementById('member-' + username);
   if (memberEl) memberEl.remove();
 }
