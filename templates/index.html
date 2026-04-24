@@ -187,8 +187,8 @@
         <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
         <div id="voice-members-list"></div>
         <div class="voice-controls" id="voice-controls">
-          <label>🎤 麦克风音量</label>
-          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
+          <label style="display:none">🎤 麦克风音量</label>
+          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" style="display:none" />
           <label>🔊 扬声器音量</label>
           <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
           <button class="voice-btn" id="mute-btn" onclick="toggleMute()">🎤 闭麦</button>
@@ -1034,18 +1034,10 @@ async function joinVoice() {
   }
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    
-    // 麦克风音量控制
+
+    // Web Audio 仅用于说话检测，原始流直接用于 WebRTC 传输
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(localStream);
-    const gainNode = audioContext.createGain();
-    micGainNode = gainNode;
-    const dest = audioContext.createMediaStreamDestination();
-    source.connect(gainNode);
-    gainNode.connect(dest);
-    localStream = dest.stream;
-    
-    // 说话检测
     const analyser = audioContext.createAnalyser();
     source.connect(analyser);
     detectSpeaking(analyser);
