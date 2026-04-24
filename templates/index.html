@@ -25,6 +25,8 @@
     #members-sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
     .member-item { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
     .member-item:hover { background: #f0f0f0; }
+    .sender:hover { opacity: 0.75; transition: opacity 0.15s; }
+    .voice-member span:hover { opacity: 0.75; transition: opacity 0.15s; }
     body.dark .member-item:hover { background: #0f3460; }
     #voice-section { margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
   body.dark #voice-section { border-color: #333; }
@@ -47,8 +49,9 @@
     #sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
     #room-list { flex: 1; overflow-y: auto; }
     .room-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
-    .room-item:hover { background: #f0f0f0; }
-    body.dark .room-item:hover { background: #0f3460; }
+    .member-item { transition: background 0.15s; cursor: pointer; }
+    .member-item:hover { background: #e0e8ff; }
+    body.dark .member-item:hover { background: #1a3a6e; }
     .room-item.active { background: #4f8ef7; color: white; }
     #create-room-btn { padding: 8px; background: #4f8ef7; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
 
@@ -88,6 +91,14 @@
     .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
     .tab { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
     .tab.active { background: #4f8ef7; color: white; border-color: #4f8ef7; }
+    /* ── Hover effects ── */
+    .modal-box button:hover { opacity: 0.85; transition: opacity 0.15s; }
+    #topbar button:hover { background: rgba(255,255,255,0.35); transition: background 0.15s; }
+    #send-btn:hover { background: #3a7be0; transition: background 0.15s; }
+    #voice-join-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
+    #create-room-btn:hover { background: #3a7be0; transition: background 0.15s; }
+    .voice-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
+    .tab:hover { background: rgba(79,142,247,0.15); transition: background 0.15s; }
   </style>
 </head>
 <body>
@@ -313,12 +324,18 @@ socket.on('members_list', function(data) {
   const list = document.getElementById('member-list');
   list.innerHTML = '';
   data.members.forEach(m => {
+    if (document.getElementById('vm-' + m.username)) return;
     const div = document.createElement('div');
-    div.style.cssText = 'padding:4px 8px; border-radius:6px; cursor:pointer;';
+    div.className = 'member-item';
+    div.id = 'member-' + m.username;
     div.innerHTML = `${m.is_admin ? '👑 ' : ''}${m.screenname}`;
     div.onclick = () => viewProfile(m.username);
     list.appendChild(div);
   });
+});
+
+socket.on('new_room_created', function(data) {
+  addRoomToList(data.room);
 });
 
 // ── 主题 ────────────────────────────────────────────────

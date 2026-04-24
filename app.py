@@ -241,8 +241,10 @@ def handle_create_room(data):
         conn.commit()
         conn.close()
         emit('create_room_result', {'success': True, 'room': room})
+        emit('new_room_created', {'room': room}, broadcast=True)
     except Exception as e:
         emit('create_room_result', {'success': False, 'msg': str(e)})
+        
 
 # ── 房间：加入 ────────────────────────────────────────────
 @socketio.on('join')
