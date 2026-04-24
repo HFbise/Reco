@@ -418,12 +418,12 @@ document.addEventListener('visibilitychange', function() {
   }
 });
 
-socket.on('members_list', function(data) {
+function renderMembers(members) {
   const list = document.getElementById('member-list');
   list.innerHTML = '';
   memberAdmins.clear();
   memberSuperAdmins.clear();
-  data.members.forEach(m => {
+  members.forEach(m => {
     if (m.is_admin) memberAdmins.add(m.username);
     if (m.is_super_admin) memberSuperAdmins.add(m.username);
     if (document.getElementById('vm-' + m.username)) return;
@@ -434,7 +434,9 @@ socket.on('members_list', function(data) {
     div.onclick = () => openMemberCard(m.username);
     list.appendChild(div);
   });
-});
+}
+
+socket.on('members_list', function(data) { renderMembers(data.members); });
 
 socket.on('new_room_created', function(data) {
   addRoomToList(data.room, data.has_password);
@@ -458,6 +460,12 @@ function toggleTheme() {
 // ── 弹窗工具 ─────────────────────────────────────────────
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+document.querySelectorAll('.modal').forEach(function(modal) {
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) closeModal(modal.id);
+  });
+});
 
 // ── 登录/注册 ─────────────────────────────────────────────
 function openAuth() { openModal('auth-modal'); loadQuestions(); }
@@ -802,7 +810,7 @@ socket.on('join_result', function(data) {
   const title = document.getElementById('chat-title');
   title.style.cursor = isAdmin ? 'pointer' : '';
   title.title = isAdmin ? '点击管理房间' : '';
-  socket.emit('get_members', { room: currentRoom });
+  if (data.members) renderMembers(data.members);
 });
 
 // ── 消息 ──────────────────────────────────────────────────

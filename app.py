@@ -326,7 +326,27 @@ def handle_join(data):
             conn.commit()
 
         is_admin = username in (room_data['admins'] or [])
-        emit('join_result', {'success': True, 'room': room, 'is_admin': is_admin})
+
+        # 成员列表（批量查 screenname）
+        member_usernames = list(room_data['members'] or [])
+        if member_usernames:
+            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', (member_usernames,))
+            screennames = {r['username']: r['screenname'] for r in cur.fetchall()}
+        else:
+            screennames = {}
+        admins_set = set(room_data['admins'] or [])
+        members_data = []
+        for u in member_usernames:
+            members_data.append({
+                'username': u,
+                'screenname': screennames.get(u, u),
+                'is_admin': u in admins_set,
+                'is_online': u in online_users,
+                'is_super_admin': u in super_admins
+            })
+        members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
+
+        emit('join_result', {'success': True, 'room': room, 'is_admin': is_admin, 'members': members_data})
 
         # 历史消息
         cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
