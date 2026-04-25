@@ -1448,6 +1448,7 @@ async function createPeerConnection(targetUsername) {
       if (savedSpeakerDeviceId && typeof audio.setSinkId === 'function') {
         audio.setSinkId(savedSpeakerDeviceId).catch(() => {});
       }
+      if (isSpeakerMuted) audio.muted = true;
       audio.play().catch(e => console.warn('audio play blocked:', e));
       audioElements[targetUsername] = audio;
       if (audioContext && audioContext.state !== 'closed') {
@@ -1470,13 +1471,32 @@ async function createPeerConnection(targetUsername) {
     }
   };
 
+  let _iceRestarted = false;
   pc.oniceconnectionstatechange = () => {
     const el = document.getElementById('vm-' + targetUsername);
-    if (el) el.style.opacity = '';
-    if (pc.iceConnectionState === 'failed') {
-      if (el) { el.style.opacity = '0.4'; el.title = 'ICE 连接失败'; }
-      alert(`与 ${targetUsername} 的语音连接失败，可能是网络环境不支持点对点连接。`);
+    const state = pc.iceConnectionState;
+    if (state === 'connected' || state === 'completed') {
+      if (el) { el.style.opacity = ''; el.title = ''; }
+      _iceRestarted = false;
+    } else if (state === 'disconnected') {
+      if (el) { el.style.opacity = '0.5'; el.title = '连接中断，等待恢复…'; }
+    } else if (state === 'failed') {
+      if (!_iceRestarted) {
+        _iceRestarted = true;
+        if (el) { el.style.opacity = '0.4'; el.title = '重新连接中…'; }
+        try { pc.restartIce(); } catch(e) {}
+      } else {
+        if (el) { el.style.opacity = '0.2'; el.title = '连接失败'; }
+      }
     }
+  };
+
+  pc.onnegotiationneeded = async () => {
+    try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('voice_offer', { room: currentRoom, from: currentUser.username, to: targetUsername, offer });
+    } catch(e) { console.warn('renegotiation failed:', e); }
   };
 
   pc.onicecandidate = (event) => {
@@ -1647,14 +1667,12 @@ function toggleSpeaker() {
   const btn = document.getElementById('speaker-toggle');
   if (isSpeakerMuted) {
     _preSpeakerVol = parseFloat(document.getElementById('speaker-volume').value);
-    Object.values(audioGains).forEach(g => {
-      if (g && g.gain) g.gain.value = 0;
-      else if (g && g.volume !== undefined) g.volume = 0;
-    });
+    Object.values(audioElements).forEach(a => { if (a) a.muted = true; });
     btn.textContent = '🔕';
     btn.classList.add('muted');
     if (!isMuted) toggleMute();
   } else {
+    Object.values(audioElements).forEach(a => { if (a) a.muted = false; });
     document.getElementById('speaker-volume').value = _preSpeakerVol;
     setSpeakerVolume(_preSpeakerVol);
     btn.textContent = '🔊';
