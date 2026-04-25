@@ -106,12 +106,13 @@ def get_ice_servers():
     if not api_key:
         return jsonify(fallback)
     try:
-        url = f'https://g.metered.ca/api/v1/turn/credentials?apiKey={api_key}'
+        url = f'https://bise.metered.live/api/v1/turn/credentials?apiKey={api_key}'
         with urllib.request.urlopen(url, timeout=5) as resp:
             import json as _json
             servers = _json.loads(resp.read())
         return jsonify(servers)
-    except Exception:
+    except Exception as e:
+        print(f'[ICE] metered.ca 请求失败，回退到 STUN: {e}')
         return jsonify(fallback)
 
 # ── 用户注册 ──────────────────────────────────────────────
