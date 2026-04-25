@@ -199,10 +199,12 @@
           <div class="voice-toggle-row">
             <button id="mic-toggle" class="voice-toggle-btn" onclick="toggleMute()" title="闭麦 / 开麦">🎤</button>
             <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
+            <span id="mic-vol-pct" style="font-size:0.8rem;min-width:32px;text-align:right;">100%</span>
           </div>
           <div class="voice-toggle-row">
             <button id="speaker-toggle" class="voice-toggle-btn" onclick="toggleSpeaker()" title="静音扬声器（同时闭麦）">🔊</button>
-            <input type="range" id="speaker-volume" min="0" max="150" value="100" oninput="setSpeakerVolume(this.value)" />
+            <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
+            <span id="speaker-vol-pct" style="font-size:0.8rem;min-width:32px;text-align:right;">100%</span>
           </div>
         </div>
       </div>
@@ -1613,6 +1615,8 @@ socket.on('voice_speaking', function(data) {
 // ── 语音：音量控制 ────────────────────────────────────────
 function setMicVolume(val) {
   if (micGainNode) micGainNode.gain.value = val / 100;
+  const pct = document.getElementById('mic-vol-pct');
+  if (pct) pct.textContent = val + '%';
 }
 
 function setSpeakerVolume(val) {
@@ -1622,6 +1626,8 @@ function setSpeakerVolume(val) {
     if (g.gain) g.gain.value = speakerVolume;
     else if (g.volume !== undefined) g.volume = Math.min(speakerVolume, 1);
   });
+  const pct = document.getElementById('speaker-vol-pct');
+  if (pct) pct.textContent = val + '%';
 }
 
 function toggleMute() {
