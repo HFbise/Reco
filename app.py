@@ -1,9 +1,12 @@
 import os
+import random
+import string
 from dotenv import load_dotenv
 load_dotenv()
 import json
 from datetime import datetime, timezone
-from flask import Flask, render_template, session, request
+from flask import Flask, render_template, session, request, jsonify
+import urllib.request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -43,6 +46,7 @@ def get_level(username, room_data):
 rooms_voice = {}
 online_users = {}        # { username: set of sids }
 super_admins = {SUPER_ADMIN}  # 超级管理员集合，启动时从 DB 加载
+pending_invites = {}     # { room: set(usernames) } — 待接受的邀请，加入时跳过密码验证
 
 def load_super_admins():
     try:
@@ -91,6 +95,24 @@ def handle_disconnect():
 @app.route('/')
 def index():
     return render_template('index.html')
+
+@app.route('/api/ice-servers')
+def get_ice_servers():
+    api_key = os.environ.get('METERED_API_KEY', '')
+    fallback = [
+        {'urls': 'stun:stun.l.google.com:19302'},
+        {'urls': 'stun:stun1.l.google.com:19302'},
+    ]
+    if not api_key:
+        return jsonify(fallback)
+    try:
+        url = f'https://g.metered.ca/api/v1/turn/credentials?apiKey={api_key}'
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            import json as _json
+            servers = _json.loads(resp.read())
+        return jsonify(servers)
+    except Exception:
+        return jsonify(fallback)
 
 # ── 用户注册 ──────────────────────────────────────────────
 @socketio.on('register')
@@ -291,11 +313,12 @@ def handle_create_room(data):
             emit('create_room_result', {'success': False, 'msg': '房间已存在'})
             conn.close()
             return
-        cur.execute('INSERT INTO rooms (name, admins, members, password, owner) VALUES (%s, %s, %s, %s, %s)',
-                    (room, [], [], password, username))
+        code = _gen_unique_room_code(cur)
+        cur.execute('INSERT INTO rooms (name, admins, members, password, owner, code) VALUES (%s, %s, %s, %s, %s, %s)',
+                    (room, [], [], password, username, code))
         conn.commit()
         conn.close()
-        emit('create_room_result', {'success': True, 'room': room, 'has_password': bool(password)})
+        emit('create_room_result', {'success': True, 'room': room, 'has_password': bool(password), 'code': code})
         socketio.emit('new_room_created', {'room': room, 'has_password': bool(password)})
     except Exception as e:
         emit('create_room_result', {'success': False, 'msg': str(e)})
@@ -324,7 +347,10 @@ def handle_join(data):
 
         room_pw = room_data.get('password')
         if room_pw and username not in super_admins:
-            if data.get('password', '') != room_pw:
+            invited = username in pending_invites.get(room, set())
+            if invited:
+                pending_invites[room].discard(username)
+            elif data.get('password', '') != room_pw:
                 emit('join_result', {'success': False, 'msg': '密码错误', 'wrong_password': True})
                 conn.close()
                 return
@@ -362,7 +388,8 @@ def handle_join(data):
             })
         members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
 
-        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data})
+        room_code = room_data.get('code') or ''
+        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code})
 
         # 历史消息
         cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
@@ -495,12 +522,16 @@ def handle_close_room(data):
 
 # ── 房间：获取列表 ────────────────────────────────────────
 @socketio.on('get_rooms')
-def handle_get_rooms():
+def handle_get_rooms(data=None):
+    username = (data or {}).get('username', '')
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT name, password FROM rooms')
-        rooms = [{'name': r['name'], 'has_password': bool(r['password'])} for r in cur.fetchall()]
+        if username:
+            cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅' OR %s = ANY(members)", (username,))
+        else:
+            cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅'")
+        rooms = [{'name': r['name'], 'has_password': bool(r['password']), 'code': r.get('code') or ''} for r in cur.fetchall()]
         conn.close()
         lobby = next((r for r in rooms if r['name'] == '大厅'), None)
         if lobby:
@@ -509,6 +540,47 @@ def handle_get_rooms():
         emit('rooms_list', {'rooms': rooms})
     except Exception as e:
         emit('rooms_list', {'rooms': []})
+
+@socketio.on('find_room')
+def handle_find_room(data):
+    code = data.get('code', '').strip()
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT name, password, code FROM rooms WHERE code = %s', (code,))
+        room = cur.fetchone()
+        conn.close()
+        if not room:
+            emit('find_room_result', {'success': False, 'msg': '找不到该房间号'})
+            return
+        emit('find_room_result', {'success': True, 'room': room['name'], 'has_password': bool(room['password']), 'code': room['code']})
+    except Exception as e:
+        emit('find_room_result', {'success': False, 'msg': str(e)})
+
+@socketio.on('get_my_admin_rooms')
+def handle_get_my_admin_rooms(data):
+    username = data.get('username', '')
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT name, code FROM rooms WHERE owner = %s OR %s = ANY(admins)", (username, username))
+        rooms = [{'name': r['name'], 'code': r.get('code') or ''} for r in cur.fetchall()]
+        conn.close()
+        emit('my_admin_rooms', {'rooms': rooms})
+    except Exception as e:
+        emit('my_admin_rooms', {'rooms': []})
+
+@socketio.on('invite_to_room')
+def handle_invite_to_room(data):
+    requester = data.get('requester', '')
+    target = data.get('target', '')
+    room = data.get('room', '')
+    if not requester or not target or not room:
+        return
+    pending_invites.setdefault(room, set()).add(target)
+    if target in online_users:
+        for sid in list(online_users[target]):
+            socketio.emit('room_invite', {'from': requester, 'room': room}, to=sid)
 
 # ── 房间：获取成员 ────────────────────────────────────────
 @socketio.on('get_members')
@@ -697,7 +769,33 @@ def handle_voice_unban(data):
 def handle_voice_speaking(data):
     emit('voice_speaking', data, to=data['room'])
 
+# ── 工具函数 ──────────────────────────────────────────────
+def _gen_unique_room_code(cur):
+    while True:
+        code = ''.join(random.choices(string.digits, k=6))
+        cur.execute('SELECT 1 FROM rooms WHERE code = %s', (code,))
+        if not cur.fetchone():
+            return code
+
 # ── 启动 ──────────────────────────────────────────────────
+def ensure_room_codes():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS code TEXT")
+        conn.commit()
+        cur.execute("SELECT name FROM rooms WHERE code IS NULL")
+        rows = cur.fetchall()
+        for row in rows:
+            code = _gen_unique_room_code(cur)
+            cur.execute("UPDATE rooms SET code = %s WHERE name = %s", (code, row['name']))
+        conn.commit()
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print('房间号迁移失败:', e)
+
 def ensure_lobby():
     try:
         conn = get_db()
@@ -713,6 +811,7 @@ def ensure_lobby():
 
 if __name__ == '__main__':
     load_super_admins()
+    ensure_room_codes()
     ensure_lobby()
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)

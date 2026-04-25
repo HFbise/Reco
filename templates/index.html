@@ -54,7 +54,9 @@
     .member-item:hover { background: #e0e8ff; }
     body.dark .member-item:hover { background: #1a3a6e; }
     .room-item.active { background: #4f8ef7; color: white; }
-    #create-room-btn { padding: 8px; background: #4f8ef7; color: white; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
+    #create-room-btn, #find-room-btn { padding: 8px; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
+    #create-room-btn { background: #4f8ef7; color: white; }
+    #find-room-btn { background: #27ae60; color: white; margin-top: 6px; }
 
     /* ── 聊天区 ── */
     #chat-header { padding: 12px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
@@ -98,6 +100,7 @@
     #send-btn:hover { background: #3a7be0; transition: background 0.15s; }
     #voice-join-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
     #create-room-btn:hover { background: #3a7be0; transition: background 0.15s; }
+    #find-room-btn:hover { background: #219a52; transition: background 0.15s; }
     .voice-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
     .tab:hover { background: rgba(79,142,247,0.15); transition: background 0.15s; }
 
@@ -169,6 +172,7 @@
     <h3>聊天室</h3>
     <div id="room-list"></div>
     <button id="create-room-btn" onclick="openCreateRoom()">＋ 创建房间</button>
+    <button id="find-room-btn" onclick="openFindRoom()">🔍 搜索房间</button>
   </div>
   <div id="chat-area">
     <div id="no-room">请先登录或注册</div>
@@ -184,6 +188,7 @@
     </div>
     <div id="members-sidebar">
       <div id="voice-section">
+        <div id="voice-status" style="display:none; font-size:0.78rem; color:#888; padding:4px 0 2px; text-align:center;"></div>
         <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
         <div id="voice-members-list"></div>
         <div class="voice-controls" id="voice-controls">
@@ -299,6 +304,7 @@
       <button id="card-kick-btn" class="danger-btn" style="display:none" onclick="doCardKick()">🚪 踢出房间</button>
       <button id="card-set-super-btn" style="display:none; background:#f0a500" onclick="doCardSetSuper(true)">⭐ 设为超级管理员</button>
       <button id="card-revoke-super-btn" class="danger-btn" style="display:none" onclick="doCardSetSuper(false)">撤销超级管理员</button>
+      <button id="card-invite-btn" style="display:none; background:#27ae60; color:white;" onclick="openInviteModal()">✉️ 邀请到聊天室</button>
     </div>
     <div id="card-voice-volume" style="display:none; border-top:1px solid #ddd; padding-top:12px; margin-top:4px;">
       <label style="font-size:0.85rem; color:#888; display:block; margin-bottom:6px;">🔊 语音音量</label>
@@ -315,6 +321,11 @@
 <div class="modal" id="room-card-modal">
   <div class="modal-box">
     <h2 id="room-card-title"></h2>
+    <div id="room-card-code-area" style="display:flex; align-items:center; gap:8px; margin-top:8px;">
+      <span style="font-size:0.85rem; color:#888;">房间号：</span>
+      <span id="room-card-code" style="font-size:1.1rem; font-weight:bold; letter-spacing:2px;"></span>
+      <button class="link-btn" style="font-size:0.8rem;" onclick="copyRoomCode()">复制</button>
+    </div>
     <div id="room-card-admin-btns" style="display:none; flex-direction:column; gap:10px; margin-top:12px;">
       <button id="room-pw-toggle-btn" onclick="toggleRoomPasswordAction()"></button>
       <div id="room-pw-set-area" style="display:none; flex-direction:column; gap:6px;">
@@ -325,6 +336,39 @@
       <button id="room-card-close-btn" onclick="confirmCloseRoomFromCard()" style="background:#e74c3c; color:white;">🗑 关闭房间</button>
     </div>
     <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('room-card-modal')">关闭</button>
+  </div>
+</div>
+
+<!-- ── 搜索房间弹窗 ── -->
+<div class="modal" id="find-room-modal">
+  <div class="modal-box">
+    <h2>🔍 搜索房间</h2>
+    <div class="error-msg" id="find-room-error"></div>
+    <input id="find-room-code" type="text" placeholder="输入房间号（6位数字）" maxlength="6" style="letter-spacing:2px;" />
+    <button onclick="doFindRoom()">搜索</button>
+    <button class="link-btn" style="color:#e74c3c" onclick="closeModal('find-room-modal')">取消</button>
+  </div>
+</div>
+
+<!-- ── 邀请选择房间弹窗 ── -->
+<div class="modal" id="invite-room-modal">
+  <div class="modal-box">
+    <h2>邀请到聊天室</h2>
+    <p id="invite-target-name" style="color:#888; font-size:0.9rem; margin-bottom:12px;"></p>
+    <div id="invite-room-list" style="display:flex; flex-direction:column; gap:8px; max-height:200px; overflow-y:auto;"></div>
+    <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('invite-room-modal')">取消</button>
+  </div>
+</div>
+
+<!-- ── 邀请通知弹窗 ── -->
+<div class="modal" id="invite-notify-modal">
+  <div class="modal-box">
+    <h2>📩 房间邀请</h2>
+    <p id="invite-notify-text" style="margin-bottom:16px;"></p>
+    <div style="display:flex; gap:10px;">
+      <button style="flex:1; background:#27ae60; color:white;" onclick="acceptInvite()">接受</button>
+      <button style="flex:1;" class="danger-btn" onclick="declineInvite()">拒绝</button>
+    </div>
   </div>
 </div>
 
@@ -381,15 +425,21 @@ let speakerVolume = 1.0;
 let micGainNode = null;
 let audioContext = null;
 
-const iceServers = {
+let iceServers = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-    { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
   ]
 };
+async function loadIceServers() {
+  try {
+    const r = await fetch('/api/ice-servers');
+    const servers = await r.json();
+    iceServers = { iceServers: servers };
+  } catch (e) {
+    console.warn('Failed to fetch ICE servers, using STUN only', e);
+  }
+}
 
 // 恢复夜间模式
 if (localStorage.getItem('theme') === 'dark') {
@@ -407,22 +457,26 @@ if (savedUser) {
 
 // 启动时获取房间列表
 socket.on('connect', function() {
-  socket.emit('get_rooms');
   if (currentUser) {
+    socket.emit('get_rooms', { username: currentUser.username });
     socket.emit('user_online', { username: currentUser.username });
     if (currentRoom) _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
   }
 });
 
 socket.on('rooms_list', function(data) {
-  data.rooms.forEach(r => addRoomToList(r.name, r.has_password));
+  data.rooms.forEach(r => addRoomToList(r.name, r.has_password, r.code));
   if (currentUser && !currentRoom) joinRoom('大厅');
 });
 
-// 手机切屏回来时刷新消息
+// 手机切屏处理
 document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible' && currentUser && currentRoom) {
-    _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+  if (document.visibilityState === 'hidden') {
+    if (inVoice) leaveVoice();
+  } else if (document.visibilityState === 'visible') {
+    if (currentUser && currentRoom) {
+      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+    }
   }
 });
 
@@ -523,6 +577,7 @@ socket.on('login_result', function(data) {
   document.getElementById('login-open-btn').style.display = 'none';
   document.getElementById('logout-btn').style.display = '';
   socket.emit('user_online', { username: currentUser.username });
+  socket.emit('get_rooms', { username: currentUser.username });
   joinRoom('大厅');
 });
 
@@ -681,16 +736,19 @@ function openMemberCard(username) {
   const isGodAdmin = currentUser?.username === 'admin';
   const canSetSuper = isGodAdmin && !isSelf && tgtLevel < 3;
   const canRevokeSuper = isGodAdmin && !isSelf && tgtLevel === 3;
+  const canInvite = !isSelf && isAdmin;
   document.getElementById('card-set-admin-btn').style.display = canSetAdmin ? '' : 'none';
   document.getElementById('card-remove-admin-btn').style.display = canRemoveAdmin ? '' : 'none';
   document.getElementById('card-kick-btn').style.display = canKick ? '' : 'none';
   document.getElementById('card-set-super-btn').style.display = canSetSuper ? '' : 'none';
   document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
-  document.getElementById('card-actions').style.display = (canSetAdmin || canRemoveAdmin || canKick || canSetSuper || canRevokeSuper) ? 'flex' : 'none';
+  document.getElementById('card-invite-btn').style.display = canInvite ? '' : 'none';
+  document.getElementById('card-actions').style.display = (canSetAdmin || canRemoveAdmin || canKick || canSetSuper || canRevokeSuper || canInvite) ? 'flex' : 'none';
   const showVolume = inVoice && username !== currentUser?.username && !!audioGains[username];
   document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
   if (showVolume) {
-    const vol = Math.round((audioGains[username].volume ?? 1) * 100);
+    const g = audioGains[username];
+    const vol = g ? (g.gain ? Math.round(g.gain.value * 100) : Math.round((g.volume ?? 1) * 100)) : 100;
     document.getElementById('card-volume-slider').value = vol;
     document.getElementById('card-volume-val').textContent = vol + '%';
   }
@@ -760,12 +818,15 @@ function doCreateRoom() {
 socket.on('create_room_result', function(data) {
   if (!data.success) { document.getElementById('create-room-error').textContent = data.msg; return; }
   closeModal('create-room-modal');
-  addRoomToList(data.room, data.has_password);
+  addRoomToList(data.room, data.has_password, data.code);
   joinRoom(data.room);
+  if (data.code) alert(`房间创建成功！\n房间号：${data.code}\n（可在房间卡片中随时查看）`);
 });
 
-function addRoomToList(room, hasPassword) {
+const roomCodes = {};
+function addRoomToList(room, hasPassword, code) {
   roomHasPassword[room] = !!hasPassword;
+  if (code) roomCodes[room] = code;
   const list = document.getElementById('room-list');
   if (document.getElementById('room-' + room)) return;
   const div = document.createElement('div');
@@ -843,10 +904,10 @@ socket.on('join_result', function(data) {
   isMod = data.is_admin || false;
   isOwner = data.is_owner || false;
   isAdmin = isMod || isOwner || (currentUser && currentUser.is_super_admin);
+  if (data.code && data.room) roomCodes[data.room] = data.code;
   const title = document.getElementById('chat-title');
-  const canManageRoom = isOwner || (currentUser && currentUser.is_super_admin);
-  title.style.cursor = canManageRoom ? 'pointer' : '';
-  title.title = canManageRoom ? '点击管理房间' : '';
+  title.style.cursor = 'pointer';
+  title.title = '点击查看房间信息';
   if (data.members) renderMembers(data.members);
 });
 
@@ -925,7 +986,11 @@ socket.on('kick_result', function(data) {
 
 function setCardVoiceVolume(val) {
   document.getElementById('card-volume-val').textContent = val + '%';
-  if (audioGains[cardTargetUsername]) audioGains[cardTargetUsername].volume = Math.min(val / 100, 1);
+  const g = audioGains[cardTargetUsername];
+  if (g) {
+    if (g.gain) g.gain.value = val / 100;
+    else if (g.volume !== undefined) g.volume = Math.min(val / 100, 1);
+  }
 }
 
 function doCardSetSuper(promote) {
@@ -953,15 +1018,27 @@ socket.on('kicked_from_room', function(data) {
 });
 
 function openRoomCard() {
-  if (!(isOwner || (currentUser && currentUser.is_super_admin)) || !currentRoom) return;
+  if (!currentRoom) return;
   document.getElementById('room-card-title').textContent = '# ' + currentRoom;
-  document.getElementById('room-pw-toggle-btn').textContent = roomHasPassword[currentRoom] ? '🔓 取消密码' : '🔒 添加密码';
-  document.getElementById('room-pw-set-area').style.display = 'none';
-  document.getElementById('room-new-pw-input').value = '';
-  document.getElementById('room-pw-set-error').textContent = '';
-  document.getElementById('room-card-close-btn').style.display = currentRoom === '大厅' ? 'none' : '';
-  document.getElementById('room-card-admin-btns').style.display = 'flex';
+  document.getElementById('room-card-code').textContent = roomCodes[currentRoom] || '——';
+  const canManage = isOwner || (currentUser && currentUser.is_super_admin);
+  if (canManage) {
+    document.getElementById('room-pw-toggle-btn').textContent = roomHasPassword[currentRoom] ? '🔓 取消密码' : '🔒 添加密码';
+    document.getElementById('room-pw-set-area').style.display = 'none';
+    document.getElementById('room-new-pw-input').value = '';
+    document.getElementById('room-pw-set-error').textContent = '';
+    document.getElementById('room-card-close-btn').style.display = currentRoom === '大厅' ? 'none' : '';
+    document.getElementById('room-card-admin-btns').style.display = 'flex';
+  } else {
+    document.getElementById('room-card-admin-btns').style.display = 'none';
+  }
   openModal('room-card-modal');
+}
+
+function copyRoomCode() {
+  const code = roomCodes[currentRoom];
+  if (!code) return;
+  navigator.clipboard.writeText(code).then(() => alert('房间号已复制：' + code)).catch(() => alert('房间号：' + code));
 }
 
 function toggleRoomPasswordAction() {
@@ -1001,6 +1078,85 @@ function confirmCloseRoomFromCard() {
   confirmCloseRoom();
 }
 
+// ── 搜索房间 ──────────────────────────────────────────────
+function openFindRoom() {
+  document.getElementById('find-room-code').value = '';
+  document.getElementById('find-room-error').textContent = '';
+  openModal('find-room-modal');
+}
+
+function doFindRoom() {
+  const code = document.getElementById('find-room-code').value.trim();
+  if (!code) return;
+  socket.emit('find_room', { code });
+}
+
+document.getElementById('find-room-code').addEventListener('keypress', e => {
+  if (e.key === 'Enter') doFindRoom();
+});
+
+socket.on('find_room_result', function(data) {
+  if (!data.success) { document.getElementById('find-room-error').textContent = data.msg; return; }
+  closeModal('find-room-modal');
+  addRoomToList(data.room, data.has_password, data.code);
+  joinRoom(data.room);
+});
+
+// ── 邀请功能 ──────────────────────────────────────────────
+let pendingInviteRoom = null;
+let pendingInviteFrom = null;
+
+function openInviteModal() {
+  if (!cardTargetUsername) return;
+  document.getElementById('invite-target-name').textContent = '邀请 @' + cardTargetUsername + ' 到：';
+  const list = document.getElementById('invite-room-list');
+  list.innerHTML = '<span style="color:#888;font-size:0.85rem;">加载中...</span>';
+  socket.emit('get_my_admin_rooms', { username: currentUser.username });
+  closeModal('member-card-modal');
+  openModal('invite-room-modal');
+}
+
+socket.on('my_admin_rooms', function(data) {
+  const list = document.getElementById('invite-room-list');
+  if (!document.getElementById('invite-room-modal').classList.contains('show')) return;
+  list.innerHTML = '';
+  if (!data.rooms.length) {
+    list.innerHTML = '<span style="color:#888;font-size:0.85rem;">你没有管理权限的聊天室</span>';
+    return;
+  }
+  data.rooms.forEach(r => {
+    const btn = document.createElement('button');
+    btn.textContent = '# ' + r.name + (r.code ? '  (' + r.code + ')' : '');
+    btn.style.cssText = 'width:100%; text-align:left;';
+    btn.onclick = () => {
+      socket.emit('invite_to_room', { requester: currentUser.username, target: cardTargetUsername, room: r.name });
+      closeModal('invite-room-modal');
+      alert(`已邀请 @${cardTargetUsername} 进入 #${r.name}`);
+    };
+    list.appendChild(btn);
+  });
+});
+
+socket.on('room_invite', function(data) {
+  pendingInviteFrom = data.from;
+  pendingInviteRoom = data.room;
+  document.getElementById('invite-notify-text').textContent = `${data.from} 邀请你加入聊天室 #${data.room}`;
+  openModal('invite-notify-modal');
+});
+
+function acceptInvite() {
+  closeModal('invite-notify-modal');
+  if (!pendingInviteRoom) return;
+  addRoomToList(pendingInviteRoom, false);
+  joinRoom(pendingInviteRoom);
+  pendingInviteRoom = null;
+}
+
+function declineInvite() {
+  closeModal('invite-notify-modal');
+  pendingInviteRoom = null;
+}
+
 function confirmCloseRoom() {
   if (confirm(`确定关闭房间 "${currentRoom}" 吗？所有人将被踢出。`)) {
     socket.emit('close_room', { requester: currentUser.username, room: currentRoom });
@@ -1035,6 +1191,7 @@ async function joinVoice() {
     alert('语音功能需要 HTTPS 连接，直接用 IP 地址访问时不可用。\n请通过 https:// 地址访问本站。');
     return;
   }
+  await loadIceServers();
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
@@ -1057,6 +1214,9 @@ async function joinVoice() {
     document.getElementById('voice-join-btn').textContent = '📵 离开语音';
     document.getElementById('voice-join-btn').classList.add('in-voice');
     document.getElementById('voice-controls').classList.add('show');
+    const vs = document.getElementById('voice-status');
+    vs.textContent = '🔊 正在 #' + currentRoom + ' 语音';
+    vs.style.display = '';
     
     addVoiceMember(currentUser.username, currentUser.screenname);
     socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
@@ -1085,6 +1245,7 @@ function leaveVoice() {
   document.getElementById('voice-controls').classList.remove('show');
   document.getElementById('mute-btn').textContent = '🎤 闭麦';
   document.getElementById('mute-btn').classList.remove('active');
+  document.getElementById('voice-status').style.display = 'none';
   
   socket.emit('voice_leave', { username: currentUser.username, room: currentRoom });
 }
@@ -1101,12 +1262,27 @@ async function createPeerConnection(targetUsername) {
       const audio = document.createElement('audio');
       audio.autoplay = true;
       audio.setAttribute('playsinline', '');
-      audio.volume = Math.min(speakerVolume, 1);
       audio.srcObject = event.streams[0];
       document.body.appendChild(audio);
       audio.play().catch(e => console.warn('audio play blocked:', e));
       audioElements[targetUsername] = audio;
-      audioGains[targetUsername] = audio;
+      if (audioContext && audioContext.state !== 'closed') {
+        try {
+          if (audioContext.state === 'suspended') audioContext.resume();
+          const src = audioContext.createMediaElementSource(audio);
+          const gain = audioContext.createGain();
+          gain.gain.value = speakerVolume;
+          src.connect(gain);
+          gain.connect(audioContext.destination);
+          audioGains[targetUsername] = gain;
+        } catch(e) {
+          audio.volume = Math.min(speakerVolume, 1);
+          audioGains[targetUsername] = audio;
+        }
+      } else {
+        audio.volume = Math.min(speakerVolume, 1);
+        audioGains[targetUsername] = audio;
+      }
     }
   };
 
@@ -1223,8 +1399,19 @@ function addVoiceMember(username, screenname) {
 
 function removeVoiceMember(username) {
   const el = document.getElementById('vm-' + username);
-  if (el) el.remove();
-  if (currentRoom) socket.emit('get_members', { room: currentRoom });
+  if (!el) return;
+  const span = el.querySelector('span[style]');
+  const rawDisplay = span ? span.textContent.replace(/^[⭐👑🛡] /, '') : username;
+  el.remove();
+  if (!document.getElementById('member-' + username)) {
+    const div = document.createElement('div');
+    div.className = 'member-item';
+    div.id = 'member-' + username;
+    const badge = memberSuperAdmins.has(username) ? '⭐ ' : (username === memberOwner ? '👑 ' : (memberAdmins.has(username) ? '🛡 ' : ''));
+    div.innerHTML = `${badge}${rawDisplay}`;
+    div.onclick = () => openMemberCard(username);
+    document.getElementById('member-list').appendChild(div);
+  }
 }
 
 // ── 语音：说话检测 ────────────────────────────────────────
@@ -1262,7 +1449,11 @@ function setMicVolume(val) {
 
 function setSpeakerVolume(val) {
   speakerVolume = val / 100;
-  Object.values(audioGains).forEach(a => { if (a) a.volume = Math.min(speakerVolume, 1); });
+  Object.values(audioGains).forEach(g => {
+    if (!g) return;
+    if (g.gain) g.gain.value = speakerVolume;
+    else if (g.volume !== undefined) g.volume = Math.min(speakerVolume, 1);
+  });
 }
 
 function toggleMute() {
