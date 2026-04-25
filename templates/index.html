@@ -157,6 +157,7 @@
     <button id="mobile-members-btn" onclick="toggleMembersBar()">👥</button>
     <span id="topbar-name"></span>
     <button onclick="openProfile()">我的资料</button>
+    <button onclick="openSettings()">⚙️</button>
     <button onclick="toggleTheme()">🌙</button>
     <button id="logout-btn" onclick="logout()" style="display:none">登出</button>
     <button id="login-open-btn" onclick="openAuth()">登录 / 注册</button>
@@ -372,6 +373,37 @@
   </div>
 </div>
 
+<!-- ── 设置弹窗 ── -->
+<div class="modal" id="settings-modal">
+  <div class="modal-box" style="max-width:420px; width:90%;">
+    <h2>⚙️ 设置</h2>
+    <div class="tabs" style="margin-bottom:16px;">
+      <button class="tab active" id="settings-tab-audio">🎵 音频</button>
+    </div>
+    <div id="settings-audio-panel">
+      <div style="margin-bottom:14px;">
+        <label style="display:block; font-size:0.85rem; color:#888; margin-bottom:6px;">🎤 麦克风</label>
+        <select id="mic-select" style="width:100%; padding:6px; border-radius:6px; border:1px solid #ddd;" onchange="saveMicDevice(this.value)"></select>
+      </div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block; font-size:0.85rem; color:#888; margin-bottom:6px;">🔊 扬声器</label>
+        <select id="speaker-select" style="width:100%; padding:6px; border-radius:6px; border:1px solid #ddd;" onchange="saveSpeakerDevice(this.value)"></select>
+      </div>
+      <div>
+        <label style="display:block; font-size:0.85rem; color:#888; margin-bottom:8px;">🎚️ 麦克风测试</label>
+        <div id="mic-test-bar" style="display:none; background:#eee; border-radius:4px; height:10px; margin-bottom:10px; overflow:hidden;">
+          <div id="mic-test-level" style="height:100%; width:0%; background:#4f8ef7; transition:width 0.05s;"></div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button id="start-mic-test-btn" onclick="startMicTest()">▶ 开始测试</button>
+          <button id="stop-mic-test-btn" style="display:none;" onclick="stopMicTest()">■ 停止</button>
+        </div>
+      </div>
+    </div>
+    <button class="link-btn" style="color:#e74c3c; margin-top:20px;" onclick="closeSettings()">关闭</button>
+  </div>
+</div>
+
 <!-- ── 房间密码弹窗 ── -->
 <div class="modal" id="room-pw-modal">
   <div class="modal-box">
@@ -490,7 +522,6 @@ function renderMembers(members) {
     if (m.is_admin) memberAdmins.add(m.username);
     if (m.is_super_admin) memberSuperAdmins.add(m.username);
     if (m.is_owner) memberOwner = m.username;
-    if (document.getElementById('vm-' + m.username)) return;
     const div = document.createElement('div');
     div.className = 'member-item' + (m.is_online ? '' : ' offline');
     div.id = 'member-' + m.username;
@@ -516,6 +547,123 @@ socket.on('online_status_changed', function(data) {
   const el = document.getElementById('member-' + data.username);
   if (el) el.classList.toggle('offline', !data.online);
 });
+
+// ── 设置 ─────────────────────────────────────────────────
+let savedMicDeviceId = localStorage.getItem('micDeviceId') || '';
+let savedSpeakerDeviceId = localStorage.getItem('speakerDeviceId') || '';
+let micTestStream = null;
+let micTestContext = null;
+let micTestAnimFrame = null;
+
+async function openSettings() {
+  openModal('settings-modal');
+  await populateAudioDevices();
+}
+
+function closeSettings() {
+  stopMicTest();
+  closeModal('settings-modal');
+}
+
+async function populateAudioDevices() {
+  try {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const mics = devices.filter(d => d.kind === 'audioinput');
+    const speakers = devices.filter(d => d.kind === 'audiooutput');
+
+    const micSel = document.getElementById('mic-select');
+    micSel.innerHTML = '';
+    if (!mics.length) {
+      micSel.innerHTML = '<option>未检测到麦克风</option>';
+    } else {
+      mics.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ('麦克风 ' + (i + 1));
+        if (d.deviceId === savedMicDeviceId) opt.selected = true;
+        micSel.appendChild(opt);
+      });
+    }
+
+    const spkSel = document.getElementById('speaker-select');
+    spkSel.innerHTML = '';
+    const supportsSink = typeof HTMLAudioElement.prototype.setSinkId === 'function';
+    if (!supportsSink || !speakers.length) {
+      spkSel.innerHTML = '<option>' + (!supportsSink ? '浏览器不支持扬声器切换' : '未检测到扬声器') + '</option>';
+      spkSel.disabled = true;
+    } else {
+      spkSel.disabled = false;
+      speakers.forEach((d, i) => {
+        const opt = document.createElement('option');
+        opt.value = d.deviceId;
+        opt.textContent = d.label || ('扬声器 ' + (i + 1));
+        if (d.deviceId === savedSpeakerDeviceId) opt.selected = true;
+        spkSel.appendChild(opt);
+      });
+    }
+  } catch(e) {
+    console.warn('无法枚举音频设备:', e);
+  }
+}
+
+function saveMicDevice(deviceId) {
+  savedMicDeviceId = deviceId;
+  localStorage.setItem('micDeviceId', deviceId);
+}
+
+function saveSpeakerDevice(deviceId) {
+  savedSpeakerDeviceId = deviceId;
+  localStorage.setItem('speakerDeviceId', deviceId);
+  Object.values(audioElements).forEach(audio => {
+    if (typeof audio.setSinkId === 'function') {
+      audio.setSinkId(deviceId).catch(e => console.warn('setSinkId:', e));
+    }
+  });
+}
+
+async function startMicTest() {
+  stopMicTest();
+  try {
+    const constraints = { audio: savedMicDeviceId ? { deviceId: { exact: savedMicDeviceId } } : true };
+    micTestStream = await navigator.mediaDevices.getUserMedia(constraints);
+    // 权限拿到后重新枚举（显示完整设备名）
+    await populateAudioDevices();
+    micTestContext = new AudioContext();
+    const source = micTestContext.createMediaStreamSource(micTestStream);
+    const analyser = micTestContext.createAnalyser();
+    analyser.fftSize = 256;
+    source.connect(analyser);
+
+    document.getElementById('mic-test-bar').style.display = '';
+    document.getElementById('stop-mic-test-btn').style.display = '';
+    document.getElementById('start-mic-test-btn').style.display = 'none';
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    function animate() {
+      micTestAnimFrame = requestAnimationFrame(animate);
+      analyser.getByteFrequencyData(data);
+      const avg = data.reduce((a, b) => a + b, 0) / data.length;
+      document.getElementById('mic-test-level').style.width = Math.min(avg * 3, 100) + '%';
+    }
+    animate();
+  } catch(e) {
+    alert('无法访问麦克风：' + e.message);
+  }
+}
+
+function stopMicTest() {
+  if (micTestAnimFrame) { cancelAnimationFrame(micTestAnimFrame); micTestAnimFrame = null; }
+  if (micTestStream) { micTestStream.getTracks().forEach(t => t.stop()); micTestStream = null; }
+  if (micTestContext) { micTestContext.close(); micTestContext = null; }
+  const bar = document.getElementById('mic-test-bar');
+  const stopBtn = document.getElementById('stop-mic-test-btn');
+  const startBtn = document.getElementById('start-mic-test-btn');
+  if (bar) bar.style.display = 'none';
+  if (stopBtn) stopBtn.style.display = 'none';
+  if (startBtn) startBtn.style.display = '';
+  const lvl = document.getElementById('mic-test-level');
+  if (lvl) lvl.style.width = '0%';
+}
 
 // ── 主题 ────────────────────────────────────────────────
 function toggleTheme() {
@@ -1193,7 +1341,8 @@ async function joinVoice() {
   }
   await loadIceServers();
   try {
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const audioConstraints = savedMicDeviceId ? { deviceId: { exact: savedMicDeviceId } } : true;
+    localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
 
     // 发送侧：与原来一致，通过 AudioContext 处理后发出
     audioContext = new AudioContext();
@@ -1264,6 +1413,9 @@ async function createPeerConnection(targetUsername) {
       audio.setAttribute('playsinline', '');
       audio.srcObject = event.streams[0];
       document.body.appendChild(audio);
+      if (savedSpeakerDeviceId && typeof audio.setSinkId === 'function') {
+        audio.setSinkId(savedSpeakerDeviceId).catch(() => {});
+      }
       audio.play().catch(e => console.warn('audio play blocked:', e));
       audioElements[targetUsername] = audio;
       if (audioContext && audioContext.state !== 'closed') {
@@ -1393,25 +1545,11 @@ function addVoiceMember(username, screenname) {
     : '';
   div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${badge}${display}</span>${banBtn}`;
   list.appendChild(div);
-  const memberEl = document.getElementById('member-' + username);
-  if (memberEl) memberEl.remove();
 }
 
 function removeVoiceMember(username) {
   const el = document.getElementById('vm-' + username);
-  if (!el) return;
-  const span = el.querySelector('span[style]');
-  const rawDisplay = span ? span.textContent.replace(/^[⭐👑🛡] /, '') : username;
-  el.remove();
-  if (!document.getElementById('member-' + username)) {
-    const div = document.createElement('div');
-    div.className = 'member-item';
-    div.id = 'member-' + username;
-    const badge = memberSuperAdmins.has(username) ? '⭐ ' : (username === memberOwner ? '👑 ' : (memberAdmins.has(username) ? '🛡 ' : ''));
-    div.innerHTML = `${badge}${rawDisplay}`;
-    div.onclick = () => openMemberCard(username);
-    document.getElementById('member-list').appendChild(div);
-  }
+  if (el) el.remove();
 }
 
 // ── 语音：说话检测 ────────────────────────────────────────
