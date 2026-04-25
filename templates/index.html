@@ -488,26 +488,37 @@ if (savedUser) {
 }
 
 // 启动时获取房间列表
+let _socketConnectedBefore = false;
 socket.on('connect', function() {
+  const isReconnect = _socketConnectedBefore;
+  _socketConnectedBefore = true;
   if (currentUser) {
     socket.emit('get_rooms', { username: currentUser.username });
     socket.emit('user_online', { username: currentUser.username });
-    if (currentRoom) _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+    if (currentRoom) {
+      const wasInVoice = inVoice;
+      // 重连时关闭已失效的对等连接，等待重新建立
+      if (isReconnect && wasInVoice) {
+        Object.values(peerConnections).forEach(pc => pc.close());
+        peerConnections = {};
+        Object.values(audioElements).forEach(audio => {
+          try { audio.pause(); audio.srcObject = null; if (audio.parentNode) audio.parentNode.removeChild(audio); } catch(e) {}
+        });
+        audioElements = {};
+        audioGains = {};
+      }
+      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+      // 重连后重新注册到语音频道，触发 voice_current_members 重建连接
+      if (isReconnect && wasInVoice) {
+        socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
+      }
+    }
   }
 });
 
 socket.on('rooms_list', function(data) {
   data.rooms.forEach(r => addRoomToList(r.name, r.has_password, r.code));
   if (currentUser && !currentRoom) joinRoom('大厅');
-});
-
-// 手机切屏处理：切回前台时重新同步房间状态，但不在切入后台时断开语音
-document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'visible') {
-    if (currentUser && currentRoom) {
-      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
-    }
-  }
 });
 
 function renderMembers(members) {
