@@ -39,8 +39,11 @@
   .voice-member .voice-icon { font-size: 0.8rem; }
   .voice-controls { display: none; flex-direction: column; gap: 6px; padding: 8px 0; }
   .voice-controls.show { display: flex; }
-  .voice-controls label { font-size: 0.8rem; color: #888; }
-  .voice-controls input[type=range] { width: 100%; }
+  .voice-controls input[type=range] { flex: 1; min-width: 0; }
+  .voice-toggle-row { display: flex; align-items: center; gap: 6px; }
+  .voice-toggle-btn { background: none; border: 1.5px solid transparent; border-radius: 6px; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 2px 5px; transition: all 0.15s; }
+  .voice-toggle-btn:hover { background: rgba(128,128,128,0.15); }
+  .voice-toggle-btn.muted { opacity: 0.45; border-color: #e74c3c; }
   .voice-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; background: #555; color: white; }
   .voice-btn.active { background: #e74c3c; }
 
@@ -193,11 +196,14 @@
         <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
         <div id="voice-members-list"></div>
         <div class="voice-controls" id="voice-controls">
-          <label>🎤 麦克风音量</label>
-          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
-          <label>🔊 扬声器音量</label>
-          <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
-          <button class="voice-btn" id="mute-btn" onclick="toggleMute()">🎤 闭麦</button>
+          <div class="voice-toggle-row">
+            <button id="mic-toggle" class="voice-toggle-btn" onclick="toggleMute()" title="闭麦 / 开麦">🎤</button>
+            <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
+          </div>
+          <div class="voice-toggle-row">
+            <button id="speaker-toggle" class="voice-toggle-btn" onclick="toggleSpeaker()" title="静音扬声器（同时闭麦）">🔊</button>
+            <input type="range" id="speaker-volume" min="0" max="150" value="100" oninput="setSpeakerVolume(this.value)" />
+          </div>
         </div>
       </div>
       <h3>成员</h3>
@@ -1410,11 +1416,14 @@ function leaveVoice() {
   
   inVoice = false;
   isMuted = false;
+  isSpeakerMuted = false;
   document.getElementById('voice-join-btn').textContent = '🎤 加入语音';
   document.getElementById('voice-join-btn').classList.remove('in-voice');
   document.getElementById('voice-controls').classList.remove('show');
-  document.getElementById('mute-btn').textContent = '🎤 闭麦';
-  document.getElementById('mute-btn').classList.remove('active');
+  document.getElementById('mic-toggle').textContent = '🎤';
+  document.getElementById('mic-toggle').classList.remove('muted');
+  document.getElementById('speaker-toggle').textContent = '🔊';
+  document.getElementById('speaker-toggle').classList.remove('muted');
   document.getElementById('voice-status').style.display = 'none';
   
   socket.emit('voice_leave', { username: currentUser.username, room: currentRoom });
@@ -1617,17 +1626,35 @@ function setSpeakerVolume(val) {
 
 function toggleMute() {
   isMuted = !isMuted;
-  if (localStream) {
-    localStream.getTracks().forEach(t => t.enabled = !isMuted);
+  if (localStream) localStream.getTracks().forEach(t => t.enabled = !isMuted);
+  const btn = document.getElementById('mic-toggle');
+  btn.textContent = isMuted ? '🔇' : '🎤';
+  btn.classList.toggle('muted', isMuted);
+  socket.emit('voice_mute_status', { room: currentRoom, username: currentUser.username, muted: isMuted });
+}
+
+let isSpeakerMuted = false;
+let _preSpeakerVol = 100;
+
+function toggleSpeaker() {
+  isSpeakerMuted = !isSpeakerMuted;
+  const btn = document.getElementById('speaker-toggle');
+  if (isSpeakerMuted) {
+    _preSpeakerVol = parseFloat(document.getElementById('speaker-volume').value);
+    Object.values(audioGains).forEach(g => {
+      if (g && g.gain) g.gain.value = 0;
+      else if (g && g.volume !== undefined) g.volume = 0;
+    });
+    btn.textContent = '🔕';
+    btn.classList.add('muted');
+    if (!isMuted) toggleMute();
+  } else {
+    document.getElementById('speaker-volume').value = _preSpeakerVol;
+    setSpeakerVolume(_preSpeakerVol);
+    btn.textContent = '🔊';
+    btn.classList.remove('muted');
+    if (isMuted) toggleMute();
   }
-  const btn = document.getElementById('mute-btn');
-  btn.textContent = isMuted ? '🔇 已闭麦' : '🎤 闭麦';
-  btn.classList.toggle('active', isMuted);
-  socket.emit('voice_mute_status', {
-    room: currentRoom,
-    username: currentUser.username,
-    muted: isMuted
-  });
 }
 
 socket.on('voice_mute_status', function(data) {
