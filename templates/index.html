@@ -501,11 +501,9 @@ socket.on('rooms_list', function(data) {
   if (currentUser && !currentRoom) joinRoom('大厅');
 });
 
-// 手机切屏处理
+// 手机切屏处理：切回前台时重新同步房间状态，但不在切入后台时断开语音
 document.addEventListener('visibilitychange', function() {
-  if (document.visibilityState === 'hidden') {
-    if (inVoice) leaveVoice();
-  } else if (document.visibilityState === 'visible') {
+  if (document.visibilityState === 'visible') {
     if (currentUser && currentRoom) {
       _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
     }
@@ -1366,7 +1364,19 @@ async function joinVoice() {
     const vs = document.getElementById('voice-status');
     vs.textContent = '🔊 正在 #' + currentRoom + ' 语音';
     vs.style.display = '';
-    
+
+    // iOS Safari 切后台时可能强制停止麦克风轨道，检测到后更新UI提示重连
+    dest.stream.getTracks().forEach(track => {
+      track.onended = () => {
+        if (inVoice) {
+          leaveVoice();
+          const vs2 = document.getElementById('voice-status');
+          vs2.textContent = '⚠️ 语音已断开（切后台）';
+          vs2.style.display = '';
+        }
+      };
+    });
+
     addVoiceMember(currentUser.username, currentUser.screenname);
     socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
   } catch (e) {
