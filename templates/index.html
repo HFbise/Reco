@@ -2223,14 +2223,14 @@ function popOutStream(username) {
   floater.appendChild(video);
   document.body.appendChild(floater);
   makeDraggable(floater, floater.querySelector('.stream-floater-bar'));
-  const ph = document.createElement('div');
-  ph.className = 'stream-placeholder';
-  ph.id = 'stream-ph-' + username;
-  ph.textContent = '已浮出';
-  card.insertBefore(ph, card.querySelector('.stream-card-btns'));
-  // 浮出状态下卡片第一个按钮变成归位
-  const firstBtn = card.querySelector('.stream-card-btn');
-  if (firstBtn) { firstBtn.textContent = '⊡'; firstBtn.title = '归位'; firstBtn.onclick = () => popInStream(username); }
+  // 隐藏卡片，面板区域缩小；若没有可见卡片则收起面板
+  card.style.display = 'none';
+  const panel = document.getElementById('stream-panel');
+  const hasVisible = panel.querySelector('.stream-card:not([style*="display: none"]):not([style*="display:none"])');
+  if (!hasVisible) {
+    panel.classList.remove('active');
+    document.getElementById('stream-resize-handle').classList.remove('active');
+  }
 }
 
 function popInStream(username) {
@@ -2240,11 +2240,11 @@ function popInStream(username) {
   if (!video || !card) { if (floater) floater.remove(); return; }
   video.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
   card.insertBefore(video, card.firstChild);
-  const ph = document.getElementById('stream-ph-' + username);
-  if (ph) ph.remove();
   if (floater) floater.remove();
-  const btn = card.querySelector('.stream-card-btn');
-  if (btn) { btn.textContent = '⤢'; btn.title = '全屏'; btn.onclick = () => fullscreenStream(username); }
+  // 恢复卡片和面板
+  card.style.display = '';
+  document.getElementById('stream-panel').classList.add('active');
+  document.getElementById('stream-resize-handle').classList.add('active');
 }
 
 function fullscreenStream(username) {
@@ -2252,7 +2252,11 @@ function fullscreenStream(username) {
   const card = document.getElementById('stream-card-' + username);
   const video = (floater || card)?.querySelector('video');
   if (!video) return;
-  (video.requestFullscreen || video.webkitRequestFullscreen || video.mozRequestFullScreen)?.call(video);
+  // webkitEnterFullscreen 是 iOS Safari 上视频全屏的正确方法
+  if (video.requestFullscreen) video.requestFullscreen();
+  else if (video.webkitEnterFullscreen) video.webkitEnterFullscreen();
+  else if (video.webkitRequestFullscreen) video.webkitRequestFullscreen();
+  else if (video.mozRequestFullScreen) video.mozRequestFullScreen();
 }
 
 function makeDraggable(el, handle) {
