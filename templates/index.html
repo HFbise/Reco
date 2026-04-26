@@ -48,6 +48,35 @@
   .voice-toggle-btn.muted { opacity: 0.45; border-color: #e74c3c; }
   .voice-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; background: #555; color: white; }
   .voice-btn.active { background: #e74c3c; }
+  #stream-audio-btn { width: 100%; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.82rem; background: #555; color: white; margin-top: 4px; text-align: left; }
+  #stream-audio-btn.active { background: #e74c3c; }
+  #live-btn { width: 100%; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.82rem; background: #9b59b6; color: white; margin-top: 4px; text-align: left; }
+  #live-btn.active { background: #e74c3c; }
+  .stream-vol-row { display: flex; align-items: center; gap: 5px; padding: 2px 8px 4px 22px; }
+  .stream-vol-row input[type=range] { flex: 1; min-width: 0; }
+  .stream-indicator { font-size: 0.75rem; opacity: 0.65; }
+
+  /* ── 直播面板 ── */
+  #stream-panel { display: none; flex-shrink: 0; background: #111; height: 240px; min-height: 90px; overflow: hidden; }
+  #stream-panel.active { display: flex; flex-direction: column; }
+  #stream-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; overflow: hidden; align-content: stretch; }
+  .stream-card { position: relative; flex: 1; min-width: 160px; background: #000; border-radius: 4px; overflow: hidden; }
+  .stream-card video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .stream-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #555; font-size: 0.85rem; }
+  .stream-card-label { position: absolute; bottom: 5px; left: 8px; color: white; font-size: 0.78rem; text-shadow: 0 1px 3px rgba(0,0,0,0.9); pointer-events: none; background: rgba(0,0,0,0.35); padding: 1px 5px; border-radius: 3px; }
+  .stream-card-btns { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; opacity: 0; transition: opacity 0.15s; }
+  .stream-card:hover .stream-card-btns { opacity: 1; }
+  .stream-card-btn { background: rgba(0,0,0,0.55); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 2px 7px; font-size: 0.8rem; }
+  #stream-resize-handle { display: none; height: 5px; background: #ccc; cursor: ns-resize; flex-shrink: 0; user-select: none; }
+  body.dark #stream-resize-handle { background: #2a2a3e; }
+  #stream-resize-handle:hover, #stream-resize-handle.dragging { background: #4f8ef7; }
+  #stream-resize-handle.active { display: block; }
+  .stream-floater { position: fixed; z-index: 500; width: 360px; height: 220px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 28px rgba(0,0,0,0.7); resize: both; min-width: 200px; min-height: 120px; }
+  .stream-floater video { width: 100%; height: 100%; object-fit: contain; display: block; }
+  .stream-floater-bar { position: absolute; top: 0; left: 0; right: 0; height: 30px; background: linear-gradient(rgba(0,0,0,0.75), transparent); display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: grab; z-index: 1; }
+  .stream-floater-bar:active { cursor: grabbing; }
+  .stream-floater-bar span { color: white; font-size: 0.78rem; pointer-events: none; }
+  .stream-floater-btn { background: rgba(255,255,255,0.18); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 1px 8px; font-size: 0.8rem; }
 
     /* ── 侧栏 ── */
     #sidebar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
@@ -196,6 +225,10 @@
       <div id="chat-header">
         <button id="chat-title" onclick="openRoomCard()"></button>
       </div>
+      <div id="stream-panel">
+        <div id="stream-grid"></div>
+      </div>
+      <div id="stream-resize-handle"></div>
       <div id="messages"></div>
       <div id="input-area">
         <input id="msg-input" type="text" placeholder="输入消息..." />
@@ -218,6 +251,8 @@
             <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
             <span id="speaker-vol-pct" style="font-size:0.8rem;min-width:32px;text-align:right;">100%</span>
           </div>
+          <button id="stream-audio-btn" onclick="toggleStreamAudio()">🖥 共享音频</button>
+          <button id="live-btn" onclick="toggleLive()">📺 直播</button>
         </div>
       </div>
       <h3>成员</h3>
@@ -464,8 +499,15 @@ let isMod = false;     // 是管理员（非房主）
 let memberOwner = '';  // 当前房间房主用户名
 let localStream = null;
 let peerConnections = {}; // { username: RTCPeerConnection }
-let audioElements = {}; // { username: MediaStreamAudioSourceNode }
-let audioGains = {};    // { username: GainNode }
+let audioElements = {};   // { username: HTMLAudioElement }
+let audioGains = {};      // { username: GainNode }
+let displayStream = null;
+let isStreamingAudio = false;
+let isStreaming = false;
+let streamAudioTrack = null;
+const streamAudioElements = {}; // { username: HTMLAudioElement } — 对方的共享音频
+const streamVideos = {};        // { username: HTMLVideoElement }
+const voiceScreennames = {};    // { username: screenname }
 let inVoice = false;
 let isMuted = false;
 let voiceBanned = new Set();
@@ -530,6 +572,14 @@ socket.on('connect', function() {
         });
         audioElements = {};
         audioGains = {};
+        if (isStreamingAudio) stopStreamAudio(true);
+        if (isStreaming) stopStream(true);
+        Object.values(streamAudioElements).forEach(a => { try { a.pause(); a.srcObject = null; a.remove(); } catch(e) {} });
+        for (const u in streamAudioElements) delete streamAudioElements[u];
+        Object.keys(streamVideos).forEach(u => removeStreamCard(u));
+        document.querySelectorAll('.stream-vol-row').forEach(el => el.remove());
+        document.querySelectorAll('.stream-indicator').forEach(el => el.remove());
+        document.querySelectorAll('.stream-floater').forEach(el => el.remove());
       }
       _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '', isReconnect);
       // 重连后重新注册到语音频道，触发 voice_current_members 重建连接
@@ -1505,7 +1555,15 @@ function leaveVoice() {
   Object.values(audioGains).forEach(g => { try { g.disconnect(); } catch(e) {} });
   audioGains = {};
   if (audioContext) { audioContext.close(); audioContext = null; }
-  
+  if (isStreamingAudio) stopStreamAudio(true);
+  if (isStreaming) stopStream(true);
+  Object.values(streamAudioElements).forEach(a => { try { a.pause(); a.srcObject = null; a.remove(); } catch(e) {} });
+  for (const u in streamAudioElements) delete streamAudioElements[u];
+  Object.keys(streamVideos).forEach(u => removeStreamCard(u));
+  document.querySelectorAll('.stream-vol-row').forEach(el => el.remove());
+  document.querySelectorAll('.stream-indicator').forEach(el => el.remove());
+  document.querySelectorAll('.stream-floater').forEach(el => el.remove());
+
   inVoice = false;
   isMuted = false;
   isSpeakerMuted = false;
@@ -1529,11 +1587,14 @@ async function createPeerConnection(targetUsername) {
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
   
   pc.ontrack = (event) => {
-    if (event.streams && event.streams[0] && !audioElements[targetUsername]) {
+    if (event.track.kind !== 'audio') return;
+
+    if (!audioElements[targetUsername]) {
+      // 第一条音轨 = 麦克风
       const audio = document.createElement('audio');
       audio.autoplay = true;
       audio.setAttribute('playsinline', '');
-      audio.srcObject = event.streams[0];
+      audio.srcObject = new MediaStream([event.track]);
       document.body.appendChild(audio);
       if (savedSpeakerDeviceId && typeof audio.setSinkId === 'function') {
         audio.setSinkId(savedSpeakerDeviceId).catch(() => {});
@@ -1558,6 +1619,31 @@ async function createPeerConnection(targetUsername) {
         audio.volume = Math.min(speakerVolume, 1);
         audioGains[targetUsername] = audio;
       }
+
+    } else if (!streamAudioElements[targetUsername]) {
+      // 第二条音轨 = 对方共享的音频
+      const audio = document.createElement('audio');
+      audio.autoplay = true;
+      audio.setAttribute('playsinline', '');
+      audio.srcObject = new MediaStream([event.track]);
+      document.body.appendChild(audio);
+      if (isSpeakerMuted) audio.muted = true;
+      audio.volume = 0.8;
+      audio.play().catch(() => {});
+      streamAudioElements[targetUsername] = audio;
+      showStreamVolControl(targetUsername);
+      event.track.onended = () => hideStreamVolControl(targetUsername);
+
+    } else if (event.track.kind === 'video' && !streamVideos[targetUsername]) {
+      // 视频轨道 = 直播画面
+      const video = document.createElement('video');
+      video.autoplay = true;
+      video.setAttribute('playsinline', '');
+      video.muted = true; // 音频走独立的音频轨道
+      video.srcObject = new MediaStream([event.track]);
+      streamVideos[targetUsername] = video;
+      addStreamCard(targetUsername, voiceScreennames[targetUsername] || targetUsername);
+      event.track.onended = () => removeStreamCard(targetUsername);
     }
   };
 
@@ -1673,6 +1759,7 @@ function canBanUser(username) {
 }
 
 function addVoiceMember(username, screenname) {
+  voiceScreennames[username] = screenname || username;
   const list = document.getElementById('voice-members-list');
   if (document.getElementById('vm-' + username)) return;
   const display = screenname || username;
@@ -1692,6 +1779,8 @@ function addVoiceMember(username, screenname) {
 function removeVoiceMember(username) {
   const el = document.getElementById('vm-' + username);
   if (el) el.remove();
+  removeStreamCard(username);
+  delete voiceScreennames[username];
 }
 
 // ── 语音：说话检测 ────────────────────────────────────────
@@ -1758,11 +1847,13 @@ function toggleSpeaker() {
   if (isSpeakerMuted) {
     _preSpeakerVol = parseFloat(document.getElementById('speaker-volume').value);
     Object.values(audioElements).forEach(a => { if (a) a.muted = true; });
+    Object.values(streamAudioElements).forEach(a => { if (a) a.muted = true; });
     btn.textContent = '🔕';
     btn.classList.add('muted');
     if (!isMuted) toggleMute();
   } else {
     Object.values(audioElements).forEach(a => { if (a) a.muted = false; });
+    Object.values(streamAudioElements).forEach(a => { if (a) a.muted = false; });
     document.getElementById('speaker-volume').value = _preSpeakerVol;
     setSpeakerVolume(_preSpeakerVol);
     btn.textContent = '🔊';
@@ -1832,6 +1923,282 @@ socket.on('voice_unbanned', function(data) {
 function unbanVoice(username) {
   socket.emit('voice_unban', { requester: currentUser.username, room: currentRoom, target: username });
 }
+
+// ── 语音：共享音频 ────────────────────────────────────────
+function toggleStreamAudio() {
+  if (isStreamingAudio) stopStreamAudio(false);
+  else startStreamAudio();
+}
+
+async function startStreamAudio() {
+  try {
+    displayStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') alert('无法捕获音频：' + e.message);
+    return;
+  }
+  const audioTracks = displayStream.getAudioTracks();
+  if (!audioTracks.length) {
+    displayStream.getTracks().forEach(t => t.stop());
+    displayStream = null;
+    alert('未检测到共享音频。\n选择窗口/屏幕时，请勾选"分享音频"或"共享系统音频"。');
+    return;
+  }
+  displayStream.getVideoTracks().forEach(t => t.stop());
+  streamAudioTrack = audioTracks[0];
+  isStreamingAudio = true;
+  const btn = document.getElementById('stream-audio-btn');
+  btn.textContent = '⏹ 停止共享';
+  btn.classList.add('active');
+  for (const [, pc] of Object.entries(peerConnections)) {
+    try { pc.addTrack(streamAudioTrack, displayStream); } catch(e) {}
+  }
+  socket.emit('stream_audio_start', { room: currentRoom, username: currentUser.username });
+  streamAudioTrack.onended = () => stopStreamAudio(false);
+}
+
+function stopStreamAudio(silent) {
+  if (!isStreamingAudio) return;
+  for (const [, pc] of Object.entries(peerConnections)) {
+    const sender = pc.getSenders().find(s => s.track === streamAudioTrack);
+    if (sender) try { pc.removeTrack(sender); } catch(e) {}
+  }
+  if (streamAudioTrack) { try { streamAudioTrack.stop(); } catch(e) {} streamAudioTrack = null; }
+  if (displayStream) { displayStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} }); displayStream = null; }
+  isStreamingAudio = false;
+  const btn = document.getElementById('stream-audio-btn');
+  if (btn) { btn.textContent = '🖥 共享音频'; btn.classList.remove('active'); }
+  if (!silent) socket.emit('stream_audio_stop', { room: currentRoom, username: currentUser.username });
+}
+
+function showStreamVolControl(username) {
+  const vmEl = document.getElementById('vm-' + username);
+  if (!vmEl || document.getElementById('sva-' + username)) return;
+  const nameSpan = vmEl.querySelector('span:nth-child(2)');
+  if (nameSpan && !nameSpan.querySelector('.stream-indicator')) {
+    nameSpan.insertAdjacentHTML('beforeend', '<span class="stream-indicator"> 🖥</span>');
+  }
+  const row = document.createElement('div');
+  row.className = 'stream-vol-row';
+  row.id = 'sva-' + username;
+  row.innerHTML = `<span style="font-size:0.8rem;opacity:0.6">🎵</span><input type="range" min="0" max="100" value="80" oninput="setStreamVol('${username}',this.value)"><span id="svol-pct-${username}" style="font-size:0.75rem;min-width:30px;text-align:right">80%</span>`;
+  vmEl.insertAdjacentElement('afterend', row);
+}
+
+function hideStreamVolControl(username) {
+  const row = document.getElementById('sva-' + username);
+  if (row) row.remove();
+  const vmEl = document.getElementById('vm-' + username);
+  if (vmEl) { const ind = vmEl.querySelector('.stream-indicator'); if (ind) ind.remove(); }
+  if (streamAudioElements[username]) {
+    try { streamAudioElements[username].pause(); streamAudioElements[username].srcObject = null; streamAudioElements[username].remove(); } catch(e) {}
+    delete streamAudioElements[username];
+  }
+}
+
+function setStreamVol(username, val) {
+  const audio = streamAudioElements[username];
+  if (audio) audio.volume = parseInt(val) / 100;
+  const span = document.getElementById('svol-pct-' + username);
+  if (span) span.textContent = val + '%';
+}
+
+socket.on('stream_audio_start', function(data) {
+  const vmEl = document.getElementById('vm-' + data.username);
+  if (vmEl && !vmEl.querySelector('.stream-indicator')) {
+    const nameSpan = vmEl.querySelector('span:nth-child(2)');
+    if (nameSpan) nameSpan.insertAdjacentHTML('beforeend', '<span class="stream-indicator"> 🖥</span>');
+  }
+});
+
+socket.on('stream_audio_stop', function(data) {
+  hideStreamVolControl(data.username);
+});
+
+// ── 语音：直播（视频+音频）────────────────────────────────
+function toggleLive() {
+  if (isStreaming) stopStream(false);
+  else startStream();
+}
+
+async function startStream() {
+  if (isStreamingAudio) stopStreamAudio(false);
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch(e) {
+    if (e.name !== 'NotAllowedError') alert('无法捕获屏幕：' + e.message);
+    return;
+  }
+  displayStream = stream;
+  streamAudioTrack = stream.getAudioTracks()[0] || null;
+  const videoTrack = stream.getVideoTracks()[0];
+  if (!videoTrack) {
+    stream.getTracks().forEach(t => t.stop());
+    displayStream = null;
+    alert('未获取到视频轨道。');
+    return;
+  }
+  isStreaming = true;
+  if (streamAudioTrack) isStreamingAudio = true;
+  document.getElementById('live-btn').textContent = '⏹ 停止直播';
+  document.getElementById('live-btn').classList.add('active');
+  for (const [, pc] of Object.entries(peerConnections)) {
+    try { pc.addTrack(videoTrack, stream); } catch(e) {}
+    if (streamAudioTrack) try { pc.addTrack(streamAudioTrack, stream); } catch(e) {}
+  }
+  socket.emit('stream_start', { room: currentRoom, username: currentUser.username, screenname: currentUser.screenname });
+  videoTrack.onended = () => stopStream(false);
+}
+
+function stopStream(silent) {
+  if (!isStreaming) return;
+  for (const [, pc] of Object.entries(peerConnections)) {
+    pc.getSenders().forEach(sender => {
+      if (displayStream && sender.track && displayStream.getTracks().includes(sender.track)) {
+        try { pc.removeTrack(sender); } catch(e) {}
+      }
+    });
+  }
+  if (displayStream) { displayStream.getTracks().forEach(t => { try { t.stop(); } catch(e) {} }); displayStream = null; }
+  streamAudioTrack = null;
+  isStreaming = false;
+  isStreamingAudio = false;
+  const btn = document.getElementById('live-btn');
+  if (btn) { btn.textContent = '📺 直播'; btn.classList.remove('active'); }
+  if (!silent) socket.emit('stream_stop', { room: currentRoom, username: currentUser.username });
+}
+
+// ── 直播面板 UI ───────────────────────────────────────────
+function addStreamCard(username, screenname) {
+  if (document.getElementById('stream-card-' + username)) return;
+  const video = streamVideos[username];
+  if (!video) return;
+  const panel = document.getElementById('stream-panel');
+  const grid = document.getElementById('stream-grid');
+  const card = document.createElement('div');
+  card.className = 'stream-card';
+  card.id = 'stream-card-' + username;
+  video.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+  card.appendChild(video);
+  card.insertAdjacentHTML('beforeend',
+    `<div class="stream-card-label">${screenname}</div>` +
+    `<div class="stream-card-btns">` +
+    `<button class="stream-card-btn" onclick="popOutStream('${username}')" title="浮出">⤢</button>` +
+    `</div>`
+  );
+  grid.appendChild(card);
+  panel.classList.add('active');
+  document.getElementById('stream-resize-handle').classList.add('active');
+}
+
+function removeStreamCard(username) {
+  const card = document.getElementById('stream-card-' + username);
+  if (card) card.remove();
+  const floater = document.getElementById('stream-float-' + username);
+  if (floater) floater.remove();
+  if (streamVideos[username]) {
+    try { streamVideos[username].srcObject = null; } catch(e) {}
+    delete streamVideos[username];
+  }
+  if (!document.querySelector('.stream-card')) {
+    document.getElementById('stream-panel').classList.remove('active');
+    document.getElementById('stream-resize-handle').classList.remove('active');
+  }
+}
+
+function popOutStream(username) {
+  const video = streamVideos[username];
+  const card = document.getElementById('stream-card-' + username);
+  if (!video || !card) return;
+  const screenname = card.querySelector('.stream-card-label')?.textContent || username;
+  const floater = document.createElement('div');
+  floater.className = 'stream-floater';
+  floater.id = 'stream-float-' + username;
+  floater.style.cssText = 'right:20px;bottom:20px;';
+  floater.innerHTML =
+    `<div class="stream-floater-bar">` +
+    `<span>${screenname}</span>` +
+    `<div style="display:flex;gap:4px">` +
+    `<button class="stream-floater-btn" onclick="popInStream('${username}')" title="归位">⊡</button>` +
+    `</div></div>`;
+  video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;';
+  floater.appendChild(video);
+  document.body.appendChild(floater);
+  makeDraggable(floater, floater.querySelector('.stream-floater-bar'));
+  const ph = document.createElement('div');
+  ph.className = 'stream-placeholder';
+  ph.id = 'stream-ph-' + username;
+  ph.textContent = '已浮出';
+  card.insertBefore(ph, card.querySelector('.stream-card-btns'));
+  card.querySelector('.stream-card-btn').textContent = '⊡';
+  card.querySelector('.stream-card-btn').onclick = () => popInStream(username);
+}
+
+function popInStream(username) {
+  const floater = document.getElementById('stream-float-' + username);
+  const card = document.getElementById('stream-card-' + username);
+  const video = streamVideos[username];
+  if (!video || !card) { if (floater) floater.remove(); return; }
+  video.style.cssText = 'width:100%;height:100%;object-fit:contain;display:block;';
+  card.insertBefore(video, card.firstChild);
+  const ph = document.getElementById('stream-ph-' + username);
+  if (ph) ph.remove();
+  if (floater) floater.remove();
+  const btn = card.querySelector('.stream-card-btn');
+  if (btn) { btn.textContent = '⤢'; btn.onclick = () => popOutStream(username); }
+}
+
+function makeDraggable(el, handle) {
+  handle = handle || el;
+  let sx, sy, sl, st;
+  handle.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    sx = e.clientX; sy = e.clientY;
+    sl = el.offsetLeft; st = el.offsetTop;
+    el.style.right = 'auto'; el.style.bottom = 'auto';
+    const onMove = e2 => {
+      el.style.left = Math.max(0, sl + e2.clientX - sx) + 'px';
+      el.style.top  = Math.max(0, st + e2.clientY - sy) + 'px';
+    };
+    const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    e.preventDefault();
+  });
+}
+
+// 直播面板拖拽缩放
+(function() {
+  const handle = document.getElementById('stream-resize-handle');
+  let dragging = false, startY = 0, startH = 0;
+  handle.addEventListener('mousedown', e => {
+    dragging = true; startY = e.clientY;
+    startH = document.getElementById('stream-panel').offsetHeight;
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const newH = Math.max(90, Math.min(window.innerHeight * 0.72, startH + e.clientY - startY));
+    document.getElementById('stream-panel').style.height = newH + 'px';
+  });
+  document.addEventListener('mouseup', () => { if (dragging) { dragging = false; handle.classList.remove('dragging'); } });
+})();
+
+socket.on('stream_start', function(data) {
+  const vmEl = document.getElementById('vm-' + data.username);
+  if (vmEl && !vmEl.querySelector('.live-indicator')) {
+    const nameSpan = vmEl.querySelector('span:nth-child(2)');
+    if (nameSpan) nameSpan.insertAdjacentHTML('beforeend', '<span class="live-indicator" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;">LIVE</span>');
+  }
+});
+
+socket.on('stream_stop', function(data) {
+  removeStreamCard(data.username);
+  const vmEl = document.getElementById('vm-' + data.username);
+  if (vmEl) { const ind = vmEl.querySelector('.live-indicator'); if (ind) ind.remove(); }
+});
 
 // ── 手机侧栏切换 ─────────────────────────────────────────
 function toggleSidebar() {

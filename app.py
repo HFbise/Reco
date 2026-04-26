@@ -599,6 +599,30 @@ def handle_room_subscribe(data):
     """只订阅房间消息流，不加载历史，不更新成员列表。"""
     join_room(data['room'])
 
+@socketio.on('stream_audio_start')
+def handle_stream_audio_start(data):
+    room = data.get('room')
+    if room:
+        emit('stream_audio_start', data, to=room, include_self=False)
+
+@socketio.on('stream_audio_stop')
+def handle_stream_audio_stop(data):
+    room = data.get('room')
+    if room:
+        emit('stream_audio_stop', data, to=room, include_self=False)
+
+@socketio.on('stream_start')
+def handle_stream_start(data):
+    room = data.get('room')
+    if room:
+        emit('stream_start', data, to=room, include_self=False)
+
+@socketio.on('stream_stop')
+def handle_stream_stop(data):
+    room = data.get('room')
+    if room:
+        emit('stream_stop', data, to=room, include_self=False)
+
 @socketio.on('find_room')
 def handle_find_room(data):
     code = data.get('code', '').strip()
