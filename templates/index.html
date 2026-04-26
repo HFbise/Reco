@@ -1602,15 +1602,6 @@ async function createPeerConnection(targetUsername) {
   
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
-  // 如果当前正在直播/共享音频，把活跃轨道也加入新连接
-  if (displayStream) {
-    displayStream.getTracks().filter(t => t.readyState === 'live').forEach(t => {
-      try { pc.addTrack(t, displayStream); } catch(e) {}
-    });
-  } else if (isStreamingAudio && streamAudioTrack && streamAudioTrack.readyState === 'live') {
-    try { pc.addTrack(streamAudioTrack, new MediaStream([streamAudioTrack])); } catch(e) {}
-  }
-
   pc.ontrack = (event) => {
     if (event.track.kind !== 'audio') return;
 
@@ -1742,6 +1733,17 @@ socket.on('voice_offer', async function(data) {
     to: data.from,
     answer: answer
   });
+  // After answer, signaling state returns to 'stable' — safe to add stream tracks now.
+  // This lets late joiners receive ongoing streams via renegotiation.
+  if (displayStream) {
+    displayStream.getTracks().filter(t => t.readyState === 'live').forEach(t => {
+      const alreadySending = pc.getSenders().find(s => s.track === t);
+      if (!alreadySending) try { pc.addTrack(t, displayStream); } catch(e) {}
+    });
+  } else if (isStreamingAudio && streamAudioTrack?.readyState === 'live') {
+    const alreadySending = pc.getSenders().find(s => s.track === streamAudioTrack);
+    if (!alreadySending) try { pc.addTrack(streamAudioTrack, new MediaStream([streamAudioTrack])); } catch(e) {}
+  }
 });
 
 socket.on('voice_answer', async function(data) {
@@ -2144,7 +2146,7 @@ function watchStream(username) {
         panel.classList.remove('active');
         document.getElementById('stream-resize-handle').classList.remove('active');
       }
-    }, 5000);
+    }, 15000);
     waiting._timeout = t;
   }
 }
