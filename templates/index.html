@@ -365,8 +365,15 @@
     <div id="card-voice-volume" style="display:none; border-top:1px solid #ddd; padding-top:12px; margin-top:4px;">
       <label style="font-size:0.85rem; color:#888; display:block; margin-bottom:6px;">🔊 语音音量</label>
       <div style="display:flex; align-items:center; gap:8px;">
-        <input type="range" id="card-volume-slider" min="0" max="150" value="100" style="flex:1" oninput="setCardVoiceVolume(this.value)" />
+        <input type="range" id="card-volume-slider" min="0" max="100" value="100" style="flex:1" oninput="setCardVoiceVolume(this.value)" />
         <span id="card-volume-val" style="font-size:0.85rem; min-width:36px;">100%</span>
+      </div>
+    </div>
+    <div id="card-stream-volume" style="display:none; border-top:1px solid #ddd; padding-top:12px; margin-top:4px;">
+      <label style="font-size:0.85rem; color:#888; display:block; margin-bottom:6px;">🎵 共享音频音量</label>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <input type="range" id="card-stream-slider" min="0" max="100" value="80" style="flex:1" oninput="setCardStreamVolume(this.value)" />
+        <span id="card-stream-val" style="font-size:0.85rem; min-width:36px;">80%</span>
       </div>
     </div>
     <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('member-card-modal')">关闭</button>
@@ -988,13 +995,19 @@ function openMemberCard(username) {
   document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
   document.getElementById('card-invite-btn').style.display = canInvite ? '' : 'none';
   document.getElementById('card-actions').style.display = (canSetAdmin || canRemoveAdmin || canKick || canSetSuper || canRevokeSuper || canInvite) ? 'flex' : 'none';
-  const showVolume = inVoice && username !== currentUser?.username && !!audioGains[username];
+  const showVolume = inVoice && username !== currentUser?.username && !!audioElements[username];
   document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
   if (showVolume) {
-    const g = audioGains[username];
-    const vol = g ? (g.gain ? Math.round(g.gain.value * 100) : Math.round((g.volume ?? 1) * 100)) : 100;
+    const vol = Math.round((audioElements[username].volume ?? 1) * 100);
     document.getElementById('card-volume-slider').value = vol;
     document.getElementById('card-volume-val').textContent = vol + '%';
+  }
+  const showStreamVol = inVoice && username !== currentUser?.username && !!streamAudioElements[username];
+  document.getElementById('card-stream-volume').style.display = showStreamVol ? '' : 'none';
+  if (showStreamVol) {
+    const vol = Math.round((streamAudioElements[username].volume ?? 0.8) * 100);
+    document.getElementById('card-stream-slider').value = vol;
+    document.getElementById('card-stream-val').textContent = vol + '%';
   }
   socket.emit('get_profile', { username });
   openModal('member-card-modal');
@@ -1290,11 +1303,14 @@ socket.on('kick_result', function(data) {
 
 function setCardVoiceVolume(val) {
   document.getElementById('card-volume-val').textContent = val + '%';
-  const g = audioGains[cardTargetUsername];
-  if (g) {
-    if (g.gain) g.gain.value = val / 100;
-    else if (g.volume !== undefined) g.volume = Math.min(val / 100, 1);
-  }
+  const a = audioElements[cardTargetUsername];
+  if (a) a.volume = Math.min(val / 100, 1);
+}
+
+function setCardStreamVolume(val) {
+  document.getElementById('card-stream-val').textContent = val + '%';
+  const audio = streamAudioElements[cardTargetUsername];
+  if (audio) audio.volume = parseInt(val) / 100;
 }
 
 function doCardSetSuper(promote) {
@@ -1600,25 +1616,10 @@ async function createPeerConnection(targetUsername) {
         audio.setSinkId(savedSpeakerDeviceId).catch(() => {});
       }
       if (isSpeakerMuted) audio.muted = true;
+      audio.volume = Math.min(speakerVolume, 1);
       audio.play().catch(e => console.warn('audio play blocked:', e));
       audioElements[targetUsername] = audio;
-      if (audioContext && audioContext.state !== 'closed') {
-        try {
-          if (audioContext.state === 'suspended') audioContext.resume();
-          const src = audioContext.createMediaElementSource(audio);
-          const gain = audioContext.createGain();
-          gain.gain.value = speakerVolume;
-          src.connect(gain);
-          gain.connect(audioContext.destination);
-          audioGains[targetUsername] = gain;
-        } catch(e) {
-          audio.volume = Math.min(speakerVolume, 1);
-          audioGains[targetUsername] = audio;
-        }
-      } else {
-        audio.volume = Math.min(speakerVolume, 1);
-        audioGains[targetUsername] = audio;
-      }
+      audioGains[targetUsername] = audio;
 
     } else if (!streamAudioElements[targetUsername]) {
       // 第二条音轨 = 对方共享的音频
@@ -1828,11 +1829,9 @@ function setMicVolume(val) {
 
 function setSpeakerVolume(val) {
   speakerVolume = val / 100;
-  Object.values(audioGains).forEach(g => {
-    if (!g) return;
-    if (g.gain) g.gain.value = speakerVolume;
-    else if (g.volume !== undefined) g.volume = Math.min(speakerVolume, 1);
-  });
+  for (const [u, a] of Object.entries(audioElements)) {
+    if (a && !ignoredUsers.has(u)) a.volume = speakerVolume;
+  }
   const pct = document.getElementById('speaker-vol-pct');
   if (pct) pct.textContent = val + '%';
 }
@@ -2093,11 +2092,36 @@ function addStreamCard(username, screenname) {
     `<div class="stream-card-label">${screenname}</div>` +
     `<div class="stream-card-btns">` +
     `<button class="stream-card-btn" onclick="popOutStream('${username}')" title="浮出">⤢</button>` +
+    `<button class="stream-card-btn" onclick="hideStreamCard('${username}')" title="停止观看">✕</button>` +
     `</div>`
   );
   grid.appendChild(card);
   panel.classList.add('active');
   document.getElementById('stream-resize-handle').classList.add('active');
+}
+
+function watchStream(username) {
+  closeAllSidebars();
+  const card = document.getElementById('stream-card-' + username);
+  if (card) {
+    card.style.display = '';
+    document.getElementById('stream-panel').classList.add('active');
+    document.getElementById('stream-resize-handle').classList.add('active');
+    card.style.outline = '2px solid #4f8ef7';
+    setTimeout(() => { card.style.outline = ''; }, 1200);
+  }
+}
+
+function hideStreamCard(username) {
+  const card = document.getElementById('stream-card-' + username);
+  if (card) card.style.display = 'none';
+  const floater = document.getElementById('stream-float-' + username);
+  if (floater) floater.remove();
+  const visible = document.querySelectorAll('.stream-card:not([style*="display: none"])');
+  if (!visible.length) {
+    document.getElementById('stream-panel').classList.remove('active');
+    document.getElementById('stream-resize-handle').classList.remove('active');
+  }
 }
 
 function removeStreamCard(username) {
@@ -2198,7 +2222,9 @@ socket.on('stream_start', function(data) {
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl && !vmEl.querySelector('.live-indicator')) {
     const nameSpan = vmEl.querySelector('span:nth-child(2)');
-    if (nameSpan) nameSpan.insertAdjacentHTML('beforeend', '<span class="live-indicator" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;">LIVE</span>');
+    if (nameSpan) nameSpan.insertAdjacentHTML('beforeend',
+      `<span class="live-indicator" onclick="watchStream('${data.username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
+    );
   }
 });
 
