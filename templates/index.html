@@ -1601,7 +1601,16 @@ async function createPeerConnection(targetUsername) {
   peerConnections[targetUsername] = pc;
   
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-  
+
+  // 如果当前正在直播/共享音频，把活跃轨道也加入新连接
+  if (displayStream) {
+    displayStream.getTracks().filter(t => t.readyState === 'live').forEach(t => {
+      try { pc.addTrack(t, displayStream); } catch(e) {}
+    });
+  } else if (isStreamingAudio && streamAudioTrack && streamAudioTrack.readyState === 'live') {
+    try { pc.addTrack(streamAudioTrack, new MediaStream([streamAudioTrack])); } catch(e) {}
+  }
+
   pc.ontrack = (event) => {
     if (event.track.kind !== 'audio') return;
 
@@ -2081,6 +2090,8 @@ function addStreamCard(username, screenname) {
   if (document.getElementById('stream-card-' + username)) return;
   const video = streamVideos[username];
   if (!video) return;
+  const waiting = document.getElementById('stream-waiting-' + username);
+  if (waiting) { clearTimeout(waiting._timeout); waiting.remove(); }
   const panel = document.getElementById('stream-panel');
   const grid = document.getElementById('stream-grid');
   const card = document.createElement('div');
@@ -2102,6 +2113,10 @@ function addStreamCard(username, screenname) {
 
 function watchStream(username) {
   closeAllSidebars();
+  // 手机端确保聊天区可见
+  const chatMain = document.getElementById('chat-main');
+  if (chatMain) { chatMain.style.display = 'flex'; chatMain.style.flexDirection = 'column'; }
+
   const card = document.getElementById('stream-card-' + username);
   if (card) {
     card.style.display = '';
@@ -2109,6 +2124,28 @@ function watchStream(username) {
     document.getElementById('stream-resize-handle').classList.add('active');
     card.style.outline = '2px solid #4f8ef7';
     setTimeout(() => { card.style.outline = ''; }, 1200);
+  } else {
+    // 轨道还没到，等最多5秒
+    const panel = document.getElementById('stream-panel');
+    panel.classList.add('active');
+    document.getElementById('stream-resize-handle').classList.add('active');
+    const grid = document.getElementById('stream-grid');
+    let waiting = document.getElementById('stream-waiting-' + username);
+    if (!waiting) {
+      waiting = document.createElement('div');
+      waiting.id = 'stream-waiting-' + username;
+      waiting.className = 'stream-placeholder';
+      waiting.textContent = '等待直播画面…';
+      grid.appendChild(waiting);
+    }
+    const t = setTimeout(() => {
+      if (waiting.parentNode) waiting.remove();
+      if (!document.querySelector('.stream-card')) {
+        panel.classList.remove('active');
+        document.getElementById('stream-resize-handle').classList.remove('active');
+      }
+    }, 5000);
+    waiting._timeout = t;
   }
 }
 
