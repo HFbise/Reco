@@ -1603,7 +1603,19 @@ async function createPeerConnection(targetUsername) {
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
   pc.ontrack = (event) => {
-    if (event.track.kind !== 'audio') return;
+    if (event.track.kind === 'video') {
+      if (!streamVideos[targetUsername]) {
+        const video = document.createElement('video');
+        video.autoplay = true;
+        video.setAttribute('playsinline', '');
+        video.muted = true;
+        video.srcObject = new MediaStream([event.track]);
+        streamVideos[targetUsername] = video;
+        addStreamCard(targetUsername, voiceScreennames[targetUsername] || targetUsername);
+        event.track.onended = () => removeStreamCard(targetUsername);
+      }
+      return;
+    }
 
     if (!audioElements[targetUsername]) {
       // 第一条音轨 = 麦克风
@@ -1635,16 +1647,6 @@ async function createPeerConnection(targetUsername) {
       showStreamVolControl(targetUsername);
       event.track.onended = () => hideStreamVolControl(targetUsername);
 
-    } else if (event.track.kind === 'video' && !streamVideos[targetUsername]) {
-      // 视频轨道 = 直播画面
-      const video = document.createElement('video');
-      video.autoplay = true;
-      video.setAttribute('playsinline', '');
-      video.muted = true; // 音频走独立的音频轨道
-      video.srcObject = new MediaStream([event.track]);
-      streamVideos[targetUsername] = video;
-      addStreamCard(targetUsername, voiceScreennames[targetUsername] || targetUsername);
-      event.track.onended = () => removeStreamCard(targetUsername);
     }
   };
 
