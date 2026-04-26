@@ -351,6 +351,7 @@ def handle_join(data):
             return
 
         room_pw = room_data.get('password')
+        print(f'[JOIN] room={room} user={username} room_pw={repr(room_pw)} provided={repr(data.get("password",""))}')
         if room_pw and username not in super_admins:
             invited = username in pending_invites.get(room, set())
             if invited:
