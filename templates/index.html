@@ -560,6 +560,12 @@ if (savedUser) {
   document.getElementById('logout-btn').style.display = '';
 }
 
+// 不支持 getDisplayMedia 的设备（如 iOS）隐藏直播/共享音频按钮
+if (!navigator.mediaDevices?.getDisplayMedia) {
+  document.getElementById('stream-audio-btn').style.display = 'none';
+  document.getElementById('live-btn').style.display = 'none';
+}
+
 // 启动时获取房间列表
 let _socketConnectedBefore = false;
 socket.on('connect', function() {
@@ -1675,6 +1681,13 @@ async function createPeerConnection(targetUsername) {
   };
 
   pc.onnegotiationneeded = async () => {
+    // Only renegotiate if we have more live senders than already-negotiated send m-lines.
+    // This prevents spurious renegotiation on the answering side (whose onnegotiationneeded
+    // fires after the initial handshake even though no new tracks were added).
+    const activeSenders = pc.getSenders().filter(s => s.track?.readyState === 'live').length;
+    const localSdp = pc.localDescription?.sdp || '';
+    const sendMlines = (localSdp.match(/a=(sendrecv|sendonly)/gm) || []).length;
+    if (pc.localDescription && activeSenders <= sendMlines) return;
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -1702,6 +1715,15 @@ socket.on('voice_current_members', async function(data) {
     if (member.username !== currentUser.username && !peerConnections[member.username]) {
       addVoiceMember(member.username, member.screenname);
       const pc = await createPeerConnection(member.username);
+      // Include any live stream tracks in the initial offer so late joiners
+      // receive the stream without needing a separate renegotiation round.
+      if (displayStream) {
+        displayStream.getTracks().filter(t => t.readyState === 'live').forEach(t => {
+          try { pc.addTrack(t, displayStream); } catch(e) {}
+        });
+      } else if (isStreamingAudio && streamAudioTrack?.readyState === 'live') {
+        try { pc.addTrack(streamAudioTrack, new MediaStream([streamAudioTrack])); } catch(e) {}
+      }
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       socket.emit('voice_offer', {
@@ -2225,38 +2247,63 @@ function popInStream(username) {
 function makeDraggable(el, handle) {
   handle = handle || el;
   let sx, sy, sl, st;
-  handle.addEventListener('mousedown', e => {
-    if (e.target.tagName === 'BUTTON') return;
-    sx = e.clientX; sy = e.clientY;
+
+  function startDrag(cx, cy) {
+    sx = cx; sy = cy;
     sl = el.offsetLeft; st = el.offsetTop;
     el.style.right = 'auto'; el.style.bottom = 'auto';
-    const onMove = e2 => {
-      el.style.left = Math.max(0, sl + e2.clientX - sx) + 'px';
-      el.style.top  = Math.max(0, st + e2.clientY - sy) + 'px';
-    };
+  }
+  function applyDrag(cx, cy) {
+    el.style.left = Math.max(0, sl + cx - sx) + 'px';
+    el.style.top  = Math.max(0, st + cy - sy) + 'px';
+  }
+
+  handle.addEventListener('mousedown', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    startDrag(e.clientX, e.clientY);
+    const onMove = e2 => applyDrag(e2.clientX, e2.clientY);
     const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
     e.preventDefault();
   });
+
+  handle.addEventListener('touchstart', e => {
+    if (e.target.tagName === 'BUTTON') return;
+    const t = e.touches[0];
+    startDrag(t.clientX, t.clientY);
+    const onMove = e2 => { e2.preventDefault(); const t2 = e2.touches[0]; applyDrag(t2.clientX, t2.clientY); };
+    const onEnd = () => { handle.removeEventListener('touchmove', onMove); handle.removeEventListener('touchend', onEnd); };
+    handle.addEventListener('touchmove', onMove, { passive: false });
+    handle.addEventListener('touchend', onEnd);
+    e.preventDefault();
+  }, { passive: false });
 }
 
 // 直播面板拖拽缩放
 (function() {
   const handle = document.getElementById('stream-resize-handle');
   let dragging = false, startY = 0, startH = 0;
-  handle.addEventListener('mousedown', e => {
-    dragging = true; startY = e.clientY;
+
+  function startResize(y) {
+    dragging = true; startY = y;
     startH = document.getElementById('stream-panel').offsetHeight;
     handle.classList.add('dragging');
-    e.preventDefault();
-  });
-  document.addEventListener('mousemove', e => {
+  }
+  function applyResize(y) {
     if (!dragging) return;
-    const newH = Math.max(90, Math.min(window.innerHeight * 0.72, startH + e.clientY - startY));
+    const newH = Math.max(90, Math.min(window.innerHeight * 0.72, startH + y - startY));
     document.getElementById('stream-panel').style.height = newH + 'px';
-  });
-  document.addEventListener('mouseup', () => { if (dragging) { dragging = false; handle.classList.remove('dragging'); } });
+  }
+  function endResize() { if (dragging) { dragging = false; handle.classList.remove('dragging'); } }
+
+  handle.addEventListener('mousedown', e => { startResize(e.clientY); e.preventDefault(); });
+  document.addEventListener('mousemove', e => applyResize(e.clientY));
+  document.addEventListener('mouseup', endResize);
+
+  handle.addEventListener('touchstart', e => { startResize(e.touches[0].clientY); e.preventDefault(); }, { passive: false });
+  handle.addEventListener('touchmove', e => { e.preventDefault(); applyResize(e.touches[0].clientY); }, { passive: false });
+  handle.addEventListener('touchend', endResize);
 })();
 
 socket.on('stream_start', function(data) {
