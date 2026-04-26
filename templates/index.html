@@ -568,7 +568,10 @@ function renderMembers(members) {
   });
 }
 
-socket.on('members_list', function(data) { renderMembers(data.members); });
+socket.on('members_list', function(data) {
+  if (data.room) memberCache[data.room] = data.members;
+  if (data.room === currentRoom || !data.room) renderMembers(data.members);
+});
 
 socket.on('new_room_created', function(data) {
   addRoomToList(data.room, data.has_password);
@@ -580,6 +583,12 @@ socket.on('voice_members_view', function(data) {
 });
 
 socket.on('online_status_changed', function(data) {
+  // patch all cached room member lists
+  Object.values(memberCache).forEach(members => {
+    const m = members.find(m => m.username === data.username);
+    if (m) m.is_online = data.online;
+  });
+  // patch live DOM if visible
   const el = document.getElementById('member-' + data.username);
   if (el) el.classList.toggle('offline', !data.online);
 });
@@ -1008,8 +1017,9 @@ socket.on('create_room_result', function(data) {
 });
 
 const roomCodes    = {};
-const roomMessages = {};   // { roomName: [msgData, ...] }  最多缓存100条
-const roomLastTs   = {};   // { roomName: ISO timestamp }   最后一条消息的时间戳
+const roomMessages = {};   // { roomName: [msgData, ...] }  max 100
+const roomLastTs   = {};   // { roomName: ISO timestamp }
+const memberCache  = {};   // { roomName: [memberObj, ...] }
 function addRoomToList(room, hasPassword, code) {
   roomHasPassword[room] = !!hasPassword;
   if (code) roomCodes[room] = code;
@@ -1079,9 +1089,10 @@ function _submitJoin(room, password, isReconnect = false) {
     // 主动切换房间：立即显示缓存，再向服务端请求增量消息
     document.getElementById('messages').innerHTML = '';
     document.getElementById('voice-members-list').innerHTML = '';
-    document.getElementById('member-list').innerHTML = '';
     voiceBanned.clear();
     (roomMessages[room] || []).forEach(msg => appendMessage(msg, false));
+    if (memberCache[room]) renderMembers(memberCache[room]);
+    else document.getElementById('member-list').innerHTML = '';
     const since = roomLastTs[room] || null;
     socket.emit('join', { username: currentUser.username, screenname: currentUser.screenname, room, password, since });
   }
@@ -1126,7 +1137,10 @@ socket.on('join_result', function(data) {
   const title = document.getElementById('chat-title');
   title.style.cursor = 'pointer';
   title.title = '点击查看房间信息';
-  if (data.members) renderMembers(data.members);
+  if (data.members && data.room) {
+    memberCache[data.room] = data.members;
+    renderMembers(data.members);
+  }
 });
 
 // ── 消息 ──────────────────────────────────────────────────
