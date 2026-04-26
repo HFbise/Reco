@@ -51,12 +51,23 @@
     #sidebar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
     body.dark #sidebar { background: #16213e; border-color: #333; }
     #sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
-    #room-list { flex: 1; overflow-y: auto; }
-    .room-item { padding: 8px 10px; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
+    #room-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+    #room-search { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; background: inherit; color: inherit; box-sizing: border-box; }
+    body.dark #room-search { border-color: #444; }
+    .room-item { display: flex; align-items: center; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; border: 1px solid #e0e0e0; background: #f7f8fa; transition: background 0.12s, border-color 0.12s; gap: 4px; }
+    .room-item:hover { background: #edf0f7; border-color: #bfc8e0; }
+    body.dark .room-item { background: #0f3460; border-color: #1e4a80; }
+    body.dark .room-item:hover { background: #1a4a7a; border-color: #3060a0; }
+    .room-item.active { background: #4f8ef7; border-color: #3a7ae0; color: white; }
+    body.dark .room-item.active { background: #4f8ef7; border-color: #3a7ae0; }
+    .room-name-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .room-leave-btn { opacity: 0; flex-shrink: 0; background: none; border: none; color: #e74c3c; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 2px; border-radius: 3px; transition: opacity 0.12s; }
+    .room-item:hover .room-leave-btn { opacity: 0.7; }
+    .room-item:hover .room-leave-btn:hover { opacity: 1; }
+    .room-item.active .room-leave-btn { color: rgba(255,255,255,0.8); }
     .member-item { transition: background 0.15s; cursor: pointer; }
     .member-item:hover { background: #e0e8ff; }
     body.dark .member-item:hover { background: #1a3a6e; }
-    .room-item.active { background: #4f8ef7; color: white; }
     #create-room-btn, #find-room-btn { padding: 8px; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
     #create-room-btn { background: #4f8ef7; color: white; }
     #find-room-btn { background: #27ae60; color: white; margin-top: 6px; }
@@ -174,6 +185,7 @@
 <div id="app">
   <div id="sidebar">
     <h3>聊天室</h3>
+    <input id="room-search" type="text" placeholder="🔍 搜索…" oninput="filterRooms(this.value)" autocomplete="off" />
     <div id="room-list"></div>
     <button id="create-room-btn" onclick="openCreateRoom()">＋ 创建房间</button>
     <button id="find-room-btn" onclick="openFindRoom()">🔍 搜索房间</button>
@@ -997,10 +1009,33 @@ function addRoomToList(room, hasPassword, code) {
   const div = document.createElement('div');
   div.className = 'room-item';
   div.id = 'room-' + room;
-  div.innerHTML = `# ${room}${hasPassword ? '<span style="float:right">🔒</span>' : ''}`;
+  const leaveBtn = room === '大厅' ? '' : `<button class="room-leave-btn" onclick="event.stopPropagation();leaveRoom('${room}')" title="退出聊天室">×</button>`;
+  div.innerHTML = `<span class="room-name-label"># ${room}${hasPassword ? ' 🔒' : ''}</span>${leaveBtn}`;
   div.onclick = () => joinRoom(room);
   list.appendChild(div);
 }
+
+function filterRooms(query) {
+  const q = query.trim().toLowerCase();
+  document.querySelectorAll('#room-list .room-item').forEach(el => {
+    const name = el.id.replace('room-', '').toLowerCase();
+    el.style.display = name.includes(q) ? '' : 'none';
+  });
+}
+
+function leaveRoom(room) {
+  if (!confirm(`退出 #${room}？\n退出后需要重新搜索房间号才能加入。`)) return;
+  socket.emit('leave_room', { username: currentUser.username, room });
+}
+
+socket.on('leave_room_result', function(data) {
+  if (!data.success) { alert(data.msg); return; }
+  const el = document.getElementById('room-' + data.room);
+  if (el) el.remove();
+  delete roomHasPassword[data.room];
+  delete roomCodes[data.room];
+  if (currentRoom === data.room) joinRoom('大厅');
+});
 
 function joinRoom(room) {
   if (!currentUser) { openAuth(); return; }

@@ -6,7 +6,6 @@ load_dotenv()
 import json
 from datetime import datetime, timezone
 from flask import Flask, render_template, session, request, jsonify
-import urllib.request
 from flask_socketio import SocketIO, emit, join_room, leave_room
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -98,22 +97,11 @@ def index():
 
 @app.route('/api/ice-servers')
 def get_ice_servers():
-    api_key = os.environ.get('METERED_API_KEY', '')
-    fallback = [
-        {'urls': 'stun:stun.l.google.com:19302'},
-        {'urls': 'stun:stun1.l.google.com:19302'},
-    ]
-    if not api_key:
-        return jsonify(fallback)
-    try:
-        url = f'https://bise.metered.live/api/v1/turn/credentials?apiKey={api_key}'
-        with urllib.request.urlopen(url, timeout=5) as resp:
-            import json as _json
-            servers = _json.loads(resp.read())
-        return jsonify(servers)
-    except Exception as e:
-        print(f'[ICE] metered.ca 请求失败，回退到 STUN: {e}')
-        return jsonify(fallback)
+    return jsonify([
+        {'urls': 'stun:34.218.48.175:3478'},
+        {'urls': 'turn:34.218.48.175:3478',                  'username': 'reco', 'credential': 'reco_123456'},
+        {'urls': 'turn:34.218.48.175:3478?transport=tcp',    'username': 'reco', 'credential': 'reco_123456'},
+    ])
 
 # ── 用户注册 ──────────────────────────────────────────────
 @socketio.on('register')
@@ -541,6 +529,40 @@ def handle_get_rooms(data=None):
         emit('rooms_list', {'rooms': rooms})
     except Exception as e:
         emit('rooms_list', {'rooms': []})
+
+@socketio.on('leave_room')
+def handle_leave_room(data):
+    username = data['username']
+    room = data['room'].strip()
+    if room == '大厅':
+        emit('leave_room_result', {'success': False, 'msg': '无法退出大厅'})
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT members, admins FROM rooms WHERE name = %s', (room,))
+        room_data = cur.fetchone()
+        if not room_data:
+            emit('leave_room_result', {'success': False, 'msg': '房间不存在'})
+            conn.close()
+            return
+        members = list(room_data['members'] or [])
+        admins = list(room_data['admins'] or [])
+        changed = False
+        if username in members:
+            members.remove(username)
+            cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
+            changed = True
+        if username in admins:
+            admins.remove(username)
+            cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, room))
+            changed = True
+        if changed:
+            conn.commit()
+        conn.close()
+        emit('leave_room_result', {'success': True, 'room': room})
+    except Exception as e:
+        emit('leave_room_result', {'success': False, 'msg': str(e)})
 
 @socketio.on('find_room')
 def handle_find_room(data):
