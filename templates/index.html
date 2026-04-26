@@ -2223,7 +2223,7 @@ socket.on('stream_start', function(data) {
   if (vmEl && !vmEl.querySelector('.live-indicator')) {
     const nameSpan = vmEl.querySelector('span:nth-child(2)');
     if (nameSpan) nameSpan.insertAdjacentHTML('beforeend',
-      `<span class="live-indicator" onclick="watchStream('${data.username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
+      `<span class="live-indicator" onclick="event.stopPropagation();watchStream('${data.username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
     );
   }
 });
