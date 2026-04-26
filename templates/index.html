@@ -530,7 +530,7 @@ socket.on('connect', function() {
         audioElements = {};
         audioGains = {};
       }
-      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '');
+      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '', isReconnect);
       // 重连后重新注册到语音频道，触发 voice_current_members 重建连接
       if (isReconnect && wasInVoice) {
         socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
@@ -540,7 +540,11 @@ socket.on('connect', function() {
 });
 
 socket.on('rooms_list', function(data) {
-  data.rooms.forEach(r => addRoomToList(r.name, r.has_password, r.code));
+  data.rooms.forEach(r => {
+    addRoomToList(r.name, r.has_password, r.code);
+    // 订阅所有房间的消息流，这样后台消息会实时写入缓存
+    if (currentUser) socket.emit('room_subscribe', { room: r.name });
+  });
   if (currentUser && !currentRoom) joinRoom('大厅');
 });
 
@@ -1003,7 +1007,9 @@ socket.on('create_room_result', function(data) {
   if (data.code) alert(`房间创建成功！\n房间号：${data.code}\n（可在房间卡片中随时查看）`);
 });
 
-const roomCodes = {};
+const roomCodes    = {};
+const roomMessages = {};   // { roomName: [msgData, ...] }  最多缓存100条
+const roomLastTs   = {};   // { roomName: ISO timestamp }   最后一条消息的时间戳
 function addRoomToList(room, hasPassword, code) {
   roomHasPassword[room] = !!hasPassword;
   if (code) roomCodes[room] = code;
@@ -1055,9 +1061,8 @@ function joinRoom(room) {
   _submitJoin(room, '');
 }
 
-function _submitJoin(room, password) {
+function _submitJoin(room, password, isReconnect = false) {
   currentRoom = room;
-  socket.emit('join', { username: currentUser.username, screenname: currentUser.screenname, room, password });
   document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('room-' + room);
   if (el) el.classList.add('active');
@@ -1065,11 +1070,21 @@ function _submitJoin(room, password) {
   document.getElementById('no-room').style.display = 'none';
   document.getElementById('chat-main').style.display = 'flex';
   document.getElementById('chat-main').style.flexDirection = 'column';
-  document.getElementById('messages').innerHTML = '';
-  document.getElementById('voice-members-list').innerHTML = '';
-  document.getElementById('member-list').innerHTML = '';
-  voiceBanned.clear();
   closeAllSidebars();
+
+  if (isReconnect) {
+    // 断线重连：保留当前消息，只让服务端重注册 socket 房间 + 更新成员列表
+    socket.emit('join', { username: currentUser.username, screenname: currentUser.screenname, room, password, skip_history: true });
+  } else {
+    // 主动切换房间：立即显示缓存，再向服务端请求增量消息
+    document.getElementById('messages').innerHTML = '';
+    document.getElementById('voice-members-list').innerHTML = '';
+    document.getElementById('member-list').innerHTML = '';
+    voiceBanned.clear();
+    (roomMessages[room] || []).forEach(msg => appendMessage(msg, false));
+    const since = roomLastTs[room] || null;
+    socket.emit('join', { username: currentUser.username, screenname: currentUser.screenname, room, password, since });
+  }
 }
 
 function submitRoomPassword() {
@@ -1115,7 +1130,20 @@ socket.on('join_result', function(data) {
 });
 
 // ── 消息 ──────────────────────────────────────────────────
-socket.on('message', function(data) {
+function appendMessage(data, cache = true) {
+  const msgRoom = data.room || currentRoom;
+
+  // 写缓存（系统消息不缓存，避免重复显示）
+  if (cache && msgRoom && !data.system) {
+    if (!roomMessages[msgRoom]) roomMessages[msgRoom] = [];
+    roomMessages[msgRoom].push(data);
+    if (roomMessages[msgRoom].length > 100) roomMessages[msgRoom].shift();
+    if (data.time) roomLastTs[msgRoom] = data.time;
+  }
+
+  // 非当前房间的消息只缓存，不渲染
+  if (msgRoom !== currentRoom) return;
+
   const div = document.getElementById('messages');
   const msg = document.createElement('div');
   msg.className = 'msg' + (data.system ? ' system' : (currentUser && data.username === currentUser.username ? ' mine' : ' other'));
@@ -1139,9 +1167,13 @@ socket.on('message', function(data) {
 
   div.appendChild(msg);
   div.scrollTop = div.scrollHeight;
-  if (data.system && currentRoom) {
-  socket.emit('get_members', { room: currentRoom });
 }
+
+socket.on('message', function(data) {
+  appendMessage(data);
+  if (data.system && data.room === currentRoom) {
+    socket.emit('get_members', { room: currentRoom });
+  }
 });
 
 function formatMsgTime(ts) {

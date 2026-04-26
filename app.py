@@ -351,7 +351,6 @@ def handle_join(data):
             return
 
         room_pw = room_data.get('password')
-        print(f'[JOIN] room={room} user={username} room_pw={repr(room_pw)} provided={repr(data.get("password",""))}')
         if room_pw and username not in super_admins:
             invited = username in pending_invites.get(room, set())
             if invited:
@@ -398,17 +397,27 @@ def handle_join(data):
         emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code})
 
         # 历史消息
-        cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
-        history = list(reversed(cur.fetchall()))
+        skip_history = data.get('skip_history', False)
+        since = data.get('since')
+        if not skip_history:
+            if since:
+                cur.execute(
+                    'SELECT * FROM messages WHERE room = %s AND created_at > %s ORDER BY created_at ASC LIMIT 50',
+                    (room, since)
+                )
+                history = cur.fetchall()
+            else:
+                cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
+                history = list(reversed(cur.fetchall()))
+            for msg in history:
+                emit('message', {
+                    'username': msg['username'],
+                    'screenname': msg['screenname'],
+                    'text': msg['text'],
+                    'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
+                    'room': room
+                })
         conn.close()
-        for msg in history:
-            emit('message', {
-                'username': msg['username'],
-                'screenname': msg['screenname'],
-                'text': msg['text'],
-                'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                'room': room
-            })
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
             emit('voice_members_view', {
@@ -580,6 +589,11 @@ def handle_leave_room(data):
         emit('leave_room_result', {'success': True, 'room': room})
     except Exception as e:
         emit('leave_room_result', {'success': False, 'msg': str(e)})
+
+@socketio.on('room_subscribe')
+def handle_room_subscribe(data):
+    """只订阅房间消息流，不加载历史，不更新成员列表。"""
+    join_room(data['room'])
 
 @socketio.on('find_room')
 def handle_find_room(data):
