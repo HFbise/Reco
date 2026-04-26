@@ -73,10 +73,12 @@
     #find-room-btn { background: #27ae60; color: white; margin-top: 6px; }
 
     /* ── 聊天区 ── */
-    #chat-header { padding: 12px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
+    #chat-header { padding: 8px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
     body.dark #chat-header { border-color: #333; }
-    #admin-btn { background: #f0a500; color: white; margin-right: 8px; }
-    #close-room-btn { background: #e74c3c; color: white; }
+    #chat-title { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #f7f8fa; cursor: pointer; font-size: 1rem; font-weight: 600; transition: background 0.12s, border-color 0.12s; user-select: none; }
+    #chat-title:hover { background: #edf0f7; border-color: #bfc8e0; }
+    body.dark #chat-title { background: #0f3460; border-color: #1e4a80; }
+    body.dark #chat-title:hover { background: #1a4a7a; border-color: #3060a0; }
     #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
     .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); word-break: break-word; white-space: pre-wrap; }
     .msg.other { align-self: flex-start; }
@@ -194,7 +196,7 @@
     <div id="no-room">请先登录或注册</div>
     <div id="chat-main" style="display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden;">
       <div id="chat-header">
-        <span id="chat-title" onclick="openRoomCard()"></span>
+        <button id="chat-title" onclick="openRoomCard()"></button>
       </div>
       <div id="messages"></div>
       <div id="input-area">
@@ -485,9 +487,10 @@ let iceServers = {
 };
 async function loadIceServers() {
   try {
-    const r = await fetch('/api/ice-servers');
+    const u = currentUser ? encodeURIComponent(currentUser.username) : '';
+    const r = await fetch('/api/ice-servers?u=' + u);
     const servers = await r.json();
-    iceServers = { iceServers: servers };
+    if (servers.length) iceServers = { iceServers: servers };
   } catch (e) {
     console.warn('Failed to fetch ICE servers, using STUN only', e);
   }
@@ -1058,7 +1061,7 @@ function _submitJoin(room, password) {
   document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('room-' + room);
   if (el) el.classList.add('active');
-  document.getElementById('chat-title').textContent = '# ' + room;
+  document.getElementById('chat-title').textContent = '# ' + room + '  ▾';
   document.getElementById('no-room').style.display = 'none';
   document.getElementById('chat-main').style.display = 'flex';
   document.getElementById('chat-main').style.flexDirection = 'column';
@@ -1425,7 +1428,7 @@ async function joinVoice() {
         if (inVoice) {
           leaveVoice();
           const vs2 = document.getElementById('voice-status');
-          vs2.textContent = '⚠️ 语音已断开（切后台）';
+          vs2.innerHTML = '⚠️ 语音已断开 <button onclick="toggleVoice()" style="font-size:0.75rem;padding:2px 8px;margin-left:4px;background:#4f8ef7;color:white;border:none;border-radius:4px;cursor:pointer;">重新加入</button>';
           vs2.style.display = '';
         }
       };

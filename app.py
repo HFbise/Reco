@@ -1,6 +1,10 @@
 import os
 import random
 import string
+import hmac
+import hashlib
+import base64
+import time
 from dotenv import load_dotenv
 load_dotenv()
 import json
@@ -95,18 +99,30 @@ def handle_disconnect():
 def index():
     return render_template('index.html')
 
+TURN_HOST   = '34.218.48.175'
+TURN_PORT   = 3478
+TURN_SECRET = os.environ.get('TURN_SECRET', '')
+
 @app.route('/api/ice-servers')
 def get_ice_servers():
+    username = request.args.get('u', '').strip()
+    if not username or not TURN_SECRET:
+        return jsonify([])
+    expiry       = int(time.time()) + 86400          # 24小时有效
+    turn_user    = f'{expiry}:{username}'
+    turn_pass    = base64.b64encode(
+        hmac.new(TURN_SECRET.encode(), turn_user.encode(), hashlib.sha1).digest()
+    ).decode()
     return jsonify([
-        {'urls': 'stun:34.218.48.175:3478'},
-        {'urls': 'turn:34.218.48.175:3478',                  'username': 'reco', 'credential': 'reco_123456'},
-        {'urls': 'turn:34.218.48.175:3478?transport=tcp',    'username': 'reco', 'credential': 'reco_123456'},
+        {'urls': f'stun:{TURN_HOST}:{TURN_PORT}'},
+        {'urls': f'turn:{TURN_HOST}:{TURN_PORT}',               'username': turn_user, 'credential': turn_pass},
+        {'urls': f'turn:{TURN_HOST}:{TURN_PORT}?transport=tcp', 'username': turn_user, 'credential': turn_pass},
     ])
 
 # ── 用户注册 ──────────────────────────────────────────────
 @socketio.on('register')
 def handle_register(data):
-    username = data['username'].strip()
+    username = data['username'].strip().lower()
     screenname = data['screenname'].strip()
     password = data['password']
     bio = data.get('bio', '').strip()
@@ -141,13 +157,13 @@ def handle_register(data):
 # ── 用户登录 ──────────────────────────────────────────────
 @socketio.on('login')
 def handle_login(data):
-    username = data['username'].strip()
+    username = data['username'].strip().lower()
     password = data['password']
 
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT * FROM users WHERE username = %s', (username,))
+        cur.execute('SELECT * FROM users WHERE LOWER(username) = %s', (username,))
         user = cur.fetchone()
         conn.close()
 
@@ -801,6 +817,19 @@ def _gen_unique_room_code(cur):
             return code
 
 # ── 启动 ──────────────────────────────────────────────────
+def ensure_columns():
+    """确保 rooms 表拥有所有必要的列，兼容旧版数据库。"""
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
+        cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
+        cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print('列迁移失败:', e)
+
 def ensure_room_codes():
     try:
         conn = get_db()
@@ -834,6 +863,7 @@ def ensure_lobby():
 
 if __name__ == '__main__':
     load_super_admins()
+    ensure_columns()
     ensure_room_codes()
     ensure_lobby()
     port = int(os.environ.get('PORT', 5000))
