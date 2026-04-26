@@ -61,10 +61,6 @@
     .room-item.active { background: #4f8ef7; border-color: #3a7ae0; color: white; }
     body.dark .room-item.active { background: #4f8ef7; border-color: #3a7ae0; }
     .room-name-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .room-leave-btn { opacity: 0; flex-shrink: 0; background: none; border: none; color: #e74c3c; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0 2px; border-radius: 3px; transition: opacity 0.12s; }
-    .room-item:hover .room-leave-btn { opacity: 0.7; }
-    .room-item:hover .room-leave-btn:hover { opacity: 1; }
-    .room-item.active .room-leave-btn { color: rgba(255,255,255,0.8); }
     .member-item { transition: background 0.15s; cursor: pointer; }
     .member-item:hover { background: #e0e8ff; }
     body.dark .member-item:hover { background: #1a3a6e; }
@@ -358,7 +354,10 @@
       </div>
       <button id="room-card-close-btn" onclick="confirmCloseRoomFromCard()" style="background:#e74c3c; color:white;">🗑 关闭房间</button>
     </div>
-    <button class="link-btn" style="color:#e74c3c; margin-top:12px;" onclick="closeModal('room-card-modal')">关闭</button>
+    <div id="room-card-leave-area" style="margin-top:12px;">
+      <button id="room-card-leave-btn" onclick="leaveRoomFromCard()" style="width:100%; padding:8px; background:#e74c3c; color:white; border:none; border-radius:6px; cursor:pointer;">退出房间</button>
+    </div>
+    <button class="link-btn" style="margin-top:10px;" onclick="closeModal('room-card-modal')">关闭</button>
   </div>
 </div>
 
@@ -1028,8 +1027,7 @@ function addRoomToList(room, hasPassword, code) {
   const div = document.createElement('div');
   div.className = 'room-item';
   div.id = 'room-' + room;
-  const leaveBtn = room === '大厅' ? '' : `<button class="room-leave-btn" onclick="event.stopPropagation();leaveRoom('${room}')" title="退出聊天室">×</button>`;
-  div.innerHTML = `<span class="room-name-label"># ${room}${hasPassword ? ' 🔒' : ''}</span>${leaveBtn}`;
+  div.innerHTML = `<span class="room-name-label"># ${room}${hasPassword ? ' 🔒' : ''}</span>`;
   div.onclick = () => joinRoom(room);
   list.appendChild(div);
 }
@@ -1040,6 +1038,11 @@ function filterRooms(query) {
     const name = el.id.replace('room-', '').toLowerCase();
     el.style.display = name.includes(q) ? '' : 'none';
   });
+}
+
+function leaveRoomFromCard() {
+  closeModal('room-card-modal');
+  leaveRoom(currentRoom);
 }
 
 function leaveRoom(room) {
@@ -1281,6 +1284,7 @@ function openRoomCard() {
   } else {
     document.getElementById('room-card-admin-btns').style.display = 'none';
   }
+  document.getElementById('room-card-leave-area').style.display = currentRoom === '大厅' ? 'none' : '';
   openModal('room-card-modal');
 }
 
