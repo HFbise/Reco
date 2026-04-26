@@ -362,7 +362,7 @@ def handle_join(data):
 
         join_room(room)
         members = list(room_data['members'] or [])
-        is_first_join = username not in members
+        is_first_join = username not in members and username not in super_admins
         if is_first_join:
             members.append(username)
             cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
@@ -383,13 +383,15 @@ def handle_join(data):
             screennames = {}
         members_data = []
         for u in member_usernames:
+            if u in super_admins:
+                continue
             members_data.append({
                 'username': u,
                 'screenname': screennames.get(u, u),
                 'is_admin': u in admins_set,
                 'is_owner': u == owner,
                 'is_online': u in online_users,
-                'is_super_admin': u in super_admins
+                'is_super_admin': False
             })
         members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
 
@@ -542,7 +544,9 @@ def handle_get_rooms(data=None):
     try:
         conn = get_db()
         cur = conn.cursor()
-        if username:
+        if username in super_admins:
+            cur.execute("SELECT name, password, code FROM rooms")
+        elif username:
             cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅' OR %s = ANY(members)", (username,))
         else:
             cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅'")
@@ -658,13 +662,15 @@ def handle_get_members(data):
             screennames = {}
         members = []
         for username in member_usernames:
+            if username in super_admins:
+                continue
             members.append({
                 'username': username,
                 'screenname': screennames.get(username, username),
                 'is_admin': username in admins_set,
                 'is_owner': username == owner,
                 'is_online': username in online_users,
-                'is_super_admin': username in super_admins
+                'is_super_admin': False
             })
         members.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
         conn.close()
@@ -840,6 +846,12 @@ def ensure_columns():
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
+        # 清除历史遗留：super_admin 不应出现在成员列表里
+        for sa in list(super_admins):
+            cur.execute(
+                "UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)",
+                (sa, sa)
+            )
         conn.commit()
         conn.close()
     except Exception as e:
