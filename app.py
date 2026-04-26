@@ -48,6 +48,7 @@ def get_level(username, room_data):
 # ── 内存状态 ─────────────────────────────────────────────
 rooms_voice = {}
 online_users = {}        # { username: set of sids }
+sid_to_voice = {}        # { sid: (username, room) } — for cleanup on disconnect
 super_admins = {SUPER_ADMIN}  # 超级管理员集合，启动时从 DB 加载
 pending_invites = {}     # { room: set(usernames) } — 待接受的邀请，加入时跳过密码验证
 
@@ -93,6 +94,14 @@ def handle_disconnect():
                 del online_users[username]
                 socketio.emit('online_status_changed', {'username': username, 'online': False})
             break
+    # Remove from voice if the tab/app was closed without calling voice_leave
+    if sid in sid_to_voice:
+        username, room = sid_to_voice.pop(sid)
+        if room in rooms_voice:
+            rooms_voice[room]['voice_members'] = [
+                m for m in rooms_voice[room]['voice_members'] if m['username'] != username
+            ]
+        socketio.emit('voice_user_left', {'username': username}, to=room)
 
 # ── 页面路由 ──────────────────────────────────────────────
 @app.route('/')
@@ -782,6 +791,7 @@ def handle_voice_join(data):
         rooms_voice[room] = {'voice_members': [], 'voice_banned': []}
     if not any(m['username'] == username for m in rooms_voice[room]['voice_members']):
         rooms_voice[room]['voice_members'].append({'username': username, 'screenname': screenname})
+    sid_to_voice[request.sid] = (username, room)
     emit('voice_user_joined', {'username': username, 'screenname': screenname}, to=room)
     emit('voice_current_members', {'members': rooms_voice[room]['voice_members']})
 
@@ -791,6 +801,7 @@ def handle_voice_leave(data):
     room = data['room']
     if room in rooms_voice:
         rooms_voice[room]['voice_members'] = [m for m in rooms_voice[room]['voice_members'] if m['username'] != username]
+    sid_to_voice.pop(request.sid, None)
     emit('voice_user_left', {'username': username}, to=room)
 
 @socketio.on('voice_offer')

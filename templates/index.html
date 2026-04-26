@@ -2128,7 +2128,8 @@ function addStreamCard(username, screenname) {
   card.insertAdjacentHTML('beforeend',
     `<div class="stream-card-label">${screenname}</div>` +
     `<div class="stream-card-btns">` +
-    `<button class="stream-card-btn" onclick="popOutStream('${username}')" title="浮出">⤢</button>` +
+    `<button class="stream-card-btn" onclick="fullscreenStream('${username}')" title="全屏">⤢</button>` +
+    `<button class="stream-card-btn" onclick="popOutStream('${username}')" title="浮出">⧉</button>` +
     `<button class="stream-card-btn" onclick="hideStreamCard('${username}')" title="停止观看">✕</button>` +
     `</div>`
   );
@@ -2215,6 +2216,7 @@ function popOutStream(username) {
     `<div class="stream-floater-bar">` +
     `<span>${screenname}</span>` +
     `<div style="display:flex;gap:4px">` +
+    `<button class="stream-floater-btn" onclick="fullscreenStream('${username}')" title="全屏">⤢</button>` +
     `<button class="stream-floater-btn" onclick="popInStream('${username}')" title="归位">⊡</button>` +
     `</div></div>`;
   video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:contain;';
@@ -2226,8 +2228,9 @@ function popOutStream(username) {
   ph.id = 'stream-ph-' + username;
   ph.textContent = '已浮出';
   card.insertBefore(ph, card.querySelector('.stream-card-btns'));
-  card.querySelector('.stream-card-btn').textContent = '⊡';
-  card.querySelector('.stream-card-btn').onclick = () => popInStream(username);
+  // 浮出状态下卡片第一个按钮变成归位
+  const firstBtn = card.querySelector('.stream-card-btn');
+  if (firstBtn) { firstBtn.textContent = '⊡'; firstBtn.title = '归位'; firstBtn.onclick = () => popInStream(username); }
 }
 
 function popInStream(username) {
@@ -2241,7 +2244,15 @@ function popInStream(username) {
   if (ph) ph.remove();
   if (floater) floater.remove();
   const btn = card.querySelector('.stream-card-btn');
-  if (btn) { btn.textContent = '⤢'; btn.onclick = () => popOutStream(username); }
+  if (btn) { btn.textContent = '⤢'; btn.title = '全屏'; btn.onclick = () => fullscreenStream(username); }
+}
+
+function fullscreenStream(username) {
+  const floater = document.getElementById('stream-float-' + username);
+  const card = document.getElementById('stream-card-' + username);
+  const video = (floater || card)?.querySelector('video');
+  if (!video) return;
+  (video.requestFullscreen || video.webkitRequestFullscreen || video.mozRequestFullScreen)?.call(video);
 }
 
 function makeDraggable(el, handle) {
