@@ -122,9 +122,9 @@
     #no-room { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.1rem; min-width: 0; }
 
     /* ── 弹窗通用 ── */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; }
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; cursor: pointer; }
     .modal.show { display: flex; }
-    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; max-height: 90dvh; overflow-y: auto; cursor: default; }
     body.dark .modal-box { background: #16213e; }
     .modal-box h2 { margin-bottom: 16px; font-size: 1.2rem; }
     .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 0.95rem; }
@@ -626,7 +626,7 @@ const i18n = {
   }
 };
 let currentLang = localStorage.getItem('lang') || 'zh';
-function t(key) { return (i18n[currentLang] || i18n.zh)[key] || key; }
+function t(key) { const v = (i18n[currentLang] || i18n.zh)[key]; return v !== undefined ? v : (i18n.zh[key] || key); }
 
 function applyLang() {
   const L = i18n[currentLang] || i18n.zh;
@@ -1008,9 +1008,9 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 document.querySelectorAll('.modal').forEach(function(modal) {
-  modal.addEventListener('click', function(e) {
-    if (e.target === modal) closeModal(modal.id);
-  });
+  function tryClose(e) { if (e.target === modal) closeModal(modal.id); }
+  modal.addEventListener('click', tryClose);
+  modal.addEventListener('touchend', tryClose);
 });
 
 // ── 登录/注册 ─────────────────────────────────────────────
@@ -1042,7 +1042,7 @@ function populateQuestionSelect() {
   cachedQuestions.forEach((q, i) => {
     const opt = document.createElement('option');
     opt.value = q; // value stays as the Chinese string (stored in DB)
-    opt.textContent = t('sq' + i) || q;
+    opt.textContent = t('sq' + i) !== ('sq' + i) ? t('sq' + i) : q;
     if (q === selected) opt.selected = true;
     sel.appendChild(opt);
   });
