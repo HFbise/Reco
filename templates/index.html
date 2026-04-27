@@ -2,7 +2,7 @@
 <html lang="zh">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Reco</title>
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <link rel="apple-touch-icon" href="/static/app-logo.png">
@@ -443,10 +443,10 @@
   <div class="modal-box" style="max-width:420px; width:90%;">
     <h2 id="settings-title">⚙️ 设置</h2>
     <div class="tabs" style="margin-bottom:16px;">
-      <button class="tab active" id="settings-tab-audio" onclick="switchSettingsTab('audio')">🎵 音频</button>
-      <button class="tab" id="settings-tab-general" onclick="switchSettingsTab('general')">通用</button>
+      <button class="tab" id="settings-tab-audio" onclick="switchSettingsTab('audio')">🎵 音频</button>
+      <button class="tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">通用</button>
     </div>
-    <div id="settings-audio-panel">
+    <div id="settings-audio-panel" style="display:none;">
       <div style="margin-bottom:14px;">
         <label id="settings-mic-label" style="display:block; font-size:0.85rem; color:#888; margin-bottom:6px;">🎤 麦克风</label>
         <select id="mic-select" style="width:100%; padding:6px; border-radius:6px; border:1px solid #ddd;" onchange="saveMicDevice(this.value)"></select>
@@ -466,7 +466,7 @@
         </div>
       </div>
     </div>
-    <div id="settings-general-panel" style="display:none;">
+    <div id="settings-general-panel">
       <div>
         <label id="settings-lang-label" style="display:block; font-size:0.85rem; color:#888; margin-bottom:8px;">🌐 语言 / Language</label>
         <div style="display:flex; gap:8px;">
@@ -2538,6 +2538,38 @@ socket.on('stream_stop', function(data) {
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl) { const ind = vmEl.querySelector('.live-indicator'); if (ind) ind.remove(); }
 });
+
+// ── 手机边缘滑动手势 ──────────────────────────────────────
+(function() {
+  const EDGE = 28;       // 触发区域宽度 px（距屏幕边缘）
+  const MIN_SWIPE = 55;  // 最小滑动距离 px
+  const MAX_VERT = 60;   // 最大允许垂直偏移 px（防止误触滚动）
+  let t0x = 0, t0y = 0;
+
+  document.addEventListener('touchstart', e => {
+    t0x = e.touches[0].clientX;
+    t0y = e.touches[0].clientY;
+  }, { passive: true });
+
+  document.addEventListener('touchend', e => {
+    // 有弹窗打开时不触发
+    if (document.querySelector('.modal.show')) return;
+    const dx = e.changedTouches[0].clientX - t0x;
+    const dy = e.changedTouches[0].clientY - t0y;
+    if (Math.abs(dy) > MAX_VERT) return;  // 竖向滑动，跳过
+
+    const W = window.innerWidth;
+    if (t0x <= EDGE && dx >= MIN_SWIPE) {
+      // 左边缘右滑 → 打开聊天室列表
+      const sidebar = document.getElementById('sidebar');
+      if (!sidebar.classList.contains('mobile-open')) toggleSidebar();
+    } else if (t0x >= W - EDGE && dx <= -MIN_SWIPE) {
+      // 右边缘左滑 → 打开成员列表
+      const membersBar = document.getElementById('members-sidebar');
+      if (!membersBar.classList.contains('mobile-open')) toggleMembersBar();
+    }
+  }, { passive: true });
+})();
 
 // ── 手机侧栏切换 ─────────────────────────────────────────
 function toggleSidebar() {
