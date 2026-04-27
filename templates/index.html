@@ -443,8 +443,8 @@
   <div class="modal-box" style="max-width:420px; width:90%;">
     <h2 id="settings-title">⚙️ 设置</h2>
     <div class="tabs" style="margin-bottom:16px;">
-      <button class="tab" id="settings-tab-audio" onclick="switchSettingsTab('audio')">🎵 音频</button>
       <button class="tab active" id="settings-tab-general" onclick="switchSettingsTab('general')">通用</button>
+      <button class="tab" id="settings-tab-audio" onclick="switchSettingsTab('audio')">🎵 音频</button>
     </div>
     <div id="settings-audio-panel" style="display:none;">
       <div style="margin-bottom:14px;">
@@ -896,21 +896,28 @@ async function populateAudioDevices() {
       });
     }
 
+    const spkRow = document.getElementById('speaker-select')?.closest('div');
     const spkSel = document.getElementById('speaker-select');
-    spkSel.innerHTML = '';
     const supportsSink = typeof HTMLAudioElement.prototype.setSinkId === 'function';
-    if (!supportsSink || !speakers.length) {
-      spkSel.innerHTML = '<option>' + (!supportsSink ? '浏览器不支持扬声器切换' : '未检测到扬声器') + '</option>';
-      spkSel.disabled = true;
+    if (!supportsSink) {
+      // 设备不支持扬声器切换（iOS等），直接隐藏整行
+      if (spkRow) spkRow.style.display = 'none';
     } else {
-      spkSel.disabled = false;
-      speakers.forEach((d, i) => {
-        const opt = document.createElement('option');
-        opt.value = d.deviceId;
-        opt.textContent = d.label || ('扬声器 ' + (i + 1));
-        if (d.deviceId === savedSpeakerDeviceId) opt.selected = true;
-        spkSel.appendChild(opt);
-      });
+      if (spkRow) spkRow.style.display = '';
+      spkSel.innerHTML = '';
+      if (!speakers.length) {
+        spkSel.innerHTML = '<option>未检测到扬声器</option>';
+        spkSel.disabled = true;
+      } else {
+        spkSel.disabled = false;
+        speakers.forEach((d, i) => {
+          const opt = document.createElement('option');
+          opt.value = d.deviceId;
+          opt.textContent = d.label || ('扬声器 ' + (i + 1));
+          if (d.deviceId === savedSpeakerDeviceId) opt.selected = true;
+          spkSel.appendChild(opt);
+        });
+      }
     }
   } catch(e) {
     console.warn('无法枚举音频设备:', e);
@@ -935,8 +942,15 @@ function saveSpeakerDevice(deviceId) {
 async function startMicTest() {
   stopMicTest();
   try {
-    const constraints = { audio: savedMicDeviceId ? { deviceId: { exact: savedMicDeviceId } } : true };
-    micTestStream = await navigator.mediaDevices.getUserMedia(constraints);
+    if (savedMicDeviceId) {
+      try {
+        micTestStream = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: savedMicDeviceId } } });
+      } catch(e) {
+        micTestStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } else {
+      micTestStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
     // 权限拿到后重新枚举（显示完整设备名）
     await populateAudioDevices();
     micTestContext = new AudioContext();
@@ -1722,8 +1736,18 @@ async function joinVoice() {
   }
   await loadIceServers();
   try {
-    const audioConstraints = savedMicDeviceId ? { deviceId: { exact: savedMicDeviceId } } : true;
-    localStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+    let localRaw;
+    if (savedMicDeviceId) {
+      try {
+        localRaw = await navigator.mediaDevices.getUserMedia({ audio: { deviceId: { exact: savedMicDeviceId } } });
+      } catch(e) {
+        // 保存的设备 ID 在此设备上不存在（跨设备/手机），回退到默认麦克风
+        localRaw = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
+    } else {
+      localRaw = await navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+    localStream = localRaw;
 
     // 发送侧：与原来一致，通过 AudioContext 处理后发出
     audioContext = new AudioContext();
