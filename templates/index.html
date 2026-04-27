@@ -124,7 +124,7 @@
     /* ── 弹窗通用 ── */
     .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; cursor: pointer; }
     .modal.show { display: flex; }
-    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; max-height: 90dvh; overflow-y: auto; cursor: default; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; max-height: 90dvh; overflow-y: auto; }
     body.dark .modal-box { background: #16213e; }
     .modal-box h2 { margin-bottom: 16px; font-size: 1.2rem; }
     .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 0.95rem; }
@@ -1008,9 +1008,7 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 document.querySelectorAll('.modal').forEach(function(modal) {
-  function tryClose(e) { if (e.target === modal) closeModal(modal.id); }
-  modal.addEventListener('click', tryClose);
-  modal.addEventListener('touchend', tryClose);
+  modal.addEventListener('click', function(e) { if (e.target === modal) closeModal(modal.id); });
 });
 
 // ── 登录/注册 ─────────────────────────────────────────────
