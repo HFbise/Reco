@@ -555,6 +555,8 @@ const i18n = {
     'ph-reg-username':'用户名（登录用，不可更改）','ph-reg-screenname':'显示名',
     'ph-reg-password':'密码（至少6位）','ph-reg-bio':'个人简介（可选）',
     'ph-reg-question':'选择安全问题...','ph-reg-answer':'安全问题答案',
+    'sq0':'你的出生城市是？','sq1':'你的小学名字是？','sq2':'你最喜欢的宠物名字是？',
+    'sq3':'你母亲的娘家姓是？','sq4':'你的第一辆车的品牌是？','sq5':'你最喜欢的老师叫什么？',
     'ph-forgot-username':'输入用户名','ph-forgot-answer':'输入答案',
     'ph-forgot-newpw':'新密码（至少6位）',
     'ph-profile-screenname':'显示名','ph-profile-bio':'个人简介',
@@ -608,7 +610,10 @@ const i18n = {
     'ph-login-username':'Username','ph-login-password':'Password',
     'ph-reg-username':'Username (for login, cannot be changed)','ph-reg-screenname':'Display name',
     'ph-reg-password':'Password (min 6 chars)','ph-reg-bio':'Bio (optional)',
-    'ph-reg-question':'Select security question...','ph-reg-answer':'Security question answer',
+    'ph-reg-question':'Select a security question...','ph-reg-answer':'Security question answer',
+    'sq0':'What city were you born in?','sq1':'What was the name of your primary school?',
+    'sq2':'What is your favorite pet\'s name?','sq3':'What is your mother\'s maiden name?',
+    'sq4':'What was the make of your first car?','sq5':'What is your favorite teacher\'s name?',
     'ph-forgot-username':'Enter username','ph-forgot-answer':'Enter answer',
     'ph-forgot-newpw':'New password (min 6 chars)',
     'ph-profile-screenname':'Display name','ph-profile-bio':'Bio',
@@ -653,7 +658,7 @@ function applyLang() {
     'login-username':'ph-login-username','login-password':'ph-login-password',
     'reg-username':'ph-reg-username','reg-screenname':'ph-reg-screenname',
     'reg-password':'ph-reg-password','reg-bio':'ph-reg-bio',
-    'reg-question':'ph-reg-question','reg-answer':'ph-reg-answer',
+    'reg-answer':'ph-reg-answer',
     'forgot-username':'ph-forgot-username','forgot-answer':'ph-forgot-answer','forgot-newpw':'ph-forgot-newpw',
     'profile-screenname':'ph-profile-screenname','profile-bio':'ph-profile-bio',
     'admin-reset-target':'ph-admin-reset-target',
@@ -682,6 +687,8 @@ function applyLang() {
   // Language buttons active state
   document.getElementById('lang-zh-btn')?.classList.toggle('active', currentLang === 'zh');
   document.getElementById('lang-en-btn')?.classList.toggle('active', currentLang === 'en');
+  // Re-populate security question select in correct language
+  populateQuestionSelect();
 }
 
 function setLang(lang) {
@@ -1021,15 +1028,25 @@ function loadQuestions() {
   socket.emit('get_questions_list');
 }
 
+let cachedQuestions = [];
 socket.on('questions_list', function(data) {
+  cachedQuestions = data.questions;
+  populateQuestionSelect();
+});
+
+function populateQuestionSelect() {
   const sel = document.getElementById('reg-question');
-  sel.innerHTML = '<option value="">选择安全问题...</option>';
-  data.questions.forEach(q => {
+  if (!sel) return;
+  const selected = sel.value;
+  sel.innerHTML = '<option value="">' + t('ph-reg-question') + '</option>';
+  cachedQuestions.forEach((q, i) => {
     const opt = document.createElement('option');
-    opt.value = q; opt.textContent = q;
+    opt.value = q; // value stays as the Chinese string (stored in DB)
+    opt.textContent = t('sq' + i) || q;
+    if (q === selected) opt.selected = true;
     sel.appendChild(opt);
   });
-});
+}
 
 function doLogin() {
   const username = document.getElementById('login-username').value.trim();
