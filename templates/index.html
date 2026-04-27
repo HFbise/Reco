@@ -757,6 +757,8 @@ if (localStorage.getItem('theme') === 'dark') {
   document.body.classList.add('dark');
 }
 
+let cachedQuestions = [];
+
 // 应用语言（使用已保存的偏好）
 applyLang();
 
@@ -1026,7 +1028,6 @@ function loadQuestions() {
   socket.emit('get_questions_list');
 }
 
-let cachedQuestions = [];
 socket.on('questions_list', function(data) {
   cachedQuestions = data.questions;
   populateQuestionSelect();
