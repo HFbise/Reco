@@ -265,6 +265,7 @@
 <div id="mobile-topbar">
   <button class="mt-btn" id="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
   <div class="mt-room" id="mobile-room-title"></div>
+  <button class="mt-btn" id="mobile-login-btn" onclick="openAuth()" style="display:none; font-size:0.8rem; padding:4px 10px; background:#4f8ef7; color:white; border-radius:6px; opacity:1;">登录</button>
   <button class="mt-btn" id="mobile-members-btn" onclick="toggleMembersBar()">👥</button>
 </div>
 
@@ -2866,11 +2867,13 @@ function updateSidebarAvatar() {
   const logoutBtn = document.getElementById('logout-btn');
   const loginBtn = document.getElementById('login-open-btn');
   if (!wrap) return;
+  const mobileLoginBtn = document.getElementById('mobile-login-btn');
   if (!currentUser) {
     wrap.innerHTML = ''; wrap.style.display = 'none';
     if (nameEl) { nameEl.textContent = ''; nameEl.style.display = 'none'; }
     if (logoutBtn) logoutBtn.style.display = 'none';
     if (loginBtn) loginBtn.style.display = '';
+    if (mobileLoginBtn) mobileLoginBtn.style.display = '';
     return;
   }
   const av = getAvatarData(currentUser.username);
@@ -2879,6 +2882,7 @@ function updateSidebarAvatar() {
   if (nameEl) { nameEl.textContent = currentUser.screenname; nameEl.style.display = 'inline'; }
   if (logoutBtn) logoutBtn.style.display = 'flex';
   if (loginBtn) loginBtn.style.display = 'none';
+  if (mobileLoginBtn) mobileLoginBtn.style.display = 'none';
 }
 
 const _INFO_SVG = `<svg width="13" height="12" viewBox="0 0 15 14" fill="none" style="opacity:0.45;flex-shrink:0"><path d="M7.99996 9.33332V6.99999M7.99996 4.66666H8.00579M13.8333 6.99999C13.8333 10.2217 11.2216 12.8333 7.99996 12.8333C4.7783 12.8333 2.16663 10.2217 2.16663 6.99999C2.16663 3.77833 4.7783 1.16666 7.99996 1.16666C11.2216 1.16666 13.8333 3.77833 13.8333 6.99999Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
