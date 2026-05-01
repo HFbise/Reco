@@ -34,10 +34,8 @@ SUPER_ADMIN = "admin"
 DEFAULT_PASSWORD = "reco1234"
 
 def get_level(username, room_data):
-    """返回用户在房间内的权限级别: 4=admin, 3=超管, 2=房主, 1=管理员, 0=普通成员"""
+    """返回用户在房间内的权限级别: 3=admin, 2=房主, 1=管理员, 0=普通成员"""
     if username == SUPER_ADMIN:
-        return 4
-    if username in super_admins:
         return 3
     if username == (room_data.get('owner') or ''):
         return 2
@@ -49,19 +47,7 @@ def get_level(username, room_data):
 rooms_voice = {}
 online_users = {}        # { username: set of sids }
 sid_to_voice = {}        # { sid: (username, room) } — for cleanup on disconnect
-super_admins = {SUPER_ADMIN}  # 超级管理员集合，启动时从 DB 加载
 pending_invites = {}     # { room: set(usernames) } — 待接受的邀请，加入时跳过密码验证
-
-def load_super_admins():
-    try:
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute('SELECT username FROM users WHERE is_super_admin = TRUE')
-        for row in cur.fetchall():
-            super_admins.add(row['username'])
-        conn.close()
-    except Exception as e:
-        print('加载超管列表失败:', e)
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
@@ -108,9 +94,25 @@ def handle_disconnect():
 def index():
     return render_template('index.html')
 
-TURN_HOST   = '34.218.48.175'
+TURN_HOST   = '129.153.163.143'
 TURN_PORT   = 3478
 TURN_SECRET = os.environ.get('TURN_SECRET', '')
+
+@app.route('/api/voice-leave', methods=['POST'])
+def api_voice_leave():
+    try:
+        body = request.get_data(as_text=True)
+        data = json.loads(body)
+    except Exception:
+        data = {}
+    username = data.get('username', '')
+    room = data.get('room', '')
+    if username and room and room in rooms_voice:
+        rooms_voice[room]['voice_members'] = [
+            m for m in rooms_voice[room]['voice_members'] if m['username'] != username
+        ]
+        socketio.emit('voice_user_left', {'username': username}, to=room)
+    return '', 204
 
 @app.route('/api/ice-servers')
 def get_ice_servers():
@@ -187,7 +189,9 @@ def handle_login(data):
             'success': True,
             'username': username,
             'screenname': user['screenname'],
-            'is_super_admin': username in super_admins
+            'is_admin': username == SUPER_ADMIN,
+            'avatar_expression': user.get('avatar_expression') or 'Smile',
+            'avatar_color': user.get('avatar_color') or '#5865F2',
         })
     except Exception as e:
         emit('login_result', {'success': False, 'msg': str(e)})
@@ -198,13 +202,15 @@ def handle_get_profile(data):
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT screenname, bio FROM users WHERE username = %s', (data['username'],))
+        cur.execute('SELECT screenname, bio, avatar_expression, avatar_color FROM users WHERE username = %s', (data['username'],))
         user = cur.fetchone()
         conn.close()
         if not user:
             emit('profile_result', {'success': False})
             return
-        emit('profile_result', {'success': True, 'screenname': user['screenname'], 'bio': user['bio']})
+        emit('profile_result', {'success': True, 'screenname': user['screenname'], 'bio': user['bio'],
+                                 'avatar_expression': user.get('avatar_expression') or 'Smile',
+                                 'avatar_color': user.get('avatar_color') or '#5865F2'})
     except Exception as e:
         emit('profile_result', {'success': False})
 
@@ -354,13 +360,13 @@ def handle_join(data):
             return
 
         kicked = list(room_data.get('kicked') or [])
-        if username in kicked and username not in super_admins:
+        if username in kicked and username != SUPER_ADMIN:
             emit('join_result', {'success': False, 'msg': '你已被踢出该房间'})
             conn.close()
             return
 
         room_pw = room_data.get('password')
-        if room_pw and username not in super_admins:
+        if room_pw and username != SUPER_ADMIN:
             invited = username in pending_invites.get(room, set())
             if invited:
                 pending_invites[room].discard(username)
@@ -371,7 +377,7 @@ def handle_join(data):
 
         join_room(room)
         members = list(room_data['members'] or [])
-        is_first_join = username not in members and username not in super_admins
+        is_first_join = username not in members and username != SUPER_ADMIN
         if is_first_join:
             members.append(username)
             cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
@@ -386,21 +392,23 @@ def handle_join(data):
         # 成员列表（批量查 screenname）
         member_usernames = list(room_data['members'] or [])
         if member_usernames:
-            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', (member_usernames,))
-            screennames = {r['username']: r['screenname'] for r in cur.fetchall()}
+            cur.execute('SELECT username, screenname, avatar_expression, avatar_color FROM users WHERE username = ANY(%s)', (member_usernames,))
+            user_rows = {r['username']: r for r in cur.fetchall()}
         else:
-            screennames = {}
+            user_rows = {}
         members_data = []
         for u in member_usernames:
-            if u in super_admins:
+            if u == SUPER_ADMIN:
                 continue
+            row = user_rows.get(u, {})
             members_data.append({
                 'username': u,
-                'screenname': screennames.get(u, u),
+                'screenname': row.get('screenname', u),
                 'is_admin': u in admins_set,
                 'is_owner': u == owner,
                 'is_online': u in online_users,
-                'is_super_admin': False
+                'avatar_expression': row.get('avatar_expression') or 'Smile',
+                'avatar_color': row.get('avatar_color') or '#5865F2',
             })
         members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
 
@@ -457,6 +465,20 @@ def handle_message(data):
         except Exception as e:
             print('消息保存失败:', e)
     emit('message', data, to=data['room'])
+    # DM：通知对方（让其显示侧栏条目）
+    room = data.get('room', '')
+    if not data.get('system') and room.startswith('dm:'):
+        parts = room.split(':')
+        if len(parts) == 3:
+            sender = data['username']
+            recipient = parts[2] if parts[1] == sender else parts[1]
+            if recipient in online_users:
+                for sid in list(online_users[recipient]):
+                    socketio.emit('new_dm_notification', {
+                        'dm_room': room,
+                        'from_username': sender,
+                        'from_screenname': data['screenname'],
+                    }, to=sid)
 
 # ── 房间：设置管理员 ──────────────────────────────────────
 @socketio.on('set_admin')
@@ -553,7 +575,7 @@ def handle_get_rooms(data=None):
     try:
         conn = get_db()
         cur = conn.cursor()
-        if username in super_admins:
+        if username == SUPER_ADMIN:
             cur.execute("SELECT name, password, code FROM rooms")
         elif username:
             cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅' OR %s = ANY(members)", (username,))
@@ -689,21 +711,23 @@ def handle_get_members(data):
         admins_set = set(room_data['admins'] or [])
         member_usernames = list(room_data['members'] or [])
         if member_usernames:
-            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', (member_usernames,))
-            screennames = {r['username']: r['screenname'] for r in cur.fetchall()}
+            cur.execute('SELECT username, screenname, avatar_expression, avatar_color FROM users WHERE username = ANY(%s)', (member_usernames,))
+            user_rows2 = {r['username']: r for r in cur.fetchall()}
         else:
-            screennames = {}
+            user_rows2 = {}
         members = []
         for username in member_usernames:
-            if username in super_admins:
+            if username == SUPER_ADMIN:
                 continue
+            row = user_rows2.get(username, {})
             members.append({
                 'username': username,
-                'screenname': screennames.get(username, username),
+                'screenname': row.get('screenname', username),
                 'is_admin': username in admins_set,
                 'is_owner': username == owner,
                 'is_online': username in online_users,
-                'is_super_admin': False
+                'avatar_expression': row.get('avatar_expression') or 'Smile',
+                'avatar_color': row.get('avatar_color') or '#5865F2',
             })
         members.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
         conn.close()
@@ -751,48 +775,42 @@ def handle_kick_member(data):
     except Exception as e:
         emit('kick_result', {'success': False, 'msg': str(e)})
 
-# ── 超管管理 ──────────────────────────────────────────────
-@socketio.on('set_super_admin')
-def handle_set_super_admin(data):
-    if data['requester'] != SUPER_ADMIN:
-        emit('set_super_admin_result', {'success': False, 'msg': '只有 admin 可以管理超级管理员'})
-        return
-    target = data['target']
-    promote = data['promote']
-    if target == SUPER_ADMIN:
-        emit('set_super_admin_result', {'success': False, 'msg': '不能修改 admin 自身的权限'})
-        return
+# ── 语音信令 ──────────────────────────────────────────────
+@socketio.on('save_avatar')
+def handle_save_avatar(data):
+    username = data.get('username', '')
+    expression = data.get('expression', 'Smile')
+    color = data.get('color', '#5865F2')
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute('SELECT username FROM users WHERE username = %s', (target,))
-        if not cur.fetchone():
-            emit('set_super_admin_result', {'success': False, 'msg': '用户不存在'})
-            conn.close()
-            return
-        cur.execute('UPDATE users SET is_super_admin = %s WHERE username = %s', (promote, target))
+        cur.execute('UPDATE users SET avatar_expression = %s, avatar_color = %s WHERE username = %s',
+                    (expression, color, username))
         conn.commit()
         conn.close()
-        if promote:
-            super_admins.add(target)
-        else:
-            super_admins.discard(target)
-        emit('set_super_admin_result', {'success': True, 'target': target, 'promote': promote})
+        emit('save_avatar_result', {'success': True, 'expression': expression, 'color': color})
     except Exception as e:
-        emit('set_super_admin_result', {'success': False, 'msg': str(e)})
+        emit('save_avatar_result', {'success': False, 'msg': str(e)})
 
-# ── 语音信令 ──────────────────────────────────────────────
 @socketio.on('voice_join')
 def handle_voice_join(data):
     username = data['username']
     screenname = data.get('screenname', username)
     room = data['room']
+    avatar_expression = data.get('avatar_expression', 'Smile')
+    avatar_color = data.get('avatar_color', '#5865F2')
     if room not in rooms_voice:
         rooms_voice[room] = {'voice_members': [], 'voice_banned': []}
     if not any(m['username'] == username for m in rooms_voice[room]['voice_members']):
-        rooms_voice[room]['voice_members'].append({'username': username, 'screenname': screenname})
+        rooms_voice[room]['voice_members'].append({
+            'username': username, 'screenname': screenname,
+            'avatar_expression': avatar_expression, 'avatar_color': avatar_color
+        })
     sid_to_voice[request.sid] = (username, room)
-    emit('voice_user_joined', {'username': username, 'screenname': screenname}, to=room)
+    emit('voice_user_joined', {
+        'username': username, 'screenname': screenname,
+        'avatar_expression': avatar_expression, 'avatar_color': avatar_color
+    }, to=room)
     emit('voice_current_members', {'members': rooms_voice[room]['voice_members']})
 
 @socketio.on('voice_leave')
@@ -864,6 +882,79 @@ def handle_voice_unban(data):
 def handle_voice_speaking(data):
     emit('voice_speaking', data, to=data['room'])
 
+# ── 私聊 (DM) ────────────────────────────────────────────
+@socketio.on('get_dms')
+def handle_get_dms(data):
+    username = data.get('username', '')
+    if not username:
+        emit('dms_list', {'dms': []})
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT DISTINCT room FROM messages WHERE room LIKE 'dm:%%:%%' AND (room LIKE %s OR room LIKE %s)",
+            (f'dm:{username}:%', f'dm:%:{username}')
+        )
+        dm_rooms = [r['room'] for r in cur.fetchall()]
+        dms = []
+        for dm_room in dm_rooms:
+            parts = dm_room.split(':')
+            if len(parts) != 3:
+                continue
+            other = parts[2] if parts[1] == username else parts[1]
+            cur.execute('SELECT screenname, avatar_expression, avatar_color FROM users WHERE username = %s', (other,))
+            other_user = cur.fetchone()
+            if other_user:
+                dms.append({
+                    'dm_room': dm_room,
+                    'other_username': other,
+                    'other_screenname': other_user['screenname'],
+                    'avatar_expression': other_user.get('avatar_expression') or 'Smile',
+                    'avatar_color': other_user.get('avatar_color') or '#5865F2',
+                })
+            join_room(dm_room)
+        conn.close()
+        emit('dms_list', {'dms': dms})
+    except Exception as e:
+        print('get_dms error:', e)
+        emit('dms_list', {'dms': []})
+
+@socketio.on('join_dm')
+def handle_join_dm(data):
+    username = data['username']
+    dm_room = data['dm_room']
+    parts = dm_room.split(':')
+    if len(parts) != 3 or parts[0] != 'dm' or username not in [parts[1], parts[2]]:
+        emit('join_dm_result', {'success': False})
+        return
+    join_room(dm_room)
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        since = data.get('since')
+        if since:
+            cur.execute(
+                'SELECT * FROM messages WHERE room = %s AND created_at > %s ORDER BY created_at ASC LIMIT 50',
+                (dm_room, since)
+            )
+            history = cur.fetchall()
+        else:
+            cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (dm_room,))
+            history = list(reversed(cur.fetchall()))
+        conn.close()
+        for msg in history:
+            emit('message', {
+                'username': msg['username'],
+                'screenname': msg['screenname'],
+                'text': msg['text'],
+                'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
+                'room': dm_room
+            })
+    except Exception as e:
+        print('join_dm history error:', e)
+    emit('join_dm_result', {'success': True, 'dm_room': dm_room})
+
 # ── 工具函数 ──────────────────────────────────────────────
 def _gen_unique_room_code(cur):
     while True:
@@ -881,12 +972,11 @@ def ensure_columns():
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
-        # 清除历史遗留：super_admin 不应出现在成员列表里
-        for sa in list(super_admins):
-            cur.execute(
-                "UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)",
-                (sa, sa)
-            )
+        # 清除 admin 账号不应出现在成员列表里
+        cur.execute(
+            "UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)",
+            (SUPER_ADMIN, SUPER_ADMIN)
+        )
         conn.commit()
         conn.close()
     except Exception as e:
@@ -910,6 +1000,17 @@ def ensure_room_codes():
     except Exception as e:
         print('房间号迁移失败:', e)
 
+def ensure_avatar_columns():
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT")
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print('avatar列迁移失败:', e)
+
 def ensure_lobby():
     try:
         conn = get_db()
@@ -924,9 +1025,9 @@ def ensure_lobby():
         print('创建大厅失败:', e)
 
 if __name__ == '__main__':
-    load_super_admins()
     ensure_columns()
     ensure_room_codes()
+    ensure_avatar_columns()
     ensure_lobby()
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)

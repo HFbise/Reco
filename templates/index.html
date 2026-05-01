@@ -7,184 +7,235 @@
   <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
   <link rel="apple-touch-icon" href="/static/app-logo.png">
   <style>
+    /* ── Reset ── */
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #f5f5f5; color: #222; transition: background 0.3s, color 0.3s; }
-    body.dark { background: #1a1a2e; color: #e0e0e0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f0f3; color: #2e3338; overflow: hidden; height: 100vh; }
+    body.dark { background: #2a2b2f; color: #e0e0e5; }
 
-    /* ── 顶栏 ── */
-    #topbar { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; background: #4f8ef7; color: white; }
-    #topbar-logo { height: 26px; filter: brightness(0) invert(1); display: block; }
-    #topbar-right { display: flex; gap: 10px; align-items: center; }
-    #topbar button { background: rgba(255,255,255,0.2); border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer; }
+    /* ── Top Bar ── */
+    #topbar { height: 52px; background: #fff; border-bottom: 1px solid rgba(0,0,0,0.08); display: flex; align-items: center; padding: 0 16px 0 20px; gap: 10px; flex-shrink: 0; }
+    body.dark #topbar { background: #1e1f23; border-color: rgba(255,255,255,0.08); }
+    #topbar-logo { height: 24px; display: block; }
+    body.dark #topbar-logo { filter: brightness(0) invert(1); }
+    #topbar-spacer { flex: 1; }
+    #topbar-right { display: flex; align-items: center; gap: 6px; }
+    #topbar-user-avatar { cursor: pointer; flex-shrink: 0; transition: transform 0.15s; display: none; }
+    #topbar-user-avatar:hover { transform: scale(1.08); }
+    #topbar-name { font-size: 0.88rem; font-weight: 600; cursor: pointer; margin: 0 4px; white-space: nowrap; display: none; }
+    #topbar-name:hover { opacity: 0.75; }
+    .topbar-icon-btn { background: none; border: none; cursor: pointer; padding: 5px; border-radius: 6px; display: flex; align-items: center; justify-content: center; opacity: 0.6; transition: opacity 0.12s, background 0.12s; color: inherit; }
+    .topbar-icon-btn:hover { opacity: 1; background: rgba(0,0,0,0.07); }
+    body.dark .topbar-icon-btn:hover { background: rgba(255,255,255,0.07); }
+    .icon-btn { background: none; border: none; cursor: pointer; padding: 5px; border-radius: 5px; display: flex; align-items: center; justify-content: center; opacity: 0.55; transition: opacity 0.12s, background 0.12s; color: inherit; }
+    .icon-btn:hover { opacity: 1; background: rgba(0,0,0,0.07); }
+    body.dark .icon-btn:hover { background: rgba(255,255,255,0.07); }
+    #login-open-btn { background: #4f8ef7; color: white; border: none; border-radius: 6px; padding: 5px 12px; cursor: pointer; font-size: 0.83rem; white-space: nowrap; }
+    #login-open-btn:hover { background: #3a7be0; }
+    #logout-btn { display: none; }
 
-    /* ── 主体布局 ── */
-    #app { display: flex; flex-direction: row; height: calc(100vh - 48px); overflow: hidden; }
-    #sidebar { width: 220px; min-width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; overflow-y: auto; }
-    body.dark #sidebar { background: #16213e; border-color: #333; }
-    #chat-area { flex: 1; display: flex; flex-direction: row; min-width: 0; overflow: hidden; }
-    #chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
-    #members-sidebar { width: 180px; min-width: 180px; background: #fff; border-left: 1px solid #ddd; padding: 12px; overflow-y: auto; }
-    body.dark #members-sidebar { background: #16213e; border-color: #333; }
-    #members-sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
-    .member-item { padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
-    .member-item:hover { background: #f0f0f0; }
-    .sender:hover { opacity: 0.75; transition: opacity 0.15s; }
-    .voice-member span:hover { opacity: 0.75; transition: opacity 0.15s; }
-    body.dark .member-item:hover { background: #0f3460; }
-    #voice-section { margin-bottom: 12px; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
-  body.dark #voice-section { border-color: #333; }
-  #voice-join-btn { width: 100%; padding: 8px; background: #2ecc71; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; margin-bottom: 8px; }
-  #voice-join-btn.in-voice { background: #e74c3c; }
-  #voice-members-list { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; max-height: 180px; overflow-y: auto; }
-  .voice-member { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; font-size: 0.9rem; }
-  .voice-member.speaking { background: rgba(46, 204, 113, 0.2); }
-  .voice-member .voice-icon { font-size: 0.8rem; }
-  .voice-controls { display: none; flex-direction: column; gap: 6px; padding: 8px 0; }
-  .voice-controls.show { display: flex; }
-  .voice-controls input[type=range] { flex: 1; min-width: 0; }
-  .voice-toggle-row { display: flex; align-items: center; gap: 6px; }
-  .voice-toggle-btn { background: none; border: 1.5px solid transparent; border-radius: 6px; font-size: 1.2rem; line-height: 1; cursor: pointer; padding: 2px 5px; transition: all 0.15s; }
-  .voice-toggle-btn:hover { background: rgba(128,128,128,0.15); }
-  .voice-toggle-btn.muted { opacity: 0.45; border-color: #e74c3c; }
-  .voice-btn { padding: 4px 8px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; background: #555; color: white; }
-  .voice-btn.active { background: #e74c3c; }
-  #stream-audio-btn { width: 100%; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.82rem; background: #555; color: white; margin-top: 4px; text-align: left; }
-  #stream-audio-btn.active { background: #e74c3c; }
-  #live-btn { width: 100%; padding: 6px 10px; border: none; border-radius: 6px; cursor: pointer; font-size: 0.82rem; background: #9b59b6; color: white; margin-top: 4px; text-align: left; }
-  #live-btn.active { background: #e74c3c; }
-  .stream-vol-row { display: flex; align-items: center; gap: 5px; padding: 2px 8px 4px 22px; }
-  .stream-vol-row input[type=range] { flex: 1; min-width: 0; }
-  .stream-indicator { font-size: 0.75rem; opacity: 0.65; }
+    /* ── Mobile Topbar ── */
+    #mobile-topbar { display: none; align-items: center; gap: 10px; padding: 0 12px; height: 50px; background: #fff; border-bottom: 1px solid rgba(0,0,0,0.08); flex-shrink: 0; position: relative; z-index: 10; }
+    body.dark #mobile-topbar { background: #1e1f23; border-color: rgba(255,255,255,0.08); }
+    #mobile-topbar .mt-room { flex: 1; font-size: 0.95rem; font-weight: 600; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .mt-btn { background: none; border: none; cursor: pointer; padding: 6px; border-radius: 6px; color: inherit; opacity: 0.7; font-size: 1.1rem; }
+    .mt-btn:hover { opacity: 1; background: rgba(128,128,128,0.12); }
 
-  /* ── 直播面板 ── */
-  #stream-panel { display: none; flex-shrink: 0; background: #111; height: 240px; min-height: 90px; overflow: hidden; }
-  #stream-panel.active { display: flex; flex-direction: column; }
-  #stream-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; overflow: hidden; align-content: stretch; }
-  .stream-card { position: relative; flex: 1; min-width: 160px; background: #000; border-radius: 4px; overflow: hidden; }
-  .stream-card video { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .stream-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #555; font-size: 0.85rem; }
-  .stream-card-label { position: absolute; bottom: 5px; left: 8px; color: white; font-size: 0.78rem; text-shadow: 0 1px 3px rgba(0,0,0,0.9); pointer-events: none; background: rgba(0,0,0,0.35); padding: 1px 5px; border-radius: 3px; }
-  .stream-card-btns { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; opacity: 0; transition: opacity 0.15s; }
-  .stream-card:hover .stream-card-btns { opacity: 1; }
-  .stream-card-btn { background: rgba(0,0,0,0.55); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 2px 7px; font-size: 0.8rem; }
-  #stream-resize-handle { display: none; height: 5px; background: #ccc; cursor: ns-resize; flex-shrink: 0; user-select: none; }
-  body.dark #stream-resize-handle { background: #2a2a3e; }
-  #stream-resize-handle:hover, #stream-resize-handle.dragging { background: #4f8ef7; }
-  #stream-resize-handle.active { display: block; }
-  .stream-floater { position: fixed; z-index: 500; width: 360px; height: 220px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 28px rgba(0,0,0,0.7); resize: both; min-width: 200px; min-height: 120px; }
-  .stream-floater video { width: 100%; height: 100%; object-fit: contain; display: block; }
-  .stream-floater-bar { position: absolute; top: 0; left: 0; right: 0; height: 30px; background: linear-gradient(rgba(0,0,0,0.75), transparent); display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: grab; z-index: 1; }
-  .stream-floater-bar:active { cursor: grabbing; }
-  .stream-floater-bar span { color: white; font-size: 0.78rem; pointer-events: none; }
-  .stream-floater-btn { background: rgba(255,255,255,0.18); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 1px 8px; font-size: 0.8rem; }
+    /* ── Main Layout ── */
+    #app { display: flex; height: calc(100vh - 52px); overflow: hidden; }
 
-    /* ── 侧栏 ── */
-    #sidebar { width: 220px; background: #fff; border-right: 1px solid #ddd; display: flex; flex-direction: column; padding: 12px; gap: 8px; }
-    body.dark #sidebar { background: #16213e; border-color: #333; }
-    #sidebar h3 { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
-    #room-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
-    #room-search { width: 100%; padding: 6px 8px; border: 1px solid #ddd; border-radius: 6px; font-size: 0.85rem; background: inherit; color: inherit; box-sizing: border-box; }
-    body.dark #room-search { border-color: #444; }
-    .room-item { display: flex; align-items: center; padding: 7px 10px; border-radius: 6px; cursor: pointer; font-size: 0.9rem; border: 1px solid #e0e0e0; background: #f7f8fa; transition: background 0.12s, border-color 0.12s; gap: 4px; }
-    .room-item:hover { background: #edf0f7; border-color: #bfc8e0; }
-    body.dark .room-item { background: #0f3460; border-color: #1e4a80; }
-    body.dark .room-item:hover { background: #1a4a7a; border-color: #3060a0; }
-    .room-item.active { background: #4f8ef7; border-color: #3a7ae0; color: white; }
-    body.dark .room-item.active { background: #4f8ef7; border-color: #3a7ae0; }
+    /* ── Left Sidebar ── */
+    #sidebar { width: 300px; min-width: 300px; background: #fff; border-right: 1px solid rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow: hidden; }
+    body.dark #sidebar { background: #252528; border-color: rgba(255,255,255,0.07); }
+    #sidebar-header { padding: 14px 16px 8px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; position: relative; }
+    #sidebar-chats-label { font-size: 1rem; font-weight: 700; }
+    #plus-btn { background: none; border: none; cursor: pointer; color: #4f8ef7; padding: 3px 5px; border-radius: 5px; display: flex; align-items: center; transition: background 0.12s; }
+    #plus-btn:hover { background: rgba(79,142,247,0.1); }
+    #plus-dropdown { position: absolute; top: calc(100% - 4px); right: 12px; background: #fff; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.18); overflow: hidden; z-index: 200; min-width: 160px; }
+    body.dark #plus-dropdown { background: #383a40; box-shadow: 0 4px 24px rgba(0,0,0,0.5); }
+    .plus-menu-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; font-size: 0.9rem; color: #2e3338; border: none; background: none; width: 100%; text-align: left; transition: background 0.1s; }
+    body.dark .plus-menu-item { color: #dbdee1; }
+    .plus-menu-item:hover { background: rgba(0,0,0,0.06); }
+    body.dark .plus-menu-item:hover { background: rgba(255,255,255,0.07); }
+    #sidebar-search { padding: 0 10px 8px; flex-shrink: 0; }
+    .search-wrap { display: flex; align-items: center; gap: 8px; background: rgba(0,0,0,0.06); border-radius: 8px; padding: 7px 12px; }
+    body.dark .search-wrap { background: rgba(0,0,0,0.25); }
+    #room-search { flex: 1; border: none; background: none; color: inherit; font-size: 0.88rem; outline: none; }
+    #room-search::placeholder { color: #87888c; }
+    #room-list { flex: 1; overflow-y: auto; padding: 2px 8px; display: flex; flex-direction: column; gap: 1px; }
+    .room-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: 0.92rem; color: #5c5e66; transition: background 0.12s, color 0.12s; border: none; background: none; width: 100%; text-align: left; }
+    .room-item:hover { background: rgba(0,0,0,0.05); color: #2e3338; }
+    body.dark .room-item { color: #949ba4; }
+    body.dark .room-item:hover { background: rgba(255,255,255,0.05); color: #e0e0e5; }
+    .room-item.active { background: rgba(79,142,247,0.12); color: #2e3338; font-weight: 500; }
+    body.dark .room-item.active { background: rgba(79,142,247,0.2); color: #e0e0e5; }
+    .room-icon { flex-shrink: 0; display: flex; align-items: center; }
     .room-name-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .member-item { transition: background 0.15s; cursor: pointer; }
-    .member-item:hover { background: #e0e8ff; }
-    body.dark .member-item:hover { background: #1a3a6e; }
-    #create-room-btn, #find-room-btn { padding: 8px; border: none; border-radius: 6px; cursor: pointer; width: 100%; }
-    #create-room-btn { background: #4f8ef7; color: white; }
-    #find-room-btn { background: #27ae60; color: white; margin-top: 6px; }
+    .room-lock { font-size: 0.72rem; opacity: 0.5; }
 
-    /* ── 聊天区 ── */
-    #chat-header { padding: 8px 16px; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: center; }
-    body.dark #chat-header { border-color: #333; }
-    #chat-title { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 8px; border: 1px solid #ddd; background: #f7f8fa; cursor: pointer; font-size: 1rem; font-weight: 600; transition: background 0.12s, border-color 0.12s; user-select: none; }
-    #chat-title:hover { background: #edf0f7; border-color: #bfc8e0; }
-    body.dark #chat-title { background: #0f3460; border-color: #1e4a80; }
-    body.dark #chat-title:hover { background: #1a4a7a; border-color: #3060a0; }
-    #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
-    .msg { max-width: 70%; padding: 8px 12px; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); word-break: break-word; white-space: pre-wrap; }
-    .msg.other { align-self: flex-start; }
-    body.dark .msg { background: #16213e; }
-    .msg.mine { align-self: flex-end; background: #4f8ef7; color: white; }
-    .msg.system { align-self: center; background: transparent; box-shadow: none; font-size: 0.8rem; color: #999; }
-    .msg .sender { font-size: 0.75rem; font-weight: bold; margin-bottom: 4px; color: #555; cursor: pointer; }
-    .msg.mine .sender { color: rgba(255,255,255,0.8); }
-    #input-area { padding: 12px 16px; border-top: 1px solid #ddd; display: flex; gap: 8px; }
-    body.dark #input-area { border-color: #333; }
-    #msg-input { flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 1rem; }
-    body.dark #msg-input { border-color: #444; }
-    #send-btn { padding: 10px 20px; background: #4f8ef7; color: white; border: none; border-radius: 8px; cursor: pointer; }
-    #no-room { flex: 1; display: flex; align-items: center; justify-content: center; color: #aaa; font-size: 1.1rem; min-width: 0; }
+    /* ── Chat Area ── */
+    #chat-area { flex: 1; display: flex; min-width: 0; overflow: hidden; background: #f0f0f3; }
+    body.dark #chat-area { background: #2a2b2f; }
+    #no-room { flex: 1; display: flex; align-items: center; justify-content: center; color: #87888c; font-size: 1.05rem; }
+    #chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    #chat-header { height: 50px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #f0f0f3; border-bottom: 1px solid rgba(0,0,0,0.07); flex-shrink: 0; }
+    body.dark #chat-header { background: #2a2b2f; border-color: rgba(255,255,255,0.07); }
+    #chat-title { background: none; border: none; cursor: pointer; font-size: 0.97rem; font-weight: 600; color: inherit; padding: 4px 8px; border-radius: 5px; display: inline-flex; align-items: center; gap: 8px; transition: background 0.12s; width: fit-content; max-width: 60%; }
+    #chat-title:hover { background: rgba(0,0,0,0.05); }
+    body.dark #chat-title:hover { background: rgba(255,255,255,0.05); }
+    .ch-right { display: flex; align-items: center; gap: 4px; }
 
-    /* ── 弹窗通用 ── */
-    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; cursor: pointer; }
+    /* ── Messages ── */
+    #messages { flex: 1; overflow-y: auto; padding: 12px 0 10px; display: flex; flex-direction: column; gap: 0; min-height: 0; }
+    .msg { display: flex; align-items: flex-start; gap: 10px; padding: 5px 16px; }
+    .msg.system { justify-content: center; padding: 6px 16px; }
+    .msg-separator { text-align: center; color: #87888c; font-size: 0.74rem; padding: 10px 16px; }
+    .msg-av { flex-shrink: 0; margin-top: 2px; }
+    .msg-body { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+    .msg-name { font-size: 0.85rem; font-weight: 600; margin-bottom: 4px; cursor: pointer; display: block; }
+    .msg-name:hover { text-decoration: underline; }
+    .msg-bubble { background: #fff; border-radius: 12px; padding: 10px 14px; display: inline-block; max-width: 100%; word-break: break-word; }
+    body.dark .msg-bubble { background: #383940; }
+    .msg-text { font-size: 0.92rem; line-height: 1.5; white-space: pre-wrap; color: #2e3338; }
+    body.dark .msg-text { color: #e0e0e5; }
+    .msg.system .msg-sys-text { font-size: 0.79rem; color: #87888c; }
+    .msg.own { flex-direction: row-reverse; }
+    .msg.own .msg-body { align-items: flex-end; }
+    .msg.own .msg-bubble { background: #4f8ef7; }
+    .msg.own .msg-text { color: #fff; }
+
+    /* ── Input Area ── */
+    #input-area { padding: 10px 16px 14px; display: flex; gap: 10px; align-items: center; flex-shrink: 0; background: #f0f0f3; }
+    body.dark #input-area { background: #2a2b2f; }
+    #msg-input { flex: 1; padding: 11px 16px; border: none; border-radius: 10px; background: #e4e4e8; color: inherit; font-size: 0.95rem; outline: none; }
+    body.dark #msg-input { background: #383940; color: #e0e0e5; }
+    #msg-input::placeholder { color: #87888c; }
+    #send-btn { background: #4f8ef7; border: none; border-radius: 10px; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; justify-content: center; transition: background 0.12s; flex-shrink: 0; }
+    #send-btn:hover { background: #3a7be0; }
+
+    /* ── Right Sidebar ── */
+    #members-sidebar { width: 230px; min-width: 230px; background: #fff; border-left: 1px solid rgba(0,0,0,0.08); display: flex; flex-direction: column; overflow-y: auto; }
+    body.dark #members-sidebar { background: #252528; border-color: rgba(255,255,255,0.07); }
+
+    /* ── Voice Section ── */
+    #voice-section { padding: 14px 14px 10px; flex-shrink: 0; }
+    #voice-section-title { font-size: 0.88rem; font-weight: 700; margin-bottom: 10px; }
+    #voice-join-btn { width: 100%; padding: 9px; background: #4f8ef7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 0.88rem; font-weight: 600; transition: background 0.12s; margin-bottom: 8px; }
+    #voice-join-btn:hover { background: #3a7be0; }
+    #voice-in-controls { display: none; align-items: center; gap: 8px; margin-bottom: 8px; }
+    #voice-in-controls.show { display: flex; }
+    .voice-icon-btn { border: none; border-radius: 7px; cursor: pointer; padding: 8px 10px; display: flex; align-items: center; justify-content: center; color: white; transition: background 0.12s; flex-shrink: 0; }
+    #mic-toggle { background: #4f8ef7; }
+    #mic-toggle:hover { background: #3a7be0; }
+    #mic-toggle.muted { background: #ed4245; }
+    #speaker-toggle { background: #4f8ef7; }
+    #speaker-toggle:hover { background: #3a7be0; }
+    #speaker-toggle.muted { background: #ed4245; }
+    #voice-leave-btn { background: #ed4245; color: white; border: none; border-radius: 7px; cursor: pointer; padding: 8px 14px; font-size: 0.86rem; font-weight: 600; flex: 1; transition: background 0.12s; }
+    #voice-leave-btn:hover { background: #c03537; }
+    #voice-members-list { display: flex; flex-direction: column; gap: 3px; margin-top: 8px; }
+    .voice-member { display: flex; align-items: center; gap: 8px; padding: 3px 2px; font-size: 0.86rem; }
+    .voice-member.speaking .voice-av-wrap { outline: 2px solid #3ba55c; border-radius: 50%; }
+    .voice-icon { font-size: 0.78rem; color: #87888c; flex-shrink: 0; }
+    .voice-vol-row { display: flex; align-items: center; gap: 5px; margin-top: 5px; }
+    .voice-vol-row input[type=range] { flex: 1; min-width: 0; }
+    #stream-audio-btn { display: none; width: 100%; padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.79rem; background: #4f5660; color: white; margin-top: 3px; text-align: left; }
+    #stream-audio-btn.active { background: #ed4245; }
+    #live-btn { display: none; width: 100%; padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.79rem; background: #9b59b6; color: white; margin-top: 3px; text-align: left; }
+    #live-btn.active { background: #ed4245; }
+    #stream-audio-btn.show-ctrl, #live-btn.show-ctrl { display: block; }
+
+    /* ── Members Section ── */
+    #members-divider { height: 1px; background: rgba(0,0,0,0.08); margin: 4px 14px; flex-shrink: 0; }
+    body.dark #members-divider { background: rgba(255,255,255,0.08); }
+    #sidebar-members-title { font-size: 0.88rem; font-weight: 700; padding: 10px 14px 8px; flex-shrink: 0; }
+    #member-list { padding: 0 8px 12px; display: flex; flex-direction: column; gap: 1px; }
+    .member-item { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 7px; cursor: pointer; transition: background 0.1s; }
+    .member-item:hover { background: rgba(0,0,0,0.05); }
+    body.dark .member-item:hover { background: rgba(255,255,255,0.05); }
+    .member-item.offline { opacity: 0.38; }
+    .member-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.86rem; }
+    .member-badge { font-size: 0.68rem; flex-shrink: 0; }
+
+    /* ── Avatar ── */
+    .av { border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .avatar-preview { display: flex; justify-content: center; margin-bottom: 12px; }
+    .avatar-picker-label { font-size: 0.8rem; color: #87888c; margin-bottom: 6px; display: block; }
+    .av-expr-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .av-expr-opt { width: 38px; height: 38px; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; border: 3px solid transparent; transition: transform 0.12s, border-color 0.12s; }
+    .av-expr-opt:hover { transform: scale(1.1); }
+    .av-expr-opt.sel { border-color: #fff; box-shadow: 0 0 0 2px #4f8ef7; }
+    .av-color-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .av-color-opt { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 3px solid transparent; transition: transform 0.12s; }
+    .av-color-opt:hover { transform: scale(1.15); }
+    .av-color-opt.sel { border-color: #fff; box-shadow: 0 0 0 2px #4f8ef7; }
+
+    /* ── Stream Panel ── */
+    #stream-panel { display: none; flex-shrink: 0; background: #111; height: 240px; min-height: 90px; overflow: hidden; }
+    #stream-panel.active { display: flex; flex-direction: column; }
+    #stream-grid { flex: 1; display: flex; flex-wrap: wrap; gap: 3px; padding: 3px; overflow: hidden; align-content: stretch; }
+    .stream-card { position: relative; flex: 1; min-width: 160px; background: #000; border-radius: 4px; overflow: hidden; }
+    .stream-card video { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .stream-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: #555; font-size: 0.85rem; }
+    .stream-card-label { position: absolute; bottom: 5px; left: 8px; color: white; font-size: 0.78rem; text-shadow: 0 1px 3px rgba(0,0,0,0.9); pointer-events: none; background: rgba(0,0,0,0.35); padding: 1px 5px; border-radius: 3px; }
+    .stream-card-btns { position: absolute; top: 4px; right: 4px; display: flex; gap: 3px; opacity: 0; transition: opacity 0.15s; }
+    .stream-card:hover .stream-card-btns { opacity: 1; }
+    .stream-card-btn { background: rgba(0,0,0,0.55); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 2px 7px; font-size: 0.8rem; }
+    #stream-resize-handle { display: none; height: 5px; background: #ccc; cursor: ns-resize; flex-shrink: 0; user-select: none; }
+    body.dark #stream-resize-handle { background: #2a2a3e; }
+    #stream-resize-handle:hover, #stream-resize-handle.dragging { background: #4f8ef7; }
+    #stream-resize-handle.active { display: block; }
+    .stream-floater { position: fixed; z-index: 500; width: 360px; height: 220px; background: #000; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 28px rgba(0,0,0,0.7); resize: both; min-width: 200px; min-height: 120px; }
+    .stream-floater video { width: 100%; height: 100%; object-fit: contain; display: block; }
+    .stream-floater-bar { position: absolute; top: 0; left: 0; right: 0; height: 30px; background: linear-gradient(rgba(0,0,0,0.75), transparent); display: flex; align-items: center; justify-content: space-between; padding: 0 8px; cursor: grab; z-index: 1; }
+    .stream-floater-bar:active { cursor: grabbing; }
+    .stream-floater-bar span { color: white; font-size: 0.78rem; pointer-events: none; }
+    .stream-floater-btn { background: rgba(255,255,255,0.18); border: none; color: white; border-radius: 4px; cursor: pointer; padding: 1px 8px; font-size: 0.8rem; }
+
+    /* ── Modals ── */
+    .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.52); z-index: 100; align-items: center; justify-content: center; cursor: pointer; }
     .modal.show { display: flex; }
-    .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 360px; max-width: 90vw; max-height: 90dvh; overflow-y: auto; }
-    body.dark .modal-box { background: #16213e; }
-    .modal-box h2 { margin-bottom: 16px; font-size: 1.2rem; }
-    .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 10px; margin-bottom: 12px; border: 1px solid #ddd; border-radius: 8px; background: inherit; color: inherit; font-size: 0.95rem; }
-    body.dark .modal-box input, body.dark .modal-box select, body.dark .modal-box textarea { border-color: #444; }
-    .modal-box button { width: 100%; padding: 10px; background: #4f8ef7; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; margin-top: 4px; }
-    .modal-box .link-btn { background: none; color: #4f8ef7; font-size: 0.85rem; margin-top: 8px; }
-    .modal-box .danger-btn { background: #e74c3c; }
-    .error-msg { color: #e74c3c; font-size: 0.85rem; margin-bottom: 8px; }
-    .success-msg { color: #2ecc71; font-size: 0.85rem; margin-bottom: 8px; }
-    .tabs { display: flex; gap: 8px; margin-bottom: 16px; }
-    .tab { flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 8px; background: none; color: inherit; cursor: pointer; }
+    .modal-box { background: #fff; border-radius: 12px; padding: 24px 26px; width: 370px; max-width: 92vw; max-height: 90dvh; overflow-y: auto; cursor: default; }
+    body.dark .modal-box { background: #2b2d31; }
+    .modal-box h2 { margin-bottom: 14px; font-size: 1.12rem; }
+    .modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 9px 11px; margin-bottom: 10px; border: 1px solid #e3e5e8; border-radius: 7px; background: inherit; color: inherit; font-size: 0.92rem; outline: none; }
+    body.dark .modal-box input, body.dark .modal-box select, body.dark .modal-box textarea { border-color: #4a4d56; }
+    .modal-box input:focus, .modal-box select:focus, .modal-box textarea:focus { border-color: #4f8ef7; }
+    .modal-box button { width: 100%; padding: 9px; background: #4f8ef7; color: white; border: none; border-radius: 7px; cursor: pointer; font-size: 0.95rem; margin-top: 4px; transition: opacity 0.12s; }
+    .modal-box button:hover { opacity: 0.86; }
+    .modal-box .link-btn { background: none; color: #4f8ef7; font-size: 0.84rem; margin-top: 6px; }
+    .modal-box .link-btn:hover { background: none; opacity: 0.75; }
+    .modal-box .danger-btn { background: #ed4245; }
+    .error-msg { color: #ed4245; font-size: 0.83rem; margin-bottom: 8px; }
+    .success-msg { color: #3ba55c; font-size: 0.83rem; margin-bottom: 8px; }
+    .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+    .tab { flex: 1; padding: 7px; border: 1px solid #e3e5e8; border-radius: 7px; background: none; color: inherit; cursor: pointer; font-size: 0.88rem; transition: all 0.12s; }
+    body.dark .tab { border-color: #4a4d56; }
     .tab.active { background: #4f8ef7; color: white; border-color: #4f8ef7; }
-    /* ── Hover effects ── */
-    .modal-box button:hover { opacity: 0.85; transition: opacity 0.15s; }
-    #topbar button:hover { background: rgba(255,255,255,0.35); transition: background 0.15s; }
-    #send-btn:hover { background: #3a7be0; transition: background 0.15s; }
-    #voice-join-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
-    #create-room-btn:hover { background: #3a7be0; transition: background 0.15s; }
-    #find-room-btn:hover { background: #219a52; transition: background 0.15s; }
-    .voice-btn:hover { opacity: 0.85; transition: opacity 0.15s; }
-    .tab:hover { background: rgba(79,142,247,0.15); transition: background 0.15s; }
+    .tab:hover:not(.active) { background: rgba(79,142,247,0.1); }
+    .sender:hover { opacity: 0.75; }
 
-    .member-item.offline { opacity: 0.45; }
-
-    /* ── 手机适配 ── */
-    #mobile-menu-btn, #mobile-members-btn { display: none; }
-
+    /* ── Mobile ── */
     @media (max-width: 768px) {
-      #mobile-menu-btn, #mobile-members-btn { display: block; }
-      #topbar { padding: 8px 12px; min-height: 48px; flex-wrap: nowrap; }
-      #topbar-logo { height: 18px; }
-      #topbar-right { gap: 6px; }
-      #topbar button { padding: 5px 8px; font-size: 0.82rem; }
-      #topbar-name { display: none; }
-
+      #topbar { display: none; }
+      #mobile-topbar { display: flex; }
+      #app { height: calc(100vh - 50px); height: calc(100dvh - 50px); }
       #sidebar {
-        position: fixed; left: 0; top: 48px; bottom: 0; z-index: 50;
+        position: fixed; left: 0; top: 50px; bottom: 0; z-index: 50;
         transform: translateX(-100%); transition: transform 0.25s ease;
-        width: 260px; min-width: 0; box-shadow: 2px 0 12px rgba(0,0,0,0.18);
+        width: 280px; min-width: 0; box-shadow: 2px 0 14px rgba(0,0,0,0.22);
       }
       #sidebar.mobile-open { transform: translateX(0); }
-
       #members-sidebar {
-        position: fixed; right: 0; top: 48px; bottom: 0; z-index: 50;
+        position: fixed; right: 0; top: 50px; bottom: 0; z-index: 50;
         transform: translateX(100%); transition: transform 0.25s ease;
-        width: 220px; min-width: 0; box-shadow: -2px 0 12px rgba(0,0,0,0.18);
+        width: 230px; min-width: 0; box-shadow: -2px 0 14px rgba(0,0,0,0.22);
       }
       #members-sidebar.mobile-open { transform: translateX(0); }
-
-      #sidebar-overlay {
-        display: none; position: fixed; inset: 0; top: 48px;
-        background: rgba(0,0,0,0.45); z-index: 45;
-      }
+      #sidebar-overlay { display: none; position: fixed; inset: 0; top: 50px; background: rgba(0,0,0,0.48); z-index: 45; }
       #sidebar-overlay.show { display: block; }
-
-      #app { height: calc(100vh - 48px); height: calc(100dvh - 48px); }
       #msg-input { font-size: 16px; }
       #messages, #room-list, #member-list { -webkit-overflow-scrolling: touch; }
-
-      .modal-box { width: 94vw; max-width: 94vw; padding: 20px 16px; }
+      .modal-box { width: 94vw; max-width: 94vw; padding: 18px 14px; }
     }
   </style>
 </head>
@@ -192,73 +243,117 @@
 
 <!-- ── 顶栏 ── -->
 <div id="topbar">
-  <div style="display:flex; align-items:center; gap:10px;">
-    <button id="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
-    <img id="topbar-logo" src="/static/logo.svg" alt="Reco">
-  </div>
+  <img id="topbar-logo" src="/static/logo.svg" alt="Reco">
+  <div id="topbar-spacer"></div>
   <div id="topbar-right">
-    <button id="mobile-members-btn" onclick="toggleMembersBar()">👥</button>
-    <span id="topbar-name"></span>
-    <button id="profile-btn" onclick="openProfile()">我的资料</button>
-    <button onclick="openSettings()">⚙️</button>
-    <button onclick="toggleTheme()">🌙</button>
-    <button id="logout-btn" onclick="logout()" style="display:none">登出</button>
-    <button id="login-open-btn" onclick="openAuth()">登录 / 注册</button>
+    <div id="topbar-user-avatar" onclick="openProfile()"></div>
+    <span id="topbar-name" onclick="openProfile()"></span>
+    <button class="topbar-icon-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="切换主题">
+      <svg width="17" height="17" viewBox="0 0 21 21" fill="none"><path d="M10.5 3.5V2M10.5 19v-1.5M3.5 10.5H2M19 10.5h-1.5M5.45 5.45 4.39 4.39M16.61 16.61l-1.06-1.06M5.45 15.55l-1.06 1.06M16.61 4.39l-1.06 1.06M14 10.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="topbar-icon-btn" onclick="openSettings()" title="设置">
+      <svg width="17" height="17" viewBox="0 0 21 21" fill="none"><path d="M10.5 13.125C11.9497 13.125 13.125 11.9497 13.125 10.5C13.125 9.05025 11.9497 7.875 10.5 7.875C9.05025 7.875 7.875 9.05025 7.875 10.5C7.875 11.9497 9.05025 13.125 10.5 13.125Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M16.975 13.125C16.8585 13.3889 16.8238 13.6817 16.8752 13.9655C16.9267 14.2494 17.062 14.5113 17.2637 14.7175L17.3163 14.77C17.479 14.9325 17.608 15.1255 17.6961 15.338C17.7842 15.5504 17.8295 15.7781 17.8295 16.0081C17.8295 16.2381 17.7842 16.4658 17.6961 16.6783C17.608 16.8907 17.479 17.0837 17.3163 17.2462C17.1537 17.409 16.9607 17.538 16.7483 17.6261C16.5358 17.7142 16.3081 17.7595 16.0781 17.7595C15.8481 17.7595 15.6204 17.7142 15.408 17.6261C15.1955 17.538 15.0025 17.409 14.84 17.2462L14.7875 17.1937C14.5813 16.992 14.3194 16.8567 14.0355 16.8052C13.7517 16.7538 13.4589 16.7885 13.195 16.905C12.9362 17.0159 12.7155 17.2001 12.56 17.4348C12.4046 17.6696 12.3211 17.9447 12.32 18.2262V18.375C12.32 18.8391 12.1356 19.2842 11.8074 19.6124C11.4792 19.9406 11.0341 20.125 10.57 20.125C10.1059 20.125 9.66075 19.9406 9.33256 19.6124C9.00437 19.2842 8.82 18.8391 8.82 18.375V18.2962C8.81323 18.0066 8.71948 17.7257 8.55095 17.4901C8.38241 17.2545 8.14689 17.075 7.875 16.975C7.61109 16.8585 7.31833 16.8238 7.03449 16.8752C6.75064 16.9267 6.48872 17.062 6.2825 17.2637L6.23 17.3163C6.06747 17.479 5.87447 17.608 5.66202 17.6961C5.44957 17.7842 5.22185 17.8295 4.99187 17.8295C4.7619 17.8295 4.53418 17.7842 4.32173 17.6961C4.10928 17.608 3.91628 17.479 3.75375 17.3163C3.59104 17.1537 3.46196 16.9607 3.3739 16.7483C3.28583 16.5358 3.2405 16.3081 3.2405 16.0781C3.2405 15.8481 3.28583 15.6204 3.3739 15.408C3.46196 15.1955 3.59104 15.0025 3.75375 14.84L3.80625 14.7875C4.00797 14.5813 4.14329 14.3194 4.19475 14.0355C4.24622 13.7517 4.21148 13.4589 4.095 13.195C3.98408 12.9362 3.79991 12.7155 3.56516 12.56C3.3304 12.4046 3.05531 12.3211 2.77375 12.32H2.625C2.16087 12.32 1.71575 12.1356 1.38756 11.8074C1.05937 11.4792 0.875 11.0341 0.875 10.57C0.875 10.1059 1.05937 9.66075 1.38756 9.33256C1.71575 9.00437 2.16087 8.82 2.625 8.82H2.70375C2.99337 8.81323 3.27425 8.71948 3.50989 8.55095C3.74552 8.38241 3.925 8.14689 4.025 7.875C4.14148 7.61109 4.17622 7.31833 4.12475 7.03449C4.07329 6.75064 3.93797 6.48872 3.73625 6.2825L3.68375 6.23C3.52104 6.06747 3.39196 5.87447 3.3039 5.66202C3.21583 5.44957 3.1705 5.22185 3.1705 4.99187C3.1705 4.7619 3.21583 4.53418 3.3039 4.32173C3.39196 4.10928 3.52104 3.91628 3.68375 3.75375C3.84628 3.59104 4.03928 3.46196 4.25173 3.3739C4.46418 3.28583 4.6919 3.2405 4.92188 3.2405C5.15185 3.2405 5.37957 3.28583 5.59202 3.3739C5.80447 3.46196 5.99747 3.59104 6.16 3.75375L6.2125 3.80625C6.41872 4.00797 6.68064 4.14329 6.96448 4.19475C7.24833 4.24622 7.54109 4.21148 7.805 4.095H7.875C8.1338 3.98408 8.35451 3.79991 8.50998 3.56516C8.66545 3.3304 8.74888 3.05531 8.75 2.77375V2.625C8.75 2.16087 8.93437 1.71575 9.26256 1.38756C9.59075 1.05937 10.0359 0.875 10.5 0.875C10.9641 0.875 11.4092 1.05937 11.7374 1.38756C12.0656 1.71575 12.25 2.16087 12.25 2.625V2.70375C12.2511 2.98531 12.3346 3.2604 12.49 3.49516C12.6455 3.72991 12.8662 3.91408 13.125 4.025C13.3889 4.14148 13.6817 4.17622 13.9655 4.12475C14.2494 4.07329 14.5113 3.93797 14.7175 3.73625L14.77 3.68375C14.9325 3.52104 15.1255 3.39196 15.338 3.3039C15.5504 3.21583 15.7781 3.1705 16.0081 3.1705C16.2381 3.1705 16.4658 3.21583 16.6783 3.3039C16.8907 3.39196 17.0837 3.52104 17.2462 3.68375C17.409 3.84628 17.538 4.03928 17.6261 4.25173C17.7142 4.46418 17.7595 4.6919 17.7595 4.92188C17.7595 5.15185 17.7142 5.37957 17.6261 5.59202C17.538 5.80447 17.409 5.99747 17.2462 6.16L17.1937 6.2125C16.992 6.41872 16.8567 6.68064 16.8052 6.96448C16.7538 7.24833 16.7885 7.54109 16.905 7.805V7.875C17.0159 8.1338 17.2001 8.35451 17.4348 8.50998C17.6696 8.66545 17.9447 8.74888 18.2262 8.75H18.375C18.8391 8.75 19.2842 8.93437 19.6124 9.26256C19.9406 9.59075 20.125 10.0359 20.125 10.5C20.125 10.9641 19.9406 11.4092 19.6124 11.7374C19.2842 12.0656 18.8391 12.25 18.375 12.25H18.2962C18.0147 12.2511 17.7396 12.3346 17.5048 12.49C17.2701 12.6455 17.0859 12.8662 16.975 13.125Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button class="topbar-icon-btn" id="logout-btn" onclick="logout()" title="登出">
+      <svg width="17" height="17" viewBox="0 0 21 21" fill="none"><path d="M7.875 18.375H4.375A1.75 1.75 0 012.625 16.625V4.375A1.75 1.75 0 014.375 2.625h3.5M14 14.875L18.375 10.5 14 6.125M18.375 10.5H7.875" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="login-open-btn" onclick="openAuth()">登录</button>
   </div>
 </div>
 
-<!-- ── 侧栏遮罩（手机用）── -->
+<!-- ── 手机顶栏 ── -->
+<div id="mobile-topbar">
+  <button class="mt-btn" id="mobile-menu-btn" onclick="toggleSidebar()">☰</button>
+  <div class="mt-room" id="mobile-room-title"></div>
+  <button class="mt-btn" id="mobile-members-btn" onclick="toggleMembersBar()">👥</button>
+</div>
+
+<!-- ── 侧栏遮罩 ── -->
 <div id="sidebar-overlay" onclick="closeAllSidebars()"></div>
 
-<!-- ── 主体 ── -->
+<!-- ── 主体三栏布局 ── -->
 <div id="app">
+
+  <!-- 左侧栏：聊天室列表 -->
   <div id="sidebar">
-    <h3 id="sidebar-rooms-title">聊天室</h3>
-    <input id="room-search" type="text" placeholder="🔍 搜索…" oninput="filterRooms(this.value)" autocomplete="off" />
+    <div id="sidebar-header">
+      <span id="sidebar-rooms-title">聊天室</span>
+      <button id="plus-btn" onclick="togglePlusMenu()">
+        <svg width="18" height="18" viewBox="0 0 19 19" fill="none"><path d="M9.5 3.958v11.084M3.958 9.5h11.084" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+      </button>
+      <div id="plus-dropdown" style="display:none">
+        <button class="plus-menu-item" onclick="openCreateRoom();closePlusMenu()">
+          <svg width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M9.5 3.958v11.084M3.958 9.5h11.084" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          创建房间
+        </button>
+        <button class="plus-menu-item" onclick="openFindRoom();closePlusMenu()">
+          <svg width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M16.1875 16.1875L12.8344 12.8344M14.6458 8.47917C14.6458 11.8849 11.8849 14.6458 8.47917 14.6458C5.07341 14.6458 2.3125 11.8849 2.3125 8.47917C2.3125 5.07341 5.07341 2.3125 8.47917 2.3125C11.8849 2.3125 14.6458 5.07341 14.6458 8.47917Z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          搜索房间
+        </button>
+      </div>
+    </div>
+    <div id="sidebar-search">
+      <div class="search-wrap">
+        <svg width="14" height="14" viewBox="0 0 19 19" fill="none"><path d="M16.1875 16.1875L12.8344 12.8344M14.6458 8.47917C14.6458 11.8849 11.8849 14.6458 8.47917 14.6458C5.07341 14.6458 2.3125 11.8849 2.3125 8.47917C2.3125 5.07341 5.07341 2.3125 8.47917 2.3125C11.8849 2.3125 14.6458 5.07341 14.6458 8.47917Z" stroke="#87888c" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <input id="room-search" type="text" placeholder="Search..." oninput="filterRooms(this.value)" autocomplete="off" />
+      </div>
+    </div>
     <div id="room-list"></div>
-    <button id="create-room-btn" onclick="openCreateRoom()">＋ 创建房间</button>
-    <button id="find-room-btn" onclick="openFindRoom()">🔍 搜索房间</button>
   </div>
+
+  <!-- 中间：聊天区 -->
   <div id="chat-area">
     <div id="no-room">请先登录或注册</div>
-    <div id="chat-main" style="display:none; flex-direction:column; flex:1; min-width:0; min-height:0; overflow:hidden;">
+    <div id="chat-main" style="display:none; flex:1; flex-direction:column; min-width:0; min-height:0; overflow:hidden;">
       <div id="chat-header">
         <button id="chat-title" onclick="openRoomCard()"></button>
       </div>
-      <div id="stream-panel">
-        <div id="stream-grid"></div>
-      </div>
+      <div id="stream-panel"><div id="stream-grid"></div></div>
       <div id="stream-resize-handle"></div>
       <div id="messages"></div>
       <div id="input-area">
         <input id="msg-input" type="text" placeholder="输入消息..." />
-        <button id="send-btn" onclick="sendMessage()">发送</button>
+        <button id="send-btn" onclick="sendMessage()">
+          <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4.114 9.875h11.521M15.635 9.875L9.875 4.115M15.635 9.875L9.875 15.635" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
       </div>
-    </div>
-    <div id="members-sidebar">
-      <div id="voice-section">
-        <div id="voice-status" style="display:none; font-size:0.78rem; color:#888; padding:4px 0 2px; text-align:center;"></div>
-        <button id="voice-join-btn" onclick="toggleVoice()">🎤 加入语音</button>
-        <div id="voice-members-list"></div>
-        <div class="voice-controls" id="voice-controls">
-          <div class="voice-toggle-row">
-            <button id="mic-toggle" class="voice-toggle-btn" onclick="toggleMute()" title="闭麦 / 开麦">🎤</button>
-            <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
-            <span id="mic-vol-pct" style="font-size:0.8rem;min-width:32px;text-align:right;">100%</span>
-          </div>
-          <div class="voice-toggle-row">
-            <button id="speaker-toggle" class="voice-toggle-btn" onclick="toggleSpeaker()" title="静音扬声器（同时闭麦）">🔊</button>
-            <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
-            <span id="speaker-vol-pct" style="font-size:0.8rem;min-width:32px;text-align:right;">100%</span>
-          </div>
-          <button id="stream-audio-btn" onclick="toggleStreamAudio()">🖥 共享音频</button>
-          <button id="live-btn" onclick="toggleLive()">📺 直播</button>
-        </div>
-      </div>
-      <h3 id="sidebar-members-title">成员</h3>
-      <div id="member-list"></div>
     </div>
   </div>
+
+  <!-- 右侧栏：语音 + 成员 -->
+  <div id="members-sidebar">
+    <div id="voice-section">
+      <div id="voice-section-title">Voice Chat</div>
+      <button id="voice-join-btn" onclick="joinVoice()">🎤 加入语音</button>
+      <div id="voice-in-controls">
+        <button id="mic-toggle" class="voice-icon-btn" onclick="toggleMute()" title="闭麦 / 开麦">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="speaker-toggle" class="voice-icon-btn" onclick="toggleSpeaker()" title="静音扬声器">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 010 14.14M15.54 8.46a5 5 0 010 7.07" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button id="voice-leave-btn" onclick="leaveVoice()">📵 离开语音</button>
+      </div>
+      <!-- 音量控制（隐藏，进阶用） -->
+      <div id="voice-vol-controls" style="display:none">
+        <div class="voice-vol-row">
+          <input type="range" id="mic-volume" min="0" max="100" value="100" oninput="setMicVolume(this.value)" />
+          <span id="mic-vol-pct" style="font-size:0.78rem;min-width:30px;text-align:right;">100%</span>
+        </div>
+        <div class="voice-vol-row">
+          <input type="range" id="speaker-volume" min="0" max="100" value="100" oninput="setSpeakerVolume(this.value)" />
+          <span id="speaker-vol-pct" style="font-size:0.78rem;min-width:30px;text-align:right;">100%</span>
+        </div>
+      </div>
+      <button id="stream-audio-btn" onclick="toggleStreamAudio()">🖥 共享音频</button>
+      <button id="live-btn" onclick="toggleLive()">📺 直播</button>
+      <div id="voice-members-list"></div>
+    </div>
+    <div id="members-divider"></div>
+    <div id="sidebar-members-title">Members</div>
+    <div id="member-list"></div>
+  </div>
+
 </div>
 
 <!-- ── 登录/注册弹窗 ── -->
@@ -320,17 +415,24 @@
     <div class="success-msg" id="profile-success"></div>
     <input id="profile-screenname" type="text" placeholder="显示名" />
     <textarea id="profile-bio" placeholder="个人简介" rows="3"></textarea>
+    <!-- 头像选择器 -->
+    <div style="margin-bottom:12px;">
+      <label class="avatar-picker-label">头像</label>
+      <div class="avatar-preview" id="profile-avatar-preview"></div>
+      <div class="av-expr-row" id="av-expr-row"></div>
+      <div class="av-color-row" id="av-color-row"></div>
+    </div>
     <button id="profile-save-btn" onclick="saveProfile()">保存</button>
     <button id="profile-changepw-btn" class="link-btn" onclick="openChangePassword()">修改密码</button>
-    <button id="profile-close-btn" class="link-btn" style="color:#e74c3c" onclick="closeModal('profile-modal')">关闭</button>
-    <!-- 超级管理员专区 -->
-    <div id="super-admin-area" style="display:none; margin-top:16px; border-top:1px solid #ddd; padding-top:16px;">
-      <h3 id="admin-area-title" style="font-size:0.9rem; margin-bottom:8px;">🔑 超级管理员</h3>
+    <!-- admin 专区 -->
+    <div id="admin-area" style="display:none; margin-top:16px; border-top:1px solid #ddd; padding-top:16px;">
+      <h3 style="font-size:0.9rem; margin-bottom:8px; color:#e74c3c;">🔑 管理员</h3>
       <div class="error-msg" id="admin-reset-error"></div>
       <div class="success-msg" id="admin-reset-success"></div>
-      <input id="admin-reset-target" type="text" placeholder="输入要重置的用户名" />
+      <input id="admin-reset-target" type="text" placeholder="输入要重置密码的用户名" />
       <button id="admin-reset-btn" class="danger-btn" onclick="doAdminReset()">重置该用户密码</button>
     </div>
+    <button id="profile-close-btn" class="link-btn" style="color:#e74c3c; margin-top:8px;" onclick="closeModal('profile-modal')">关闭</button>
   </div>
 </div>
 
@@ -355,11 +457,10 @@
     <p id="card-username" style="color:#888; font-size:0.82rem; margin-bottom:6px;"></p>
     <p id="card-bio" style="color:#999; font-size:0.95rem; margin-bottom:16px;"></p>
     <div id="card-actions" style="display:none; flex-direction:column; gap:8px; border-top:1px solid #ddd; padding-top:12px; margin-bottom:8px;">
+      <button id="card-dm-btn" style="display:none; background:#4f8ef7; color:white;" onclick="openDm(cardTargetUsername)">💬 发私信</button>
       <button id="card-set-admin-btn" style="display:none" onclick="doCardSetAdmin(false)">👑 设为管理员</button>
       <button id="card-remove-admin-btn" class="danger-btn" style="display:none" onclick="doCardSetAdmin(true)">取消管理员</button>
       <button id="card-kick-btn" class="danger-btn" style="display:none" onclick="doCardKick()">🚪 踢出房间</button>
-      <button id="card-set-super-btn" style="display:none; background:#f0a500" onclick="doCardSetSuper(true)">⭐ 设为超级管理员</button>
-      <button id="card-revoke-super-btn" class="danger-btn" style="display:none" onclick="doCardSetSuper(false)">撤销超级管理员</button>
       <button id="card-invite-btn" style="display:none; background:#27ae60; color:white;" onclick="openInviteModal()">✉️ 邀请到聊天室</button>
     </div>
     <div id="card-voice-volume" style="display:none; border-top:1px solid #ddd; padding-top:12px; margin-top:4px;">
@@ -527,9 +628,9 @@ const i18n = {
     'settings-mic-test-label':'🎚️ 麦克风测试',
     'start-mic-test-btn':'▶ 开始测试','stop-mic-test-btn':'■ 停止',
     'settings-lang-label':'🌐 语言 / Language','settings-close-btn':'关闭',
+    'card-dm-btn':'💬 发私信',
     'card-set-admin-btn':'👑 设为管理员','card-remove-admin-btn':'取消管理员',
-    'card-kick-btn':'🚪 踢出房间','card-set-super-btn':'⭐ 设为超级管理员',
-    'card-revoke-super-btn':'撤销超级管理员','card-invite-btn':'✉️ 邀请到聊天室',
+    'card-kick-btn':'🚪 踢出房间','card-invite-btn':'✉️ 邀请到聊天室',
     'card-voice-vol-label':'🔊 语音音量','card-stream-vol-label':'🎵 共享音频音量',
     'card-modal-close-btn':'关闭',
     'room-code-label':'房间号：','room-code-copy-btn':'复制',
@@ -542,7 +643,7 @@ const i18n = {
     'forgot-reset-btn':'重置密码','forgot-back-btn':'返回登录',
     'profile-title':'我的资料','profile-save-btn':'保存',
     'profile-changepw-btn':'修改密码','profile-close-btn':'关闭',
-    'admin-area-title':'🔑 超级管理员','admin-reset-btn':'重置该用户密码',
+    'admin-reset-btn':'重置该用户密码',
     'changepw-title':'修改密码','changepw-confirm-btn':'确认修改','changepw-cancel-btn':'取消',
     'create-room-title':'创建房间','create-room-confirm-btn':'创建','create-room-cancel-btn':'取消',
     'find-room-title':'🔍 搜索房间','find-room-confirm-btn':'搜索','find-room-cancel-btn':'取消',
@@ -566,6 +667,8 @@ const i18n = {
     'ph-find-room-code':'输入房间号（6位数字）',
     'ph-room-new-pw-input':'输入新密码','ph-room-pw-input':'密码',
     'room-pw-remember-label-text':'记住密码',
+    'room-info-title':'查看房间信息',
+    'voice-chat-title':'语音聊天',
   },
   en: {
     'profile-btn':'Profile','logout-btn':'Logout','login-open-btn':'Login / Register',
@@ -583,9 +686,9 @@ const i18n = {
     'settings-mic-test-label':'🎚️ Mic Test',
     'start-mic-test-btn':'▶ Start Test','stop-mic-test-btn':'■ Stop',
     'settings-lang-label':'🌐 Language','settings-close-btn':'Close',
+    'card-dm-btn':'💬 Direct Message',
     'card-set-admin-btn':'👑 Set Admin','card-remove-admin-btn':'Remove Admin',
-    'card-kick-btn':'🚪 Kick','card-set-super-btn':'⭐ Set Super Admin',
-    'card-revoke-super-btn':'Revoke Super Admin','card-invite-btn':'✉️ Invite to Room',
+    'card-kick-btn':'🚪 Kick','card-invite-btn':'✉️ Invite to Room',
     'card-voice-vol-label':'🔊 Voice Volume','card-stream-vol-label':'🎵 Shared Audio Volume',
     'card-modal-close-btn':'Close',
     'room-code-label':'Room Code: ','room-code-copy-btn':'Copy',
@@ -598,7 +701,7 @@ const i18n = {
     'forgot-reset-btn':'Reset Password','forgot-back-btn':'Back to Login',
     'profile-title':'My Profile','profile-save-btn':'Save',
     'profile-changepw-btn':'Change Password','profile-close-btn':'Close',
-    'admin-area-title':'🔑 Super Admin','admin-reset-btn':'Reset User Password',
+    'admin-reset-btn':'Reset User Password',
     'changepw-title':'Change Password','changepw-confirm-btn':'Confirm','changepw-cancel-btn':'Cancel',
     'create-room-title':'Create Room','create-room-confirm-btn':'Create','create-room-cancel-btn':'Cancel',
     'find-room-title':'🔍 Find Room','find-room-confirm-btn':'Search','find-room-cancel-btn':'Cancel',
@@ -623,6 +726,8 @@ const i18n = {
     'ph-find-room-code':'Enter 6-digit room code',
     'ph-room-new-pw-input':'Enter new password','ph-room-pw-input':'Password',
     'room-pw-remember-label-text':'Remember password',
+    'room-info-title':'Room info',
+    'voice-chat-title':'Voice Chat',
   }
 };
 let currentLang = localStorage.getItem('lang') || 'zh';
@@ -633,18 +738,18 @@ function applyLang() {
   // Text content by ID
   const textIds = [
     'profile-btn','logout-btn','login-open-btn','sidebar-rooms-title','create-room-btn',
-    'find-room-btn','send-btn','sidebar-members-title',
+    'find-room-btn','send-btn',
     'settings-title','settings-tab-audio','settings-tab-general',
     'settings-mic-label','settings-speaker-label','settings-mic-test-label',
     'start-mic-test-btn','stop-mic-test-btn','settings-lang-label','settings-close-btn',
-    'card-set-admin-btn','card-remove-admin-btn','card-kick-btn','card-set-super-btn',
-    'card-revoke-super-btn','card-invite-btn','card-voice-vol-label','card-stream-vol-label','card-modal-close-btn',
+    'card-dm-btn','card-set-admin-btn','card-remove-admin-btn','card-kick-btn',
+    'card-invite-btn','card-voice-vol-label','card-stream-vol-label','card-modal-close-btn',
     'room-code-label','room-code-copy-btn','room-card-close-btn','room-card-leave-btn',
     'room-card-modal-close','room-pw-confirm-btn',
     'tab-login','tab-register','login-submit-btn','forgot-pw-link','register-submit-btn',
     'forgot-title','forgot-next-btn','forgot-reset-btn','forgot-back-btn',
     'profile-title','profile-save-btn','profile-changepw-btn','profile-close-btn',
-    'admin-area-title','admin-reset-btn',
+    'admin-reset-btn',
     'changepw-title','changepw-confirm-btn','changepw-cancel-btn',
     'create-room-title','create-room-confirm-btn','create-room-cancel-btn',
     'find-room-title','find-room-confirm-btn','find-room-cancel-btn',
@@ -671,12 +776,17 @@ function applyLang() {
   // Titles
   const titleMap = { 'mic-toggle':'mic-title', 'speaker-toggle':'speaker-title' };
   Object.entries(titleMap).forEach(([id, key]) => { const el = document.getElementById(id); if (el && L[key]) el.title = L[key]; });
+  if (currentRoom) _setChatTitle(currentRoom);
+  updateVoiceCount();
+  updateMembersCount();
   // Room pw remember label (has child checkbox, use lastChild)
   const remEl = document.getElementById('room-pw-remember-label');
   if (remEl) remEl.lastChild.textContent = ' ' + (L['room-pw-remember-label-text'] || '');
   // Dynamic state buttons
-  if (!inVoice) { const vb = document.getElementById('voice-join-btn'); if (vb) vb.textContent = t('voice-join'); }
-  else { const vb = document.getElementById('voice-join-btn'); if (vb) vb.textContent = t('voice-leave'); }
+  const vjb = document.getElementById('voice-join-btn');
+  if (vjb) vjb.textContent = t('voice-join');
+  const vlb = document.getElementById('voice-leave-btn');
+  if (vlb) vlb.textContent = t('voice-leave');
   const sab = document.getElementById('stream-audio-btn');
   if (sab) sab.textContent = isStreamingAudio ? t('stop-sharing') : t('share-audio');
   const lb = document.getElementById('live-btn');
@@ -706,10 +816,11 @@ function switchSettingsTab(tab) {
 
 let currentUser = null;
 let currentRoom = null;
-let isAdmin = false;   // 有任何房间权限（管理员/房主/超管）
+let isAdmin = false;   // 有任何房间权限（管理员/房主）
 let isOwner = false;   // 是房主
 let isMod = false;     // 是管理员（非房主）
 let memberOwner = '';  // 当前房间房主用户名
+let currentIsDm = false; // 当前是否在私聊
 let localStream = null;
 let peerConnections = {}; // { username: RTCPeerConnection }
 let audioElements = {};   // { username: HTMLAudioElement }
@@ -727,7 +838,6 @@ let voiceBanned = new Set();
 let ignoredUsers = new Set();
 let cardTargetUsername = null;
 let memberAdmins = new Set();
-let memberSuperAdmins = new Set();
 let roomHasPassword = {};
 let savedRoomPasswords = JSON.parse(localStorage.getItem('roomPasswords') || '{}');
 let pendingJoinRoom = null;
@@ -752,23 +862,44 @@ async function loadIceServers() {
   }
 }
 
+const SUN_SVG = `<svg width="17" height="17" viewBox="0 0 21 21" fill="none"><path d="M10.5 3.5V2M10.5 19v-1.5M3.5 10.5H2M19 10.5h-1.5M5.45 5.45 4.39 4.39M16.61 16.61l-1.06-1.06M5.45 15.55l-1.06 1.06M16.61 4.39l-1.06 1.06M14 10.5a3.5 3.5 0 11-7 0 3.5 3.5 0 017 0z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const MOON_SVG = `<svg width="17" height="17" viewBox="0 0 21 21" fill="none"><path d="M18.5 11.5A8 8 0 119.5 2.5a6 6 0 009 9z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
 // 恢复夜间模式
 if (localStorage.getItem('theme') === 'dark') {
   document.body.classList.add('dark');
 }
+updateThemeIcon();
 
 let cachedQuestions = [];
 
 // 应用语言（使用已保存的偏好）
 applyLang();
 
+// ── 头像系统常量（必须在恢复登录之前初始化）────────────────
+const AVATAR_COLORS = ['#5865F2','#3BA55C','#FAA61A','#ED4245','#EB459E','#57F287','#0099E1','#9C84EC'];
+const AVATAR_EXPRESSIONS = ['Smile','Laugh','BigLaugh','Angi','Sad','Em'];
+const AVATAR_SVGS = {
+  Smile: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129715C11.1504 0.12973 13.5894 2.56914 13.5898 5.57796C13.5897 7.71367 12.3603 9.56145 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6532C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.828C0.299407 13.6726 0.12988 13.382 0.129791 13.0672V3.51741C0.130127 1.64673 1.64678 0.129923 3.51749 0.129715H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61323 1.87979 3.51741V11.5223L5.37979 9.42659C5.40947 9.40881 5.43982 9.39263 5.47061 9.37874C5.59267 9.31404 5.73204 9.27721 5.87979 9.27718H8.14151C10.1841 9.27716 11.8397 7.62057 11.8398 5.57796C11.8394 3.53564 10.1839 1.87973 8.14151 1.87971H3.51749ZM5.56827 5.79964C5.78143 5.70787 6.02448 5.81911 6.18155 5.99007C6.23473 6.04794 6.29408 6.10005 6.35831 6.14534C6.53706 6.27133 6.74751 6.33915 6.9628 6.33968C7.17806 6.34014 7.389 6.2734 7.56827 6.14827C7.63251 6.10339 7.69171 6.05142 7.74503 5.99397C7.90302 5.8238 8.14654 5.71362 8.35928 5.80647C8.562 5.89522 8.66186 6.13225 8.5419 6.31819C8.40375 6.53225 8.22653 6.71758 8.01944 6.86214C7.70584 7.08098 7.33738 7.19699 6.96085 7.19612C6.58412 7.19519 6.21597 7.07681 5.90323 6.85628C5.6968 6.7107 5.5199 6.5251 5.38272 6.31038C5.26381 6.12391 5.36519 5.88738 5.56827 5.79964ZM4.78018 3.37386C5.17783 3.37386 5.49991 3.69691 5.49991 4.09456C5.49965 4.49198 5.17767 4.81429 4.78018 4.81429C4.38273 4.81425 4.06072 4.49196 4.06046 4.09456C4.06046 3.69694 4.38257 3.37389 4.78018 3.37386ZM8.78018 3.15608C9.17767 3.15608 9.49966 3.47838 9.49991 3.87581C9.49991 4.27345 9.17783 4.59651 8.78018 4.59651C8.38257 4.59647 8.06046 4.27343 8.06046 3.87581C8.0607 3.4784 8.38272 3.15612 8.78018 3.15608Z" fill="white"/></svg>`,
+  Laugh: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129715C11.1504 0.12973 13.5894 2.56914 13.5898 5.57796C13.5897 7.71367 12.3603 9.56145 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6532C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.828C0.299407 13.6726 0.12988 13.382 0.129791 13.0672V3.51741C0.130127 1.64673 1.64678 0.129923 3.51749 0.129715H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61323 1.87979 3.51741V11.5223L5.37979 9.42659C5.40947 9.40881 5.43982 9.39263 5.47061 9.37874C5.59267 9.31404 5.73204 9.27721 5.87979 9.27718H8.14151C10.1841 9.27716 11.8397 7.62057 11.8398 5.57796C11.8394 3.53564 10.1839 1.87973 8.14151 1.87971H3.51749ZM7.78409 5.36604C7.98655 5.36609 8.15558 5.53293 8.10635 5.72932C8.04563 5.97141 7.92432 6.19477 7.75284 6.37483C7.49808 6.64227 7.15215 6.7928 6.7919 6.7928C6.43185 6.79272 6.08661 6.64208 5.83194 6.37483C5.66048 6.1948 5.53915 5.97137 5.47842 5.72932C5.42919 5.5329 5.59819 5.36604 5.80069 5.36604H7.78409ZM4.14346 4.34749C4.48096 4.34763 4.75479 4.62128 4.75479 4.95882C4.75458 5.29617 4.48084 5.57001 4.14346 5.57014C3.80597 5.57014 3.53234 5.29626 3.53214 4.95882C3.53214 4.6212 3.80584 4.34749 4.14346 4.34749ZM9.30557 4.34749C9.64307 4.34763 9.9169 4.62128 9.9169 4.95882C9.91669 5.29617 9.64294 5.57 9.30557 5.57014C8.96808 5.57014 8.69445 5.29626 8.69424 4.95882C8.69424 4.6212 8.96795 4.34749 9.30557 4.34749Z" fill="white"/></svg>`,
+  BigLaugh: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129707C11.1504 0.129722 13.5894 2.56913 13.5898 5.57795C13.5897 7.71367 12.3603 9.56144 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6531C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.8279C0.299407 13.6725 0.12988 13.382 0.129791 13.0672V3.5174C0.130127 1.64672 1.64678 0.129916 3.51749 0.129707H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61322 1.87979 3.5174V11.5223L5.37979 9.42658C5.40947 9.40881 5.43982 9.39262 5.47061 9.37873C5.59267 9.31403 5.73204 9.27721 5.87979 9.27717H8.14151C10.1841 9.27715 11.8397 7.62056 11.8398 5.57795C11.8394 3.53563 10.1839 1.87972 8.14151 1.87971H3.51749Z" fill="white"/><circle cx="4.2603" cy="5.0798" r="0.611312" fill="white"/><path d="M7.29625 6.07893C7.4845 6.10726 7.62081 6.2823 7.55538 6.46108C7.53126 6.52697 7.50234 6.5909 7.46879 6.65231C7.38117 6.81268 7.26369 6.95269 7.12306 7.06436C6.98243 7.17603 6.82141 7.25716 6.64919 7.30313C6.47697 7.3491 6.29692 7.359 6.11932 7.33227C5.94172 7.30554 5.77005 7.24271 5.61411 7.14735C5.45817 7.05199 5.32101 6.92599 5.21047 6.77652C5.09994 6.62705 5.01818 6.45705 4.96987 6.27623C4.95326 6.21403 4.94071 6.15098 4.93226 6.0875C4.9059 5.88931 5.09293 5.74733 5.29064 5.77709L6.28133 5.92619L7.29625 6.07893Z" fill="white"/><circle cx="9.01485" cy="5.07981" r="0.611312" fill="white"/></svg>`,
+  Angi: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129707C11.1504 0.129722 13.5894 2.56913 13.5898 5.57795C13.5897 7.71367 12.3603 9.56144 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6531C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.8279C0.299407 13.6725 0.12988 13.382 0.129791 13.0672V3.5174C0.130127 1.64672 1.64678 0.129916 3.51749 0.129707H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61322 1.87979 3.5174V11.5223L5.37979 9.42658C5.40947 9.40881 5.43982 9.39262 5.47061 9.37873C5.59267 9.31403 5.73204 9.27721 5.87979 9.27717H8.14151C10.1841 9.27715 11.8397 7.62056 11.8398 5.57795C11.8394 3.53563 10.1839 1.87972 8.14151 1.87971H3.51749Z" fill="white"/><ellipse cx="5.2604" cy="4.88763" rx="0.543389" ry="0.475465" fill="white"/><circle cx="8.92822" cy="4.8197" r="0.543389" fill="white"/><line x1="5.74956" y1="3.46124" x2="6.4521" y2="4.16378" stroke="white" stroke-width="0.543389" stroke-linecap="round"/><line x1="0.271694" y1="-0.271694" x2="1.26524" y2="-0.271694" transform="matrix(-0.707107 0.707107 0.707107 0.707107 8.82321 3.46124)" stroke="white" stroke-width="0.543389" stroke-linecap="round"/><path d="M6.17035 6.78949C5.96785 6.78949 5.79918 6.6229 5.84841 6.42647C5.90911 6.18431 6.03004 5.96099 6.20157 5.78087C6.45634 5.51337 6.80187 5.36309 7.16216 5.36309C7.52245 5.36309 7.86798 5.51337 8.12274 5.78087C8.29428 5.96098 8.4152 6.18431 8.4759 6.42647C8.52514 6.6229 8.35647 6.78949 8.15397 6.78949L7.16216 6.78949H6.17035Z" fill="white"/></svg>`,
+  Sad: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129711C11.1504 0.129726 13.5894 2.56914 13.5898 5.57795C13.5897 7.71367 12.3603 9.56144 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6531C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.828C0.299407 13.6725 0.12988 13.382 0.129791 13.0672V3.51741C0.130127 1.64672 1.64678 0.129919 3.51749 0.129711H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61322 1.87979 3.51741V11.5223L5.37979 9.42659C5.40947 9.40881 5.43982 9.39262 5.47061 9.37873C5.59267 9.31404 5.73204 9.27721 5.87979 9.27717H8.14151C10.1841 9.27716 11.8397 7.62057 11.8398 5.57795C11.8394 3.53564 10.1839 1.87973 8.14151 1.87971H3.51749Z" fill="white"/><line x1="0.407542" y1="-0.407542" x2="1.70574" y2="-0.407542" transform="matrix(0.707107 -0.707107 -0.707107 -0.707107 4.42636 5.22)" stroke="white" stroke-width="0.815083" stroke-linecap="round"/><line x1="9.69144" y1="5.22" x2="8.77347" y2="4.30203" stroke="white" stroke-width="0.815083" stroke-linecap="round"/><path d="M6.42325 6.91809C6.22075 6.91809 6.05208 6.7515 6.10131 6.55508C6.16201 6.31291 6.28294 6.08959 6.45447 5.90948C6.70924 5.64197 7.05477 5.49169 7.41506 5.49169C7.77535 5.49169 8.12088 5.64197 8.37564 5.90947C8.54718 6.08959 8.6681 6.31291 8.7288 6.55508C8.77804 6.7515 8.60937 6.91809 8.40686 6.91809L7.41506 6.91809H6.42325Z" fill="white"/></svg>`,
+  Em: `<svg width="14" height="15" viewBox="0 0 14 15" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8.14151 0.129711C11.1504 0.129726 13.5894 2.56914 13.5898 5.57795C13.5897 7.71367 12.3603 9.56144 10.5712 10.4549L12.748 12.4168C13.1069 12.7404 13.1359 13.2942 12.8124 13.6531C12.4888 14.012 11.935 14.0402 11.5761 13.7166L8.5712 11.0086C8.42942 11.0197 8.28613 11.0272 8.14151 11.0272H6.11319L1.45401 13.8172C1.18371 13.979 0.847226 13.9833 0.573151 13.828C0.299407 13.6725 0.12988 13.382 0.129791 13.0672V3.51741C0.130127 1.64672 1.64678 0.129919 3.51749 0.129711H8.14151ZM3.51749 1.87971C2.61327 1.87992 1.88013 2.61322 1.87979 3.51741V11.5223L5.37979 9.42659C5.40947 9.40881 5.43982 9.39262 5.47061 9.37873C5.59267 9.31404 5.73204 9.27721 5.87979 9.27717H8.14151C10.1841 9.27716 11.8397 7.62057 11.8398 5.57795C11.8394 3.53564 10.1839 1.87973 8.14151 1.87971H3.51749Z" fill="white"/><line x1="4.08698" y1="5.07693" x2="5.17376" y2="5.07693" stroke="white" stroke-width="0.815083" stroke-linecap="round"/><line x1="8.02641" y1="5.07694" x2="9.11318" y2="5.07694" stroke="white" stroke-width="0.815083" stroke-linecap="round"/><path d="M5.67615 7.18257C5.47365 7.18257 5.30497 7.01598 5.35421 6.81956C5.41491 6.57739 5.53584 6.35407 5.70737 6.17396C5.96213 5.90645 6.30767 5.75617 6.66796 5.75617C7.02825 5.75617 7.37378 5.90645 7.62854 6.17396C7.80008 6.35407 7.921 6.57739 7.9817 6.81956C8.03094 7.01598 7.86227 7.18257 7.65976 7.18257L6.66796 7.18257H5.67615Z" fill="white"/></svg>`
+};
+const _GROUP_PATH = `<path d="M14.0224 17.3498V15.9776C14.0224 15.2497 14.3116 14.5517 14.8262 14.037C15.3409 13.5223 16.039 13.2332 16.7668 13.2332H22.2556C22.9835 13.2332 23.6815 13.5223 24.1962 14.037C24.7109 14.5517 25 15.2497 25 15.9776V17.3498M9.90585 17.3498V15.9776C9.9063 15.3695 10.1087 14.7788 10.4812 14.2982C10.8538 13.8176 11.3754 13.4744 11.9641 13.3224M14.7085 5.08919C14.1182 5.24034 13.595 5.58366 13.2213 6.06504C12.8477 6.54641 12.6449 7.13845 12.6449 7.74782C12.6449 8.35719 12.8477 8.94923 13.2213 9.43061C13.595 9.91198 14.1182 10.2553 14.7085 10.4065M16.7668 7.74439C16.7668 9.26008 17.9955 10.4888 19.5112 10.4888C21.0269 10.4888 22.2556 9.26008 22.2556 7.74439C22.2556 6.22871 21.0269 5 19.5112 5C17.9955 5 16.7668 6.22871 16.7668 7.74439Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+function groupSVG(w, h) { return `<svg width="${w}" height="${h}" viewBox="0 0 30 22" fill="none">${_GROUP_PATH}</svg>`; }
+const GROUP_SVG = groupSVG(24, 18);
+const userAvatarCache = {};  // { username: { expression, color } }
+
 // 恢复登录状态
 const savedUser = localStorage.getItem('currentUser');
 if (savedUser) {
   currentUser = JSON.parse(savedUser);
-  document.getElementById('topbar-name').textContent = currentUser.screenname;
-  document.getElementById('login-open-btn').style.display = 'none';
-  document.getElementById('logout-btn').style.display = '';
+  if (!currentUser.avatar_expression) currentUser.avatar_expression = 'Smile';
+  if (!currentUser.avatar_color) currentUser.avatar_color = defaultAvatarColor(currentUser.username);
+  userAvatarCache[currentUser.username] = { expression: currentUser.avatar_expression, color: currentUser.avatar_color };
+  updateSidebarAvatar();
 }
 
 // 不支持 getDisplayMedia 的设备（如 iOS）隐藏直播/共享音频按钮
@@ -784,10 +915,10 @@ socket.on('connect', function() {
   _socketConnectedBefore = true;
   if (currentUser) {
     socket.emit('get_rooms', { username: currentUser.username });
+    socket.emit('get_dms', { username: currentUser.username });
     socket.emit('user_online', { username: currentUser.username });
     if (currentRoom) {
       const wasInVoice = inVoice;
-      // 重连时关闭已失效的对等连接，等待重新建立
       if (isReconnect && wasInVoice) {
         Object.values(peerConnections).forEach(pc => pc.close());
         peerConnections = {};
@@ -805,10 +936,13 @@ socket.on('connect', function() {
         document.querySelectorAll('.stream-indicator').forEach(el => el.remove());
         document.querySelectorAll('.stream-floater').forEach(el => el.remove());
       }
-      _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '', isReconnect);
-      // 重连后重新注册到语音频道，触发 voice_current_members 重建连接
-      if (isReconnect && wasInVoice) {
-        socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
+      if (currentIsDm) {
+        socket.emit('join_dm', { username: currentUser.username, dm_room: currentRoom });
+      } else {
+        _submitJoin(currentRoom, savedRoomPasswords[currentRoom] || '', isReconnect);
+        if (isReconnect && wasInVoice) {
+          socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
+        }
       }
     }
   }
@@ -827,20 +961,25 @@ function renderMembers(members) {
   const list = document.getElementById('member-list');
   list.innerHTML = '';
   memberAdmins.clear();
-  memberSuperAdmins.clear();
   memberOwner = '';
   members.forEach(m => {
     if (m.is_admin) memberAdmins.add(m.username);
-    if (m.is_super_admin) memberSuperAdmins.add(m.username);
     if (m.is_owner) memberOwner = m.username;
+    if (m.avatar_expression || m.avatar_color) {
+      userAvatarCache[m.username] = { expression: m.avatar_expression || 'Smile', color: m.avatar_color || defaultAvatarColor(m.username) };
+    }
     const div = document.createElement('div');
     div.className = 'member-item' + (m.is_online ? '' : ' offline');
     div.id = 'member-' + m.username;
-    const badge = m.is_super_admin ? '⭐ ' : (m.is_owner ? '👑 ' : (m.is_admin ? '🛡 ' : ''));
-    div.innerHTML = `${badge}${m.screenname}`;
+    const av = getAvatarData(m.username);
+    const badge = m.is_owner ? '👑' : (m.is_admin ? '🛡' : '');
+    div.innerHTML = avatarHTML(av.expression, av.color, 26) +
+      `<span class="member-name">${m.screenname}</span>` +
+      (badge ? `<span class="member-badge">${badge}</span>` : '');
     div.onclick = () => openMemberCard(m.username);
     list.appendChild(div);
   });
+  updateMembersCount();
 }
 
 socket.on('members_list', function(data) {
@@ -854,7 +993,7 @@ socket.on('new_room_created', function(data) {
 
 socket.on('voice_members_view', function(data) {
   (data.banned || []).forEach(u => voiceBanned.add(u));
-  data.members.forEach(m => addVoiceMember(m.username, m.screenname));
+  data.members.forEach(m => addVoiceMember(m.username, m.screenname, m.avatar_expression, m.avatar_color));
 });
 
 socket.on('online_status_changed', function(data) {
@@ -1000,9 +1139,15 @@ function stopMicTest() {
 }
 
 // ── 主题 ────────────────────────────────────────────────
+function updateThemeIcon() {
+  const btn = document.getElementById('theme-toggle-btn');
+  if (btn) btn.innerHTML = document.body.classList.contains('dark') ? SUN_SVG : MOON_SVG;
+}
+
 function toggleTheme() {
   document.body.classList.toggle('dark');
   localStorage.setItem('theme', document.body.classList.contains('dark') ? 'dark' : 'light');
+  updateThemeIcon();
 }
 
 // ── 弹窗工具 ─────────────────────────────────────────────
@@ -1059,14 +1204,15 @@ socket.on('login_result', function(data) {
     document.getElementById('login-error').textContent = data.msg;
     return;
   }
-  currentUser = { username: data.username, screenname: data.screenname, is_super_admin: data.is_super_admin };
+  currentUser = { username: data.username, screenname: data.screenname, is_admin: data.is_admin,
+    avatar_expression: data.avatar_expression || 'Smile', avatar_color: data.avatar_color || defaultAvatarColor(data.username) };
   localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  userAvatarCache[data.username] = { expression: currentUser.avatar_expression, color: currentUser.avatar_color };
   closeModal('auth-modal');
-  document.getElementById('topbar-name').textContent = data.screenname;
-  document.getElementById('login-open-btn').style.display = 'none';
-  document.getElementById('logout-btn').style.display = '';
+  updateSidebarAvatar();
   socket.emit('user_online', { username: currentUser.username });
   socket.emit('get_rooms', { username: currentUser.username });
+  socket.emit('get_dms', { username: currentUser.username });
   joinRoom('大厅');
 });
 
@@ -1103,10 +1249,14 @@ function logout() {
   currentUser = null;
   localStorage.removeItem('currentUser');
   currentRoom = null;
+  currentIsDm = false;
   isAdmin = false; isOwner = false; isMod = false; memberOwner = '';
-  document.getElementById('topbar-name').textContent = '';
-  document.getElementById('login-open-btn').style.display = '';
-  document.getElementById('logout-btn').style.display = 'none';
+  for (const k in openDms) delete openDms[k];
+  // 恢复语音和成员区域
+  document.getElementById('voice-section').style.display = '';
+  document.getElementById('members-divider').style.display = '';
+  document.getElementById('sidebar-members-title').style.display = '';
+  updateSidebarAvatar();
   document.getElementById('room-list').innerHTML = '';
   document.getElementById('no-room').textContent = t('no-room');
   document.getElementById('no-room').style.display = 'flex';
@@ -1169,7 +1319,9 @@ function openProfile() {
   document.getElementById('profile-screenname').value = currentUser.screenname;
   document.getElementById('profile-error').textContent = '';
   document.getElementById('profile-success').textContent = '';
-  document.getElementById('super-admin-area').style.display = currentUser.is_super_admin ? '' : 'none';
+  document.getElementById('admin-area').style.display = currentUser.is_admin ? '' : 'none';
+  const av = getAvatarData(currentUser.username);
+  initAvatarPicker(av.expression, av.color);
   socket.emit('get_profile', { username: currentUser.username });
   openModal('profile-modal');
 }
@@ -1185,6 +1337,7 @@ function saveProfile() {
   const bio = document.getElementById('profile-bio').value;
   if (!screenname) { document.getElementById('profile-error').textContent = '显示名不能为空'; return; }
   socket.emit('update_profile', { username: currentUser.username, screenname, bio });
+  socket.emit('save_avatar', { username: currentUser.username, expression: selectedAvatarExpression, color: selectedAvatarColor });
 }
 
 socket.on('update_profile_result', function(data) {
@@ -1193,21 +1346,20 @@ socket.on('update_profile_result', function(data) {
     return;
   }
   currentUser.screenname = data.screenname;
-  document.getElementById('topbar-name').textContent = data.screenname;
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  updateSidebarAvatar();
   document.getElementById('profile-success').textContent = '保存成功！';
 });
 
 // ── 权限层级 ──────────────────────────────────────────────
 function getMyLevel() {
-  if (currentUser?.username === 'admin') return 4;
-  if (currentUser?.is_super_admin) return 3;
+  if (currentUser?.username === 'admin') return 3;
   if (isOwner) return 2;
   if (isMod) return 1;
   return 0;
 }
 function getTargetLevel(username) {
-  if (username === 'admin') return 4;
-  if (memberSuperAdmins.has(username)) return 3;
+  if (username === 'admin') return 3;
   if (username === memberOwner) return 2;
   if (memberAdmins.has(username)) return 1;
   return 0;
@@ -1219,20 +1371,17 @@ function openMemberCard(username) {
   const isSelf = currentUser && username === currentUser.username;
   const myLevel = getMyLevel();
   const tgtLevel = getTargetLevel(username);
-  const canSetAdmin = !isSelf && myLevel >= 2 && tgtLevel === 0;
-  const canRemoveAdmin = !isSelf && myLevel >= 2 && tgtLevel === 1;
-  const canKick = !isSelf && myLevel >= 1 && myLevel > tgtLevel;
-  const isGodAdmin = currentUser?.username === 'admin';
-  const canSetSuper = isGodAdmin && !isSelf && tgtLevel < 3;
-  const canRevokeSuper = isGodAdmin && !isSelf && tgtLevel === 3;
-  const canInvite = !isSelf && isAdmin;
+  const canDm = !isSelf && !!currentUser;
+  const canSetAdmin = !isSelf && !currentIsDm && myLevel >= 2 && tgtLevel === 0;
+  const canRemoveAdmin = !isSelf && !currentIsDm && myLevel >= 2 && tgtLevel === 1;
+  const canKick = !isSelf && !currentIsDm && myLevel >= 1 && myLevel > tgtLevel;
+  const canInvite = !isSelf && !currentIsDm && isAdmin;
+  document.getElementById('card-dm-btn').style.display = canDm ? '' : 'none';
   document.getElementById('card-set-admin-btn').style.display = canSetAdmin ? '' : 'none';
   document.getElementById('card-remove-admin-btn').style.display = canRemoveAdmin ? '' : 'none';
   document.getElementById('card-kick-btn').style.display = canKick ? '' : 'none';
-  document.getElementById('card-set-super-btn').style.display = canSetSuper ? '' : 'none';
-  document.getElementById('card-revoke-super-btn').style.display = canRevokeSuper ? '' : 'none';
   document.getElementById('card-invite-btn').style.display = canInvite ? '' : 'none';
-  document.getElementById('card-actions').style.display = (canSetAdmin || canRemoveAdmin || canKick || canSetSuper || canRevokeSuper || canInvite) ? 'flex' : 'none';
+  document.getElementById('card-actions').style.display = (canDm || canSetAdmin || canRemoveAdmin || canKick || canInvite) ? 'flex' : 'none';
   const showVolume = inVoice && username !== currentUser?.username && !!audioElements[username];
   document.getElementById('card-voice-volume').style.display = showVolume ? '' : 'none';
   if (showVolume) {
@@ -1330,7 +1479,7 @@ function addRoomToList(room, hasPassword, code) {
   const div = document.createElement('div');
   div.className = 'room-item';
   div.id = 'room-' + room;
-  div.innerHTML = `<span class="room-name-label"># ${room}${hasPassword ? ' 🔒' : ''}</span>`;
+  div.innerHTML = `<span class="room-icon">${GROUP_SVG}</span><span class="room-name-label">${room}</span>${hasPassword ? '<span class="room-lock">🔒</span>' : ''}`;
   div.onclick = () => joinRoom(room);
   list.appendChild(div);
 }
@@ -1364,6 +1513,13 @@ socket.on('leave_room_result', function(data) {
 
 function joinRoom(room) {
   if (!currentUser) { openAuth(); return; }
+  // 从 DM 切回普通房间时，恢复语音和成员区域
+  currentIsDm = false;
+  document.getElementById('voice-section').style.display = '';
+  document.getElementById('members-divider').style.display = '';
+  document.getElementById('sidebar-members-title').style.display = '';
+  const titleEl = document.getElementById('chat-title');
+  if (titleEl) titleEl.onclick = openRoomCard;
   pendingJoinRoom = room;
   if (roomHasPassword[room]) {
     const saved = savedRoomPasswords[room];
@@ -1382,7 +1538,9 @@ function _submitJoin(room, password, isReconnect = false) {
   document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
   const el = document.getElementById('room-' + room);
   if (el) el.classList.add('active');
-  document.getElementById('chat-title').textContent = '# ' + room + '  ▾';
+  _setChatTitle(room);
+  const mt = document.getElementById('mobile-room-title');
+  if (mt) mt.textContent = '# ' + room;
   document.getElementById('no-room').style.display = 'none';
   document.getElementById('chat-main').style.display = 'flex';
   document.getElementById('chat-main').style.flexDirection = 'column';
@@ -1438,11 +1596,9 @@ socket.on('join_result', function(data) {
   }
   isMod = data.is_admin || false;
   isOwner = data.is_owner || false;
-  isAdmin = isMod || isOwner || (currentUser && currentUser.is_super_admin);
+  isAdmin = isMod || isOwner || (currentUser?.username === 'admin');
   if (data.code && data.room) roomCodes[data.room] = data.code;
-  const title = document.getElementById('chat-title');
-  title.style.cursor = 'pointer';
-  title.title = '点击查看房间信息';
+  _setChatTitle(currentRoom);
   if (data.members && data.room) {
     memberCache[data.room] = data.members;
     renderMembers(data.members);
@@ -1466,23 +1622,54 @@ function appendMessage(data, cache = true) {
 
   const div = document.getElementById('messages');
   const msg = document.createElement('div');
-  msg.className = 'msg' + (data.system ? ' system' : (currentUser && data.username === currentUser.username ? ' mine' : ' other'));
 
   if (data.system) {
-    msg.textContent = data.text;
+    msg.className = 'msg system';
+    const t = document.createElement('span');
+    t.className = 'msg-sys-text';
+    t.textContent = data.text;
+    msg.appendChild(t);
   } else {
-    const sender = document.createElement('div');
-    sender.className = 'sender';
-    sender.textContent = data.screenname;
-    sender.onclick = () => openMemberCard(data.username);
-    msg.appendChild(sender);
+    // 时间戳分隔线
+    const lastSep = div.dataset.lastSepTime;
+    const tsLabel = formatMsgTime(data.time);
+    if (tsLabel && tsLabel !== lastSep) {
+      const sep = document.createElement('div');
+      sep.className = 'msg-separator';
+      sep.textContent = tsLabel;
+      div.appendChild(sep);
+      div.dataset.lastSepTime = tsLabel;
+    }
+
+    const isOwn = currentUser && data.username === currentUser.username;
+    msg.className = 'msg' + (isOwn ? ' own' : '');
+    const av = getAvatarData(data.username);
+
+    const avDiv = document.createElement('div');
+    avDiv.className = 'msg-av';
+    avDiv.innerHTML = avatarHTML(av.expression, av.color, 32);
+    avDiv.style.cursor = 'pointer';
+    avDiv.onclick = () => openMemberCard(data.username);
+    msg.appendChild(avDiv);
+
+    const body = document.createElement('div');
+    body.className = 'msg-body';
+    if (!isOwn) {
+      const name = document.createElement('span');
+      name.className = 'msg-name';
+      name.style.color = av.color;
+      name.textContent = data.screenname;
+      name.onclick = () => openMemberCard(data.username);
+      body.appendChild(name);
+    }
+    const bubble = document.createElement('div');
+    bubble.className = 'msg-bubble';
     const text = document.createElement('div');
+    text.className = 'msg-text';
     text.textContent = data.text;
-    msg.appendChild(text);
-    const time = document.createElement('div');
-    time.style.cssText = 'font-size:0.7rem; opacity:0.6; margin-top:4px; text-align:right;';
-    time.textContent = formatMsgTime(data.time);
-    msg.appendChild(time);
+    bubble.appendChild(text);
+    body.appendChild(bubble);
+    msg.appendChild(body);
   }
 
   div.appendChild(msg);
@@ -1551,19 +1738,6 @@ function setCardStreamVolume(val) {
   if (audio) audio.volume = parseInt(val) / 100;
 }
 
-function doCardSetSuper(promote) {
-  if (!cardTargetUsername) return;
-  const label = document.getElementById('card-screenname').textContent;
-  const msg = promote ? `确定将「${label}」设为超级管理员？` : `确定撤销「${label}」的超级管理员权限？`;
-  if (!confirm(msg)) return;
-  socket.emit('set_super_admin', { requester: currentUser.username, target: cardTargetUsername, promote });
-}
-
-socket.on('set_super_admin_result', function(data) {
-  if (!data.success) { alert(data.msg); return; }
-  closeModal('member-card-modal');
-});
-
 socket.on('kicked_from_room', function(data) {
   if (data.room !== currentRoom) return;
   currentRoom = null;
@@ -1579,7 +1753,7 @@ function openRoomCard() {
   if (!currentRoom) return;
   document.getElementById('room-card-title').textContent = '# ' + currentRoom;
   document.getElementById('room-card-code').textContent = roomCodes[currentRoom] || '——';
-  const canManage = isOwner || (currentUser && currentUser.is_super_admin);
+  const canManage = isOwner || (currentUser?.username === 'admin');
   if (canManage) {
     document.getElementById('room-pw-toggle-btn').textContent = roomHasPassword[currentRoom] ? t('room-pw-toggle-remove') : t('room-pw-toggle-set');
     document.getElementById('room-pw-set-area').style.display = 'none';
@@ -1625,7 +1799,7 @@ socket.on('set_room_password_result', function(data) {
 socket.on('room_password_changed', function(data) {
   roomHasPassword[data.room] = data.has_password;
   const el = document.getElementById('room-' + data.room);
-  if (el) el.innerHTML = `# ${data.room}${data.has_password ? '<span style="float:right">🔒</span>' : ''}`;
+  if (el) el.innerHTML = `<span class="room-icon">${GROUP_SVG}</span><span class="room-name-label">${data.room}</span>${data.has_password ? '<span class="room-lock">🔒</span>' : ''}`;
   if (!data.has_password) {
     delete savedRoomPasswords[data.room];
     localStorage.setItem('roomPasswords', JSON.stringify(savedRoomPasswords));
@@ -1781,12 +1955,11 @@ async function joinVoice() {
     detectSpeaking(analyser);
     
     inVoice = true;
-    document.getElementById('voice-join-btn').textContent = t('voice-leave');
-    document.getElementById('voice-join-btn').classList.add('in-voice');
-    document.getElementById('voice-controls').classList.add('show');
-    const vs = document.getElementById('voice-status');
-    vs.textContent = t('voice-status-in').replace('#{room}', currentRoom);
-    vs.style.display = '';
+    document.getElementById('voice-join-btn').style.display = 'none';
+    document.getElementById('voice-in-controls').classList.add('show');
+    document.getElementById('voice-vol-controls').style.display = '';
+    document.getElementById('stream-audio-btn').classList.add('show-ctrl');
+    document.getElementById('live-btn').classList.add('show-ctrl');
 
     // iOS Safari 切后台时可能强制停止麦克风轨道，检测到后更新UI提示重连
     dest.stream.getTracks().forEach(track => {
@@ -1800,8 +1973,9 @@ async function joinVoice() {
       };
     });
 
-    addVoiceMember(currentUser.username, currentUser.screenname);
-    socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom });
+    const myAv = getAvatarData(currentUser.username);
+    addVoiceMember(currentUser.username, currentUser.screenname, myAv.expression, myAv.color);
+    socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom, avatar_expression: myAv.expression, avatar_color: myAv.color });
   } catch (e) {
     alert('无法访问麦克风：' + e.message);
   }
@@ -1831,14 +2005,13 @@ function leaveVoice() {
   inVoice = false;
   isMuted = false;
   isSpeakerMuted = false;
-  document.getElementById('voice-join-btn').textContent = t('voice-join');
-  document.getElementById('voice-join-btn').classList.remove('in-voice');
-  document.getElementById('voice-controls').classList.remove('show');
-  document.getElementById('mic-toggle').textContent = '🎤';
+  document.getElementById('voice-join-btn').style.display = '';
+  document.getElementById('voice-in-controls').classList.remove('show');
+  document.getElementById('voice-vol-controls').style.display = 'none';
+  document.getElementById('stream-audio-btn').classList.remove('show-ctrl');
+  document.getElementById('live-btn').classList.remove('show-ctrl');
   document.getElementById('mic-toggle').classList.remove('muted');
-  document.getElementById('speaker-toggle').textContent = '🔊';
   document.getElementById('speaker-toggle').classList.remove('muted');
-  document.getElementById('voice-status').style.display = 'none';
   
   socket.emit('voice_leave', { username: currentUser.username, room: currentRoom });
 }
@@ -1980,7 +2153,7 @@ socket.on('voice_current_members', async function(data) {
 
 socket.on('voice_user_joined', async function(data) {
   if (data.username === currentUser?.username) return;
-  addVoiceMember(data.username, data.screenname);
+  addVoiceMember(data.username, data.screenname, data.avatar_expression, data.avatar_color);
 });
 
 socket.on('voice_offer', async function(data) {
@@ -2044,22 +2217,29 @@ function canBanUser(username) {
   return myLevel >= 1 && myLevel > tgtLevel;
 }
 
-function addVoiceMember(username, screenname) {
+function addVoiceMember(username, screenname, avatarExpression, avatarColor) {
   voiceScreennames[username] = screenname || username;
+  if (avatarExpression || avatarColor) {
+    userAvatarCache[username] = { expression: avatarExpression || 'Smile', color: avatarColor || defaultAvatarColor(username) };
+  }
   const list = document.getElementById('voice-members-list');
   if (document.getElementById('vm-' + username)) return;
   const display = screenname || username;
-  const badge = memberSuperAdmins.has(username) ? '⭐ ' : (username === memberOwner ? '👑 ' : (memberAdmins.has(username) ? '🛡 ' : ''));
   const div = document.createElement('div');
   div.className = 'voice-member';
   div.id = 'vm-' + username;
+  const av = getAvatarData(username);
   const banBtn = canBanUser(username)
     ? (voiceBanned.has(username)
         ? `<button class="voice-btn" style="font-size:0.7rem;" onclick="unbanVoice('${username}')">解除禁言</button>`
         : `<button class="voice-btn" style="font-size:0.7rem;" onclick="banVoice('${username}')">禁言</button>`)
     : '';
-  div.innerHTML = `<span class="voice-icon">🎤</span><span style="cursor:pointer;flex:1" onclick="openMemberCard('${username}')">${badge}${display}</span>${banBtn}`;
+  div.innerHTML = avatarHTML(av.expression, av.color, 24) +
+    `<span class="voice-icon">🎤</span>` +
+    `<span style="cursor:pointer;flex:1;font-size:0.85rem;" onclick="openMemberCard('${username}')">${display}</span>` +
+    banBtn;
   list.appendChild(div);
+  updateVoiceCount();
 }
 
 function removeVoiceMember(username) {
@@ -2067,6 +2247,7 @@ function removeVoiceMember(username) {
   if (el) el.remove();
   removeStreamCard(username);
   delete voiceScreennames[username];
+  updateVoiceCount();
 }
 
 // ── 语音：说话检测 ────────────────────────────────────────
@@ -2116,9 +2297,7 @@ function setSpeakerVolume(val) {
 function toggleMute() {
   isMuted = !isMuted;
   if (localStream) localStream.getTracks().forEach(t => t.enabled = !isMuted);
-  const btn = document.getElementById('mic-toggle');
-  btn.textContent = isMuted ? '🔇' : '🎤';
-  btn.classList.toggle('muted', isMuted);
+  document.getElementById('mic-toggle').classList.toggle('muted', isMuted);
   socket.emit('voice_mute_status', { room: currentRoom, username: currentUser.username, muted: isMuted });
 }
 
@@ -2132,7 +2311,6 @@ function toggleSpeaker() {
     _preSpeakerVol = parseFloat(document.getElementById('speaker-volume').value);
     Object.values(audioElements).forEach(a => { if (a) a.muted = true; });
     Object.values(streamAudioElements).forEach(a => { if (a) a.muted = true; });
-    btn.textContent = '🔕';
     btn.classList.add('muted');
     if (!isMuted) toggleMute();
   } else {
@@ -2140,7 +2318,6 @@ function toggleSpeaker() {
     Object.values(streamAudioElements).forEach(a => { if (a) a.muted = false; });
     document.getElementById('speaker-volume').value = _preSpeakerVol;
     setSpeakerVolume(_preSpeakerVol);
-    btn.textContent = '🔊';
     btn.classList.remove('muted');
     if (isMuted) toggleMute();
   }
@@ -2579,6 +2756,16 @@ socket.on('stream_stop', function(data) {
   if (vmEl) { const ind = vmEl.querySelector('.live-indicator'); if (ind) ind.remove(); }
 });
 
+// 浏览器关闭时通知服务端离开语音
+window.addEventListener('pagehide', () => {
+  if (inVoice && currentRoom && currentUser && navigator.sendBeacon) {
+    navigator.sendBeacon('/api/voice-leave', JSON.stringify({
+      username: currentUser.username,
+      room: currentRoom
+    }));
+  }
+});
+
 // ── 手机边缘滑动手势 ──────────────────────────────────────
 (function() {
   const EDGE = 28;       // 触发区域宽度 px（距屏幕边缘）
@@ -2633,6 +2820,265 @@ function closeAllSidebars() {
   document.getElementById('members-sidebar').classList.remove('mobile-open');
   document.getElementById('sidebar-overlay').classList.remove('show');
 }
+
+// ── 头像系统 ──────────────────────────────────────────────
+
+function defaultAvatarColor(username) {
+  let h = 0;
+  for (const c of (username || '')) h = (h * 31 + c.charCodeAt(0)) & 0x7fffffff;
+  return AVATAR_COLORS[h % AVATAR_COLORS.length];
+}
+
+function getAvatarData(username) {
+  return userAvatarCache[username] || { expression: 'Smile', color: defaultAvatarColor(username) };
+}
+
+function avatarHTML(expression, color, size) {
+  size = size || 32;
+  const baseSvg = AVATAR_SVGS[expression] || AVATAR_SVGS.Smile;
+  const svgW = Math.round(size * 0.62);
+  const svgH = Math.round(svgW * 15 / 14);
+  const svg = baseSvg
+    .replace(/width="\d+"/, `width="${svgW}"`)
+    .replace(/height="\d+"/, `height="${svgH}"`);
+  return `<div class="av" style="width:${size}px;height:${size}px;background:${color || '#5865F2'}">${svg}</div>`;
+}
+
+// ── Plus 菜单 ────────────────────────────────────────────
+function togglePlusMenu() {
+  const dd = document.getElementById('plus-dropdown');
+  dd.style.display = dd.style.display === 'none' ? '' : 'none';
+}
+function closePlusMenu() {
+  const dd = document.getElementById('plus-dropdown');
+  if (dd) dd.style.display = 'none';
+}
+document.addEventListener('click', function(e) {
+  const btn = document.getElementById('plus-btn');
+  const dd = document.getElementById('plus-dropdown');
+  if (btn && dd && !btn.contains(e.target) && !dd.contains(e.target)) dd.style.display = 'none';
+});
+
+// ── 更新侧栏头像 ─────────────────────────────────────────
+function updateSidebarAvatar() {
+  const wrap = document.getElementById('topbar-user-avatar');
+  const nameEl = document.getElementById('topbar-name');
+  const logoutBtn = document.getElementById('logout-btn');
+  const loginBtn = document.getElementById('login-open-btn');
+  if (!wrap) return;
+  if (!currentUser) {
+    wrap.innerHTML = ''; wrap.style.display = 'none';
+    if (nameEl) { nameEl.textContent = ''; nameEl.style.display = 'none'; }
+    if (logoutBtn) logoutBtn.style.display = 'none';
+    if (loginBtn) loginBtn.style.display = '';
+    return;
+  }
+  const av = getAvatarData(currentUser.username);
+  wrap.innerHTML = avatarHTML(av.expression, av.color, 30);
+  wrap.style.display = 'flex';
+  if (nameEl) { nameEl.textContent = currentUser.screenname; nameEl.style.display = 'inline'; }
+  if (logoutBtn) logoutBtn.style.display = 'flex';
+  if (loginBtn) loginBtn.style.display = 'none';
+}
+
+const _INFO_SVG = `<svg width="13" height="12" viewBox="0 0 15 14" fill="none" style="opacity:0.45;flex-shrink:0"><path d="M7.99996 9.33332V6.99999M7.99996 4.66666H8.00579M13.8333 6.99999C13.8333 10.2217 11.2216 12.8333 7.99996 12.8333C4.7783 12.8333 2.16663 10.2217 2.16663 6.99999C2.16663 3.77833 4.7783 1.16666 7.99996 1.16666C11.2216 1.16666 13.8333 3.77833 13.8333 6.99999Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+
+function _setChatTitle(room) {
+  const el = document.getElementById('chat-title');
+  if (!el || !room) return;
+  el.title = t('room-info-title');
+  el.innerHTML = groupSVG(18, 14) + `<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${room}</span>` + _INFO_SVG;
+}
+
+function updateVoiceCount() {
+  const list = document.getElementById('voice-members-list');
+  const count = list ? list.children.length : 0;
+  const title = document.getElementById('voice-section-title');
+  const base = t('voice-chat-title');
+  if (title) title.textContent = count > 0 ? `${base} (${count})` : base;
+}
+
+function updateMembersCount() {
+  const list = document.getElementById('member-list');
+  const count = list ? list.children.length : 0;
+  const title = document.getElementById('sidebar-members-title');
+  const base = t('sidebar-members-title');
+  if (title) title.textContent = count > 0 ? `${base} (${count})` : base;
+}
+
+// ── 头像选择器 ───────────────────────────────────────────
+let selectedAvatarExpression = 'Smile';
+let selectedAvatarColor = '#5865F2';
+
+function initAvatarPicker(expression, color) {
+  selectedAvatarExpression = expression || 'Smile';
+  selectedAvatarColor = color || '#5865F2';
+
+  const exprRow = document.getElementById('av-expr-row');
+  const colorRow = document.getElementById('av-color-row');
+  const preview = document.getElementById('profile-avatar-preview');
+  if (!exprRow || !colorRow) return;
+
+  exprRow.innerHTML = '';
+  AVATAR_EXPRESSIONS.forEach(expr => {
+    const d = document.createElement('div');
+    d.className = 'av-expr-opt' + (expr === selectedAvatarExpression ? ' sel' : '');
+    d.style.background = selectedAvatarColor;
+    d.innerHTML = AVATAR_SVGS[expr] || '';
+    d.onclick = () => {
+      selectedAvatarExpression = expr;
+      document.querySelectorAll('.av-expr-opt').forEach(el => {
+        el.classList.toggle('sel', el.dataset.expr === expr);
+      });
+      refreshAvatarPickerPreview();
+    };
+    d.dataset.expr = expr;
+    exprRow.appendChild(d);
+  });
+
+  colorRow.innerHTML = '';
+  AVATAR_COLORS.forEach(c => {
+    const d = document.createElement('div');
+    d.className = 'av-color-opt' + (c === selectedAvatarColor ? ' sel' : '');
+    d.style.background = c;
+    d.onclick = () => {
+      selectedAvatarColor = c;
+      document.querySelectorAll('.av-color-opt').forEach(el => el.classList.toggle('sel', el.dataset.color === c));
+      document.querySelectorAll('.av-expr-opt').forEach(el => el.style.background = c);
+      refreshAvatarPickerPreview();
+    };
+    d.dataset.color = c;
+    colorRow.appendChild(d);
+  });
+
+  refreshAvatarPickerPreview();
+}
+
+function refreshAvatarPickerPreview() {
+  const preview = document.getElementById('profile-avatar-preview');
+  if (preview) preview.innerHTML = avatarHTML(selectedAvatarExpression, selectedAvatarColor, 80);
+}
+
+// ── 私聊 (DM) ─────────────────────────────────────────────
+const openDms = {}; // { dm_room: { otherUsername, otherScreenname } }
+
+function getDmRoom(u1, u2) {
+  const sorted = [u1, u2].sort();
+  return `dm:${sorted[0]}:${sorted[1]}`;
+}
+
+function getDmOtherUser(dmRoom) {
+  if (!currentUser) return '';
+  const parts = dmRoom.split(':');
+  return parts[1] === currentUser.username ? parts[2] : parts[1];
+}
+
+function addDmToList(dmRoom, otherUsername, otherScreenname, avatarExpr, avatarColor) {
+  if (document.getElementById('dm-item-' + otherUsername)) return;
+  openDms[dmRoom] = { otherUsername, otherScreenname };
+  if (avatarExpr || avatarColor) {
+    userAvatarCache[otherUsername] = { expression: avatarExpr || 'Smile', color: avatarColor || defaultAvatarColor(otherUsername) };
+  }
+  const list = document.getElementById('room-list');
+  const div = document.createElement('div');
+  div.className = 'room-item';
+  div.id = 'dm-item-' + otherUsername;
+  const av = getAvatarData(otherUsername);
+  div.innerHTML = `<span class="room-icon">${avatarHTML(av.expression, av.color, 24)}</span><span class="room-name-label">${otherScreenname}</span>`;
+  div.onclick = () => joinDm(dmRoom);
+  list.appendChild(div);
+}
+
+function joinDm(dmRoom) {
+  if (!currentUser) { openAuth(); return; }
+  const otherUsername = getDmOtherUser(dmRoom);
+  const info = openDms[dmRoom] || {};
+  const otherScreenname = info.otherScreenname || otherUsername;
+
+  currentRoom = dmRoom;
+  currentIsDm = true;
+  isAdmin = false; isOwner = false; isMod = false;
+
+  document.querySelectorAll('.room-item').forEach(el => el.classList.remove('active'));
+  const dmEl = document.getElementById('dm-item-' + otherUsername);
+  if (dmEl) dmEl.classList.add('active');
+
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('voice-members-list').innerHTML = '';
+  voiceBanned.clear();
+  document.getElementById('no-room').style.display = 'none';
+  document.getElementById('chat-main').style.display = 'flex';
+  document.getElementById('chat-main').style.flexDirection = 'column';
+
+  // 设置 DM 标题
+  const titleEl = document.getElementById('chat-title');
+  if (titleEl) {
+    const av = getAvatarData(otherUsername);
+    titleEl.innerHTML = `<span class="room-icon" style="margin-right:4px">${avatarHTML(av.expression, av.color, 18)}</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${otherScreenname}</span>`;
+    titleEl.title = '';
+    titleEl.onclick = null; // DM 不显示房间卡片
+  }
+  const mt = document.getElementById('mobile-room-title');
+  if (mt) mt.textContent = otherScreenname;
+
+  // 隐藏语音区域，清空成员列表
+  document.getElementById('voice-section').style.display = 'none';
+  document.getElementById('members-divider').style.display = 'none';
+  document.getElementById('sidebar-members-title').style.display = 'none';
+  document.getElementById('member-list').innerHTML = '';
+
+  // 显示缓存消息
+  (roomMessages[dmRoom] || []).forEach(msg => appendMessage(msg, false));
+  const since = roomLastTs[dmRoom] || null;
+  socket.emit('join_dm', { username: currentUser.username, dm_room: dmRoom, since });
+
+  closeAllSidebars();
+}
+
+function openDm(username) {
+  if (!currentUser) { openAuth(); return; }
+  if (!username || username === currentUser.username) return;
+  const screenname = document.getElementById('card-screenname')?.textContent || username;
+  const av = getAvatarData(username);
+  closeModal('member-card-modal');
+  const dmRoom = getDmRoom(currentUser.username, username);
+  addDmToList(dmRoom, username, screenname, av.expression, av.color);
+  joinDm(dmRoom);
+}
+
+socket.on('dms_list', function(data) {
+  data.dms.forEach(dm => {
+    addDmToList(dm.dm_room, dm.other_username, dm.other_screenname, dm.avatar_expression, dm.avatar_color);
+  });
+});
+
+socket.on('join_dm_result', function(data) {
+  // 历史消息已通过 message 事件逐条发出，无需额外处理
+});
+
+socket.on('new_dm_notification', function(data) {
+  if (!currentUser) return;
+  const dmRoom = data.dm_room;
+  const otherUsername = getDmOtherUser(dmRoom);
+  if (!document.getElementById('dm-item-' + otherUsername)) {
+    const av = getAvatarData(otherUsername);
+    addDmToList(dmRoom, otherUsername, data.from_screenname || otherUsername, av.expression, av.color);
+    // 订阅该 DM 房间以接收后续消息
+    socket.emit('join_dm', { username: currentUser.username, dm_room: dmRoom, since: null });
+  }
+});
+
+// ── 房间列表：加入Group图标 ──────────────────────────────
+socket.on('save_avatar_result', function(data) {
+  if (!data.success) return;
+  currentUser.avatar_expression = data.expression;
+  currentUser.avatar_color = data.color;
+  localStorage.setItem('currentUser', JSON.stringify(currentUser));
+  userAvatarCache[currentUser.username] = { expression: data.expression, color: data.color };
+  updateSidebarAvatar();
+  const s = document.getElementById('profile-success');
+  if (s) s.textContent = '保存成功！';
+});
 
 </script>
 </body>
