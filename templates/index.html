@@ -3021,8 +3021,7 @@ function joinDm(dmRoom) {
   const mt = document.getElementById('mobile-room-title');
   if (mt) mt.textContent = otherScreenname;
 
-  // 隐藏语音区域，清空成员列表
-  document.getElementById('voice-section').style.display = 'none';
+  // 隐藏成员列表（DM 不需要），语音区域保留
   document.getElementById('members-divider').style.display = 'none';
   document.getElementById('sidebar-members-title').style.display = 'none';
   document.getElementById('member-list').innerHTML = '';
