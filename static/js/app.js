@@ -1032,6 +1032,7 @@ function mobileShowList() {
   if (!isMobile()) return;
   document.body.classList.remove('in-chat');
   document.getElementById('members-sidebar').classList.remove('mobile-open');
+  document.getElementById('members-backdrop').classList.remove('active');
   const _ca = document.getElementById('chat-area');
   _ca.style.bottom = ''; _ca.style.transition = '';
   document.getElementById('sidebar').classList.remove('mobile-hidden');
@@ -1867,12 +1868,12 @@ function addVoiceMember(username, screenname, avatarExpression, avatarColor) {
     : '';
   div.innerHTML = avatarHTML(av.expression, av.color, 24) +
     `<span class="voice-icon">🎤</span>` +
-    `<span style="cursor:pointer;flex:1;font-size:0.85rem;" onclick="openMemberCard('${username}')">${display}</span>` +
+    `<span class="vm-name" style="cursor:pointer;flex:1;font-size:0.85rem;" onclick="openMemberCard('${username}')">${display}</span>` +
     banBtn;
   list.appendChild(div);
   voiceMembers.add(username);
   if (activeStreamers[username]) {
-    const nameSpan = div.querySelector('span:nth-child(3)');
+    const nameSpan = div.querySelector('.vm-name');
     if (nameSpan && !nameSpan.querySelector('.live-indicator'))
       nameSpan.insertAdjacentHTML('beforeend',
         `<span class="live-indicator" onclick="event.stopPropagation();watchStream('${username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
@@ -2088,7 +2089,7 @@ function stopStreamAudio(silent) {
 function showStreamVolControl(username) {
   const vmEl = document.getElementById('vm-' + username);
   if (!vmEl || document.getElementById('sva-' + username)) return;
-  const nameSpan = vmEl.querySelector('span:nth-child(2)');
+  const nameSpan = vmEl.querySelector('.vm-name');
   if (nameSpan && !nameSpan.querySelector('.stream-indicator')) {
     nameSpan.insertAdjacentHTML('beforeend', '<span class="stream-indicator"> 🖥</span>');
   }
@@ -2120,7 +2121,7 @@ function setStreamVol(username, val) {
 socket.on('stream_audio_start', function(data) {
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl && !vmEl.querySelector('.stream-indicator')) {
-    const nameSpan = vmEl.querySelector('span:nth-child(2)');
+    const nameSpan = vmEl.querySelector('.vm-name');
     if (nameSpan) nameSpan.insertAdjacentHTML('beforeend', '<span class="stream-indicator"> 🖥</span>');
   }
 });
@@ -2437,7 +2438,7 @@ socket.on('stream_start', function(data) {
   activeStreamers[data.username] = data.screenname || data.username;
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl && !vmEl.querySelector('.live-indicator')) {
-    const nameSpan = vmEl.querySelector('span:nth-child(3)');
+    const nameSpan = vmEl.querySelector('.vm-name');
     if (nameSpan) nameSpan.insertAdjacentHTML('beforeend',
       `<span class="live-indicator" onclick="event.stopPropagation();watchStream('${data.username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
     );
@@ -2508,6 +2509,12 @@ function toggleMembersBar() {
   document.getElementById('sidebar').classList.remove('mobile-open');
   membersBar.classList.toggle('mobile-open', !isOpen);
   document.getElementById('sidebar-overlay').classList.toggle('show', !isOpen);
+  if (isMobile()) document.getElementById('members-backdrop').classList.toggle('active', !isOpen);
+}
+
+function closeMembersBar() {
+  document.getElementById('members-sidebar').classList.remove('mobile-open');
+  document.getElementById('members-backdrop').classList.remove('active');
 }
 
 function closeAllSidebars() {

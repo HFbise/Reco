@@ -267,6 +267,10 @@
       #tab-me-icon { width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; }
       #tab-me-icon .av { width: 26px !important; height: 26px !important; }
 
+      /* 成员栏遮罩 */
+      #members-backdrop { display: none; position: fixed; inset: 0; z-index: 49; background: rgba(0,0,0,0.25); }
+      #members-backdrop.active { display: block; }
+
       /* 隐藏 sidebar 里的"聊天室"标签和加号（手机端 topbar 已有加号） */
       #sidebar-header { display: none; }
 
