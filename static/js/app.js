@@ -224,6 +224,7 @@ let displayStream = null;
 let isStreamingAudio = false;
 let isStreaming = false;
 let streamAudioTrack = null;
+let streamQuality = { width: 1280, height: 720, frameRate: 15, bitrate: 1_500_000 };
 const streamAudioElements = {}; // { username: HTMLAudioElement } — 对方的共享音频
 const streamVideos = {};        // { username: HTMLVideoElement }
 const voiceScreennames = {};    // { username: screenname }
@@ -304,7 +305,7 @@ if (savedUser) {
 // 不支持 getDisplayMedia 的设备（如 iOS）隐藏直播/共享音频按钮
 if (!navigator.mediaDevices?.getDisplayMedia) {
   document.getElementById('stream-audio-btn').style.display = 'none';
-  document.getElementById('live-btn').style.display = 'none';
+  document.getElementById('live-btn-row').style.display = 'none';
 }
 
 // 启动时获取房间列表
@@ -1579,7 +1580,7 @@ async function joinVoice() {
     document.getElementById('voice-in-controls').classList.add('show');
     document.getElementById('voice-vol-controls').style.display = '';
     document.getElementById('stream-audio-btn').classList.add('show-ctrl');
-    document.getElementById('live-btn').classList.add('show-ctrl');
+    document.getElementById('live-btn-row').classList.add('show-ctrl');
 
     // iOS Safari 切后台时可能强制停止麦克风轨道，检测到后更新UI提示重连
     dest.stream.getTracks().forEach(track => {
@@ -1636,7 +1637,9 @@ function leaveVoice() {
   document.getElementById('voice-in-controls').classList.remove('show');
   document.getElementById('voice-vol-controls').style.display = 'none';
   document.getElementById('stream-audio-btn').classList.remove('show-ctrl');
-  document.getElementById('live-btn').classList.remove('show-ctrl');
+  document.getElementById('live-btn-row').classList.remove('show-ctrl');
+  document.getElementById('stream-settings').style.display = 'none';
+  document.getElementById('stream-settings-btn').classList.remove('active');
   document.getElementById('mic-toggle').classList.remove('muted');
   document.getElementById('speaker-toggle').classList.remove('muted');
   
@@ -2128,7 +2131,10 @@ async function startStream() {
   if (isStreamingAudio) stopStreamAudio(false);
   let stream;
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+    stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: { ideal: streamQuality.frameRate, max: streamQuality.frameRate }, width: { ideal: streamQuality.width }, height: { ideal: streamQuality.height } },
+      audio: true
+    });
   } catch(e) {
     if (e.name !== 'NotAllowedError') alert('无法捕获屏幕：' + e.message);
     return;
@@ -2147,7 +2153,13 @@ async function startStream() {
   document.getElementById('live-btn').textContent = t('stop-live');
   document.getElementById('live-btn').classList.add('active');
   for (const [, pc] of Object.entries(peerConnections)) {
-    try { pc.addTrack(videoTrack, stream); } catch(e) {}
+    try {
+      const sender = pc.addTrack(videoTrack, stream);
+      const params = sender.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].maxBitrate = streamQuality.bitrate;
+      sender.setParameters(params).catch(() => {});
+    } catch(e) {}
     if (streamAudioTrack) try { pc.addTrack(streamAudioTrack, stream); } catch(e) {}
   }
   socket.emit('stream_start', { room: currentRoom, username: currentUser.username, screenname: currentUser.screenname });
@@ -2170,6 +2182,22 @@ function stopStream(silent) {
   const btn = document.getElementById('live-btn');
   if (btn) { btn.textContent = t('live'); btn.classList.remove('active'); }
   if (!silent) socket.emit('stream_stop', { room: currentRoom, username: currentUser.username });
+}
+
+function toggleStreamSettings() {
+  const panel = document.getElementById('stream-settings');
+  const btn = document.getElementById('stream-settings-btn');
+  const open = panel.style.display === 'none' || panel.style.display === '';
+  panel.style.display = open ? 'block' : 'none';
+  btn.classList.toggle('active', open);
+}
+
+function updateStreamQuality() {
+  const res = parseInt(document.getElementById('stream-res').value);
+  const fps = parseInt(document.getElementById('stream-fps').value);
+  const bitrate = parseInt(document.getElementById('stream-bitrate').value);
+  const widths = { 480: 854, 720: 1280, 1080: 1920 };
+  streamQuality = { width: widths[res] || 1280, height: res, frameRate: fps, bitrate };
 }
 
 // ── 直播面板 UI ───────────────────────────────────────────

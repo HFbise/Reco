@@ -158,9 +158,20 @@
     .voice-vol-row input[type=range] { flex: 1; min-width: 0; }
     #stream-audio-btn { display: none; width: 100%; padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.79rem; background: #4f5660; color: white; margin-top: 3px; text-align: left; }
     #stream-audio-btn.active { background: #ed4245; }
-    #live-btn { display: none; width: 100%; padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.79rem; background: #9b59b6; color: white; margin-top: 3px; text-align: left; }
+    #live-btn-row { display: none; align-items: center; gap: 4px; margin-top: 3px; }
+    #live-btn-row.show-ctrl { display: flex; }
+    #live-btn { flex: 1; padding: 5px 8px; border: none; border-radius: 5px; cursor: pointer; font-size: 0.79rem; background: #9b59b6; color: white; text-align: left; }
     #live-btn.active { background: #ed4245; }
-    #stream-audio-btn.show-ctrl, #live-btn.show-ctrl { display: block; }
+    #stream-settings-btn { flex-shrink: 0; padding: 5px 7px; border: none; border-radius: 5px; cursor: pointer; background: rgba(128,128,128,0.15); color: inherit; display: flex; align-items: center; }
+    #stream-settings-btn:hover { background: rgba(128,128,128,0.25); }
+    #stream-settings-btn.active { background: rgba(79,142,247,0.2); color: #4f8ef7; }
+    #stream-settings { background: rgba(0,0,0,0.04); border-radius: 7px; padding: 8px 10px; margin-top: 4px; display: none; }
+    body.dark #stream-settings { background: rgba(255,255,255,0.05); }
+    .ss-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; font-size: 0.78rem; }
+    .ss-row:last-child { margin-bottom: 0; }
+    .ss-label { opacity: 0.65; }
+    .ss-row select { font-size: 0.78rem; padding: 2px 4px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.3); background: inherit; color: inherit; cursor: pointer; }
+    #stream-audio-btn.show-ctrl { display: block; }
 
     /* ── Members Section ── */
     #members-divider { height: 1px; background: rgba(0,0,0,0.08); margin: 4px 14px; flex-shrink: 0; }
