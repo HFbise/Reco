@@ -94,6 +94,13 @@ def handle_disconnect():
 def index():
     return render_template('index.html')
 
+@app.route('/sw.js')
+def service_worker():
+    resp = app.send_static_file('sw.js')
+    resp.headers['Service-Worker-Allowed'] = '/'
+    resp.headers['Cache-Control'] = 'no-cache'
+    return resp
+
 TURN_HOST   = '129.153.163.143'
 TURN_PORT   = 3478
 TURN_SECRET = os.environ.get('TURN_SECRET', '')
@@ -189,6 +196,7 @@ def handle_login(data):
             'success': True,
             'username': username,
             'screenname': user['screenname'],
+            'bio': user.get('bio') or '',
             'is_admin': username == SUPER_ADMIN,
             'avatar_expression': user.get('avatar_expression') or 'Smile',
             'avatar_color': user.get('avatar_color') or '#5865F2',
@@ -224,7 +232,7 @@ def handle_update_profile(data):
                     (data['screenname'].strip(), data['bio'].strip(), data['username']))
         conn.commit()
         conn.close()
-        emit('update_profile_result', {'success': True, 'screenname': data['screenname'].strip()})
+        emit('update_profile_result', {'success': True, 'screenname': data['screenname'].strip(), 'bio': data['bio'].strip()})
     except Exception as e:
         emit('update_profile_result', {'success': False, 'msg': str(e)})
 
@@ -413,9 +421,8 @@ def handle_join(data):
         members_data.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
 
         room_code = room_data.get('code') or ''
-        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code})
 
-        # 历史消息
+        # 历史消息（先发，join_result 用作"历史结束"信号）
         skip_history = data.get('skip_history', False)
         since = data.get('since')
         if not skip_history:
@@ -437,6 +444,8 @@ def handle_join(data):
                     'room': room
                 })
         conn.close()
+
+        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code})
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
             emit('voice_members_view', {
@@ -881,6 +890,10 @@ def handle_voice_unban(data):
 @socketio.on('voice_speaking')
 def handle_voice_speaking(data):
     emit('voice_speaking', data, to=data['room'])
+
+@socketio.on('ping_check')
+def handle_ping_check(data):
+    emit('pong_check', data)
 
 # ── 私聊 (DM) ────────────────────────────────────────────
 @socketio.on('get_dms')
