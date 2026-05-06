@@ -45,6 +45,7 @@ def get_level(username, room_data):
 
 # ── 内存状态 ─────────────────────────────────────────────
 rooms_voice = {}
+rooms_stream = {}        # { room: { username: screenname } }
 online_users = {}        # { username: set of sids }
 sid_to_voice = {}        # { sid: (username, room) } — for cleanup on disconnect
 pending_invites = {}     # { room: set(usernames) } — 待接受的邀请，加入时跳过密码验证
@@ -453,6 +454,9 @@ def handle_join(data):
                 'banned': rooms_voice[room].get('voice_banned', [])
             })
 
+        for uname, sname in rooms_stream.get(room, {}).items():
+            emit('stream_start', {'username': uname, 'screenname': sname, 'room': room})
+
     except Exception as e:
         emit('join_result', {'success': False, 'msg': str(e)})
 
@@ -655,12 +659,14 @@ def handle_stream_audio_stop(data):
 def handle_stream_start(data):
     room = data.get('room')
     if room:
+        rooms_stream.setdefault(room, {})[data['username']] = data.get('screenname', data['username'])
         emit('stream_start', data, to=room, include_self=False)
 
 @socketio.on('stream_stop')
 def handle_stream_stop(data):
     room = data.get('room')
     if room:
+        rooms_stream.get(room, {}).pop(data.get('username'), None)
         emit('stream_stop', data, to=room, include_self=False)
 
 @socketio.on('find_room')

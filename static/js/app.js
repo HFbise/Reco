@@ -225,6 +225,7 @@ let isStreamingAudio = false;
 let isStreaming = false;
 let streamAudioTrack = null;
 let streamQuality = { width: 1280, height: 720, frameRate: 15, bitrate: 1_500_000 };
+const activeStreamers = {};  // { username: screenname }
 const streamAudioElements = {}; // { username: HTMLAudioElement } — 对方的共享音频
 const streamVideos = {};        // { username: HTMLVideoElement }
 const voiceScreennames = {};    // { username: screenname }
@@ -1870,6 +1871,13 @@ function addVoiceMember(username, screenname, avatarExpression, avatarColor) {
     banBtn;
   list.appendChild(div);
   voiceMembers.add(username);
+  if (activeStreamers[username]) {
+    const nameSpan = div.querySelector('span:nth-child(3)');
+    if (nameSpan && !nameSpan.querySelector('.live-indicator'))
+      nameSpan.insertAdjacentHTML('beforeend',
+        `<span class="live-indicator" onclick="event.stopPropagation();watchStream('${username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
+      );
+  }
   updateVoiceCount();
 }
 
@@ -2234,6 +2242,8 @@ function addStreamCard(username, screenname) {
 
 function watchStream(username) {
   closeAllSidebars();
+  const rewatch = document.getElementById('stream-rewatch-' + username);
+  if (rewatch) rewatch.remove();
   // 手机端确保聊天区可见
   const chatMain = document.getElementById('chat-main');
   if (chatMain) { chatMain.style.display = 'flex'; chatMain.style.flexDirection = 'column'; }
@@ -2272,19 +2282,27 @@ function watchStream(username) {
 
 function hideStreamCard(username) {
   const card = document.getElementById('stream-card-' + username);
+  const screenname = card?.querySelector('.stream-card-label')?.textContent || username;
   if (card) card.style.display = 'none';
   const floater = document.getElementById('stream-float-' + username);
   if (floater) floater.remove();
-  const visible = document.querySelectorAll('.stream-card:not([style*="display: none"])');
-  if (!visible.length) {
-    document.getElementById('stream-panel').classList.remove('active');
-    document.getElementById('stream-resize-handle').classList.remove('active');
+  // 保留面板并显示重新观看提示
+  if (!document.getElementById('stream-rewatch-' + username)) {
+    const el = document.createElement('div');
+    el.className = 'stream-rewatch';
+    el.id = 'stream-rewatch-' + username;
+    el.innerHTML = `<span>🔴 ${screenname} 正在直播</span><button onclick="watchStream('${username}')">重新观看</button>`;
+    document.getElementById('stream-grid').appendChild(el);
   }
+  document.getElementById('stream-panel').classList.add('active');
+  document.getElementById('stream-resize-handle').classList.add('active');
 }
 
 function removeStreamCard(username) {
   const card = document.getElementById('stream-card-' + username);
   if (card) card.remove();
+  const rewatch = document.getElementById('stream-rewatch-' + username);
+  if (rewatch) rewatch.remove();
   const floater = document.getElementById('stream-float-' + username);
   if (floater) floater.remove();
   if (streamVideos[username]) {
@@ -2416,9 +2434,10 @@ function makeDraggable(el, handle) {
 })();
 
 socket.on('stream_start', function(data) {
+  activeStreamers[data.username] = data.screenname || data.username;
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl && !vmEl.querySelector('.live-indicator')) {
-    const nameSpan = vmEl.querySelector('span:nth-child(2)');
+    const nameSpan = vmEl.querySelector('span:nth-child(3)');
     if (nameSpan) nameSpan.insertAdjacentHTML('beforeend',
       `<span class="live-indicator" onclick="event.stopPropagation();watchStream('${data.username}')" style="font-size:0.7rem;background:#e74c3c;color:white;border-radius:3px;padding:0 4px;margin-left:4px;cursor:pointer;" title="点击观看直播">LIVE</span>`
     );
@@ -2426,6 +2445,7 @@ socket.on('stream_start', function(data) {
 });
 
 socket.on('stream_stop', function(data) {
+  delete activeStreamers[data.username];
   removeStreamCard(data.username);
   const vmEl = document.getElementById('vm-' + data.username);
   if (vmEl) { const ind = vmEl.querySelector('.live-indicator'); if (ind) ind.remove(); }

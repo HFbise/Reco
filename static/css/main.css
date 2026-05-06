@@ -170,6 +170,10 @@
     .ss-row select { font-size: 0.78rem; padding: 2px 4px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.3); background: inherit; color: inherit; cursor: pointer; }
     #stream-audio-btn.show-ctrl { display: block; }
 
+    .stream-rewatch { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; background: rgba(231,76,60,0.08); border-radius: 7px; margin: 4px; font-size: 0.82rem; }
+    .stream-rewatch button { padding: 3px 10px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 0.78rem; white-space: nowrap; }
+    .stream-rewatch button:hover { background: #c0392b; }
+
     /* ── Members Section ── */
     #members-divider { height: 1px; background: rgba(0,0,0,0.08); margin: 4px 14px; flex-shrink: 0; }
     body.dark #members-divider { background: rgba(255,255,255,0.08); }
