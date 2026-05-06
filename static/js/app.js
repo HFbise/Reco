@@ -2152,6 +2152,8 @@ async function startStream() {
   if (streamAudioTrack) isStreamingAudio = true;
   document.getElementById('live-btn').textContent = t('stop-live');
   document.getElementById('live-btn').classList.add('active');
+  document.getElementById('stream-audio-btn').style.display = 'none';
+  document.getElementById('stream-settings').style.display = 'block';
   for (const [, pc] of Object.entries(peerConnections)) {
     try {
       const sender = pc.addTrack(videoTrack, stream);
@@ -2181,6 +2183,9 @@ function stopStream(silent) {
   isStreamingAudio = false;
   const btn = document.getElementById('live-btn');
   if (btn) { btn.textContent = t('live'); btn.classList.remove('active'); }
+  document.getElementById('stream-settings').style.display = 'none';
+  if (document.getElementById('stream-audio-btn').classList.contains('show-ctrl'))
+    document.getElementById('stream-audio-btn').style.display = '';
   if (!silent) socket.emit('stream_stop', { room: currentRoom, username: currentUser.username });
 }
 
