@@ -200,6 +200,19 @@ function setLang(lang) {
   currentLang = lang;
   localStorage.setItem('lang', lang);
   applyLang();
+  applyEmojiPickerLang();
+}
+
+function applyEmojiPickerLang() {
+  const picker = document.getElementById('emoji-picker');
+  if (!picker) return;
+  const isZh = currentLang === 'zh';
+  picker.setAttribute('locale', isZh ? 'zh' : 'en');
+  picker.setAttribute('data-source', isZh
+    ? 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/zh/cldr-native/data.json'
+    : 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/en/cldr/data.json'
+  );
+  picker.i18n = isZh ? { search: '搜索表情', categories: {}, skinTones: {} } : {};
 }
 
 function switchSettingsTab(tab) {
@@ -1344,6 +1357,7 @@ document.addEventListener('click', function(e) {
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  applyEmojiPickerLang();
   const picker = document.getElementById('emoji-picker');
   if (picker) {
     picker.addEventListener('emoji-click', e => {
