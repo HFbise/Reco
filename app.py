@@ -455,11 +455,14 @@ def handle_join(data):
                 history = list(reversed(cur.fetchall()))
             for msg in history:
                 emit('message', {
+                    'id': msg['id'],
                     'username': msg['username'],
                     'screenname': msg['screenname'],
                     'text': msg['text'],
                     'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                    'room': room
+                    'room': room,
+                    'recalled': bool(msg.get('recalled')),
+                    'edited': bool(msg.get('edited')),
                 })
         conn.close()
 
@@ -485,10 +488,11 @@ def handle_message(data):
             conn = get_db()
             cur = conn.cursor()
             cur.execute(
-                'INSERT INTO messages (room, username, screenname, text, time) VALUES (%s, %s, %s, %s, %s)',
+                'INSERT INTO messages (room, username, screenname, text, time) VALUES (%s, %s, %s, %s, %s) RETURNING id',
                 (data['room'], data['username'], data['screenname'], data['text'],
                  datetime.now().strftime('%H:%M'))
             )
+            data['id'] = cur.fetchone()['id']
             conn.commit()
             conn.close()
             data['time'] = datetime.now(timezone.utc).isoformat()
@@ -509,6 +513,57 @@ def handle_message(data):
                         'from_username': sender,
                         'from_screenname': data['screenname'],
                     }, to=sid)
+
+# ── 消息：撤回 ───────────────────────────────────────────
+@socketio.on('recall_message')
+def handle_recall_message(data):
+    msg_id = data.get('id')
+    username = data.get('username')
+    room = data.get('room')
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT username, recalled FROM messages WHERE id = %s', (msg_id,))
+        msg = cur.fetchone()
+        if not msg or msg['recalled']:
+            conn.close()
+            return
+        if msg['username'] != username:
+            cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
+            room_data = cur.fetchone()
+            if not room_data or get_level(username, room_data) < 1:
+                conn.close()
+                return
+        cur.execute('UPDATE messages SET recalled = true WHERE id = %s', (msg_id,))
+        conn.commit()
+        conn.close()
+        emit('message_recalled', {'id': msg_id}, to=room)
+    except Exception as e:
+        print('撤回失败:', e)
+
+# ── 消息：编辑 ───────────────────────────────────────────
+@socketio.on('edit_message')
+def handle_edit_message(data):
+    msg_id = data.get('id')
+    username = data.get('username')
+    new_text = (data.get('text') or '').strip()
+    room = data.get('room')
+    if not new_text:
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT username, recalled FROM messages WHERE id = %s', (msg_id,))
+        msg = cur.fetchone()
+        if not msg or msg['recalled'] or msg['username'] != username:
+            conn.close()
+            return
+        cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s', (new_text, msg_id))
+        conn.commit()
+        conn.close()
+        emit('message_edited', {'id': msg_id, 'text': new_text}, to=room)
+    except Exception as e:
+        print('编辑失败:', e)
 
 # ── 房间：设置管理员 ──────────────────────────────────────
 @socketio.on('set_admin')
@@ -981,11 +1036,14 @@ def handle_join_dm(data):
         conn.close()
         for msg in history:
             emit('message', {
+                'id': msg['id'],
                 'username': msg['username'],
                 'screenname': msg['screenname'],
                 'text': msg['text'],
                 'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                'room': dm_room
+                'room': dm_room,
+                'recalled': bool(msg.get('recalled')),
+                'edited': bool(msg.get('edited')),
             })
     except Exception as e:
         print('join_dm history error:', e)
@@ -1008,6 +1066,8 @@ def ensure_columns():
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
+        cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE")
         # 清除 admin 账号不应出现在成员列表里
         cur.execute(
             "UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)",

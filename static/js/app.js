@@ -61,6 +61,12 @@ const i18n = {
     'room-pw-remember-label-text':'记住密码',
     'room-info-title':'查看房间信息',
     'voice-chat-title':'语音聊天',
+    'msg-edit-btn':'编辑','msg-recall-btn':'撤回',
+    'msg-recall-confirm':'确认撤回这条消息？',
+    'msg-recalled-own':'你撤回了一条消息','msg-recalled-other':'消息已撤回',
+    'msg-edited-label':'(已编辑)',
+    'msg-edit-confirm':'确认','msg-edit-cancel':'取消',
+    'emoji-search-ph':'搜索表情…',
   },
   en: {
     'profile-btn':'Profile','logout-btn':'Logout','login-open-btn':'Login / Register',
@@ -122,6 +128,12 @@ const i18n = {
     'room-pw-remember-label-text':'Remember password',
     'room-info-title':'Room info',
     'voice-chat-title':'Voice Chat',
+    'msg-edit-btn':'Edit','msg-recall-btn':'Recall',
+    'msg-recall-confirm':'Recall this message?',
+    'msg-recalled-own':'You recalled a message','msg-recalled-other':'Message recalled',
+    'msg-edited-label':'(edited)',
+    'msg-edit-confirm':'Confirm','msg-edit-cancel':'Cancel',
+    'emoji-search-ph':'Search emoji…',
   }
 };
 let currentLang = localStorage.getItem('lang') || 'zh';
@@ -166,6 +178,7 @@ function applyLang() {
     'new-room-name':'ph-new-room-name','new-room-password':'ph-new-room-password',
     'find-room-code':'ph-find-room-code',
     'room-new-pw-input':'ph-room-new-pw-input','room-pw-input':'ph-room-pw-input',
+    'emoji-search-input':'emoji-search-ph',
   };
   Object.entries(phMap).forEach(([id, key]) => { const el = document.getElementById(id); if (el && L[key]) el.placeholder = L[key]; });
   // Titles
@@ -1351,6 +1364,7 @@ function appendMessage(data, cache = true) {
 
     const isOwn = currentUser && data.username === currentUser.username;
     msg.className = 'msg' + (isOwn ? ' own' : '');
+    if (data.id) msg.dataset.msgId = data.id;
     const av = getAvatarData(data.username);
 
     const avDiv = document.createElement('div');
@@ -1370,13 +1384,58 @@ function appendMessage(data, cache = true) {
       name.onclick = () => openMemberCard(data.username);
       body.appendChild(name);
     }
+
+    const bubbleRow = document.createElement('div');
+    bubbleRow.className = 'msg-bubble-row';
+
     const bubble = document.createElement('div');
     bubble.className = 'msg-bubble';
-    const text = document.createElement('div');
-    text.className = 'msg-text';
-    text.textContent = data.text;
-    bubble.appendChild(text);
-    body.appendChild(bubble);
+
+    if (data.recalled) {
+      const recalledText = document.createElement('div');
+      recalledText.className = 'msg-recalled-text';
+      recalledText.textContent = isOwn ? t('msg-recalled-own') : t('msg-recalled-other');
+      bubble.appendChild(recalledText);
+    } else {
+      const text = document.createElement('div');
+      text.className = 'msg-text';
+      text.textContent = data.text;
+      bubble.appendChild(text);
+      if (data.edited) {
+        const editedLabel = document.createElement('span');
+        editedLabel.className = 'msg-edited-label';
+        editedLabel.textContent = t('msg-edited-label');
+        bubble.appendChild(editedLabel);
+      }
+    }
+
+    bubbleRow.appendChild(bubble);
+
+    if (!data.recalled && data.id) {
+      const canEdit = isOwn;
+      const canRecall = isOwn || isAdmin;
+      if (canEdit || canRecall) {
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        if (canEdit) {
+          const editBtn = document.createElement('button');
+          editBtn.className = 'msg-action-btn';
+          editBtn.textContent = t('msg-edit-btn');
+          editBtn.onclick = (e) => { e.stopPropagation(); startEditMessage(data.id, bubble, data); };
+          actions.appendChild(editBtn);
+        }
+        if (canRecall) {
+          const recallBtn = document.createElement('button');
+          recallBtn.className = 'msg-action-btn recall';
+          recallBtn.textContent = t('msg-recall-btn');
+          recallBtn.onclick = (e) => { e.stopPropagation(); doRecallMessage(data.id); };
+          actions.appendChild(recallBtn);
+        }
+        bubbleRow.appendChild(actions);
+      }
+    }
+
+    body.appendChild(bubbleRow);
     msg.appendChild(body);
   }
 
@@ -1405,6 +1464,108 @@ function formatMsgTime(ts) {
   const dateStr = d.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
   return `${dateStr} ${timeStr}`;
 }
+
+function doRecallMessage(msgId) {
+  if (!confirm(t('msg-recall-confirm'))) return;
+  socket.emit('recall_message', { id: msgId, username: currentUser.username, room: currentRoom });
+}
+
+function startEditMessage(msgId, bubble, data) {
+  const currentText = bubble.querySelector('.msg-text')?.textContent || '';
+  bubble.innerHTML = '';
+
+  const ta = document.createElement('textarea');
+  ta.className = 'msg-edit-input';
+  ta.value = currentText;
+  ta.rows = 1;
+  bubble.appendChild(ta);
+  ta.focus();
+  ta.setSelectionRange(ta.value.length, ta.value.length);
+  ta.style.height = 'auto';
+  ta.style.height = ta.scrollHeight + 'px';
+  ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; });
+
+  const actionsDiv = document.createElement('div');
+  actionsDiv.className = 'msg-edit-actions';
+
+  function restoreBubble() {
+    bubble.innerHTML = '';
+    const text = document.createElement('div');
+    text.className = 'msg-text';
+    text.textContent = currentText;
+    bubble.appendChild(text);
+    if (data.edited) {
+      const lbl = document.createElement('span');
+      lbl.className = 'msg-edited-label';
+      lbl.textContent = t('msg-edited-label');
+      bubble.appendChild(lbl);
+    }
+  }
+
+  function confirmEdit() {
+    const newText = ta.value.trim();
+    if (!newText || newText === currentText) { restoreBubble(); return; }
+    socket.emit('edit_message', { id: msgId, text: newText, username: currentUser.username, room: currentRoom });
+  }
+
+  ta.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') restoreBubble();
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); confirmEdit(); }
+  });
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'msg-edit-btn cancel';
+  cancelBtn.textContent = t('msg-edit-cancel');
+  cancelBtn.onclick = restoreBubble;
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'msg-edit-btn confirm';
+  confirmBtn.textContent = t('msg-edit-confirm');
+  confirmBtn.onclick = confirmEdit;
+
+  actionsDiv.appendChild(cancelBtn);
+  actionsDiv.appendChild(confirmBtn);
+  bubble.appendChild(actionsDiv);
+}
+
+socket.on('message_recalled', function(data) {
+  if (roomMessages[currentRoom]) {
+    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
+    if (idx !== -1) roomMessages[currentRoom][idx].recalled = true;
+  }
+  const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
+  if (!msgEl) return;
+  const isOwn = msgEl.classList.contains('own');
+  const bubble = msgEl.querySelector('.msg-bubble');
+  if (!bubble) return;
+  bubble.innerHTML = '';
+  const recalledText = document.createElement('div');
+  recalledText.className = 'msg-recalled-text';
+  recalledText.textContent = isOwn ? t('msg-recalled-own') : t('msg-recalled-other');
+  bubble.appendChild(recalledText);
+  const actionsEl = msgEl.querySelector('.msg-actions');
+  if (actionsEl) actionsEl.remove();
+});
+
+socket.on('message_edited', function(data) {
+  if (roomMessages[currentRoom]) {
+    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
+    if (idx !== -1) { roomMessages[currentRoom][idx].text = data.text; roomMessages[currentRoom][idx].edited = true; }
+  }
+  const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
+  if (!msgEl) return;
+  const bubble = msgEl.querySelector('.msg-bubble');
+  if (!bubble) return;
+  bubble.innerHTML = '';
+  const text = document.createElement('div');
+  text.className = 'msg-text';
+  text.textContent = data.text;
+  bubble.appendChild(text);
+  const editedLabel = document.createElement('span');
+  editedLabel.className = 'msg-edited-label';
+  editedLabel.textContent = t('msg-edited-label');
+  bubble.appendChild(editedLabel);
+});
 
 function sendMessage() {
   if (!currentUser) { openAuth(); return; }
