@@ -281,7 +281,7 @@ function applyEmojiPickerLang() {
   );
   wrap.appendChild(picker);
   // 隐藏 picker 内置搜索栏
-  picker.addEventListener('load', () => {
+  customElements.whenDefined('emoji-picker').then(() => {
     if (picker.shadowRoot) {
       const s = document.createElement('style');
       s.textContent = '.search-row { display: none !important; }';
