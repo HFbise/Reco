@@ -60,6 +60,40 @@ rooms_stream = {}        # { room: { username: screenname } }
 online_users = {}        # { username: set of sids }
 sid_to_voice = {}        # { sid: (username, room) } — for cleanup on disconnect
 pending_invites = {}     # { room: set(usernames) } — 待接受的邀请，加入时跳过密码验证
+message_rate = {}        # { username: [timestamps] }
+login_attempts = {}      # { username: {'count': N, 'until': float} }
+
+def _check_msg_rate(username, max_msgs=8, window=10):
+    """返回 True 表示允许，False 表示超速。"""
+    now = time.time()
+    ts = [t for t in message_rate.get(username, []) if now - t < window]
+    if len(ts) >= max_msgs:
+        message_rate[username] = ts
+        return False
+    ts.append(now)
+    message_rate[username] = ts
+    return True
+
+def _check_login_rate(username):
+    """返回 (allowed, seconds_left)。"""
+    now = time.time()
+    d = login_attempts.get(username, {})
+    until = d.get('until', 0)
+    if until > now:
+        return False, int(until - now)
+    return True, 0
+
+def _record_login_fail(username):
+    now = time.time()
+    d = login_attempts.get(username, {'count': 0})
+    d['count'] = d.get('count', 0) + 1
+    if d['count'] >= 10:
+        d['until'] = now + 300   # 5分钟锁定
+        d['count'] = 0
+    login_attempts[username] = d
+
+def _reset_login_attempts(username):
+    login_attempts.pop(username, None)
 
 def get_db():
     return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
@@ -190,6 +224,11 @@ def handle_login(data):
     username = data['username'].strip().lower()
     password = data['password']
 
+    allowed, secs = _check_login_rate(username)
+    if not allowed:
+        emit('login_result', {'success': False, 'msg': f'登录尝试过多，请 {secs} 秒后重试'})
+        return
+
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -202,8 +241,10 @@ def handle_login(data):
             return
         ok, needs_migrate = verify_password(user['password'], password)
         if not ok:
+            _record_login_fail(username)
             emit('login_result', {'success': False, 'msg': '密码错误'})
             return
+        _reset_login_attempts(username)
         if needs_migrate:
             conn2 = get_db(); cur2 = conn2.cursor()
             cur2.execute('UPDATE users SET password = %s WHERE username = %s', (hash_password(password), username))
@@ -463,6 +504,7 @@ def handle_join(data):
                     'room': room,
                     'recalled': bool(msg.get('recalled')),
                     'edited': bool(msg.get('edited')),
+                    'reactions': dict(msg.get('reactions') or {}),
                 })
         conn.close()
 
@@ -484,6 +526,9 @@ def handle_join(data):
 @socketio.on('message')
 def handle_message(data):
     if not data.get('system'):
+        if not _check_msg_rate(data.get('username', '')):
+            emit('message_rate_limited', {})
+            return
         try:
             conn = get_db()
             cur = conn.cursor()
@@ -564,6 +609,41 @@ def handle_edit_message(data):
         emit('message_edited', {'id': msg_id, 'text': new_text}, to=room)
     except Exception as e:
         print('编辑失败:', e)
+
+# ── 消息：emoji 反应 ──────────────────────────────────────
+@socketio.on('add_reaction')
+def handle_add_reaction(data):
+    import json as _json
+    msg_id = data.get('id')
+    username = data.get('username')
+    emoji = data.get('emoji', '').strip()
+    room = data.get('room')
+    if not all([msg_id, username, emoji, room]):
+        return
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute('SELECT reactions, recalled FROM messages WHERE id = %s', (msg_id,))
+        msg = cur.fetchone()
+        if not msg or msg['recalled']:
+            conn.close()
+            return
+        reactions = dict(msg.get('reactions') or {})
+        users = list(reactions.get(emoji, []))
+        if username in users:
+            users.remove(username)
+        else:
+            users.append(username)
+        if users:
+            reactions[emoji] = users
+        else:
+            reactions.pop(emoji, None)
+        cur.execute('UPDATE messages SET reactions = %s WHERE id = %s', (_json.dumps(reactions), msg_id))
+        conn.commit()
+        conn.close()
+        emit('reaction_updated', {'id': msg_id, 'reactions': reactions}, to=room)
+    except Exception as e:
+        print('反应失败:', e)
 
 # ── 房间：设置管理员 ──────────────────────────────────────
 @socketio.on('set_admin')
@@ -1044,6 +1124,7 @@ def handle_join_dm(data):
                 'room': dm_room,
                 'recalled': bool(msg.get('recalled')),
                 'edited': bool(msg.get('edited')),
+                'reactions': dict(msg.get('reactions') or {}),
             })
     except Exception as e:
         print('join_dm history error:', e)
@@ -1068,6 +1149,7 @@ def ensure_columns():
         cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
         cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT FALSE")
         cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb")
         # 清除 admin 账号不应出现在成员列表里
         cur.execute(
             "UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)",

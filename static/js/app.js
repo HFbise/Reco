@@ -67,6 +67,7 @@ const i18n = {
     'msg-edited-label':'(已编辑)',
     'msg-edit-confirm':'确认','msg-edit-cancel':'取消',
     'emoji-search-ph':'搜索表情…',
+    'rate-limited-msg':'发送太频繁，请稍后再试',
   },
   en: {
     'profile-btn':'Profile','logout-btn':'Logout','login-open-btn':'Login / Register',
@@ -134,6 +135,7 @@ const i18n = {
     'msg-edited-label':'(edited)',
     'msg-edit-confirm':'Confirm','msg-edit-cancel':'Cancel',
     'emoji-search-ph':'Search emoji…',
+    'rate-limited-msg':'You are sending messages too fast, please slow down',
   }
 };
 let currentLang = localStorage.getItem('lang') || 'zh';
@@ -229,18 +231,38 @@ async function _loadEmojiData() {
   return arr;
 }
 
+let _reactionMsgId = null;
+
+function _resetEmojiPickerPos() {
+  const wrap = document.getElementById('emoji-picker-wrap');
+  wrap.style.position = '';
+  wrap.style.top = '';
+  wrap.style.bottom = '';
+  wrap.style.left = '';
+}
+
 function _insertEmoji(unicode) {
+  _emojiOpen = false;
+  const wrap = document.getElementById('emoji-picker-wrap');
+  wrap.style.display = 'none';
+  _resetEmojiPickerPos();
+  document.getElementById('emoji-btn').classList.remove('active');
+  document.getElementById('emoji-search-input').value = '';
+  document.getElementById('emoji-search-results').classList.remove('active');
+
+  if (_reactionMsgId != null) {
+    const msgId = _reactionMsgId;
+    _reactionMsgId = null;
+    toggleReaction(msgId, unicode);
+    return;
+  }
+
   const input = document.getElementById('msg-input');
   const pos = input.selectionStart ?? input.value.length;
   const val = input.value;
   input.value = val.slice(0, pos) + unicode + val.slice(pos);
   input.focus();
   input.setSelectionRange(pos + unicode.length, pos + unicode.length);
-  _emojiOpen = false;
-  document.getElementById('emoji-picker-wrap').style.display = 'none';
-  document.getElementById('emoji-btn').classList.remove('active');
-  document.getElementById('emoji-search-input').value = '';
-  document.getElementById('emoji-search-results').classList.remove('active');
 }
 
 async function _onEmojiSearch() {
@@ -1411,31 +1433,36 @@ function appendMessage(data, cache = true) {
 
     bubbleRow.appendChild(bubble);
 
-    if (!data.recalled && data.id) {
-      const canEdit = isOwn;
-      const canRecall = isOwn || isAdmin;
-      if (canEdit || canRecall) {
-        const actions = document.createElement('div');
-        actions.className = 'msg-actions';
-        if (canEdit) {
-          const editBtn = document.createElement('button');
-          editBtn.className = 'msg-action-btn';
-          editBtn.textContent = t('msg-edit-btn');
-          editBtn.onclick = (e) => { e.stopPropagation(); startEditMessage(data.id, bubble, data); };
-          actions.appendChild(editBtn);
-        }
-        if (canRecall) {
-          const recallBtn = document.createElement('button');
-          recallBtn.className = 'msg-action-btn recall';
-          recallBtn.textContent = t('msg-recall-btn');
-          recallBtn.onclick = (e) => { e.stopPropagation(); doRecallMessage(data.id); };
-          actions.appendChild(recallBtn);
-        }
-        bubbleRow.appendChild(actions);
+    if (!data.recalled && data.id && currentUser) {
+      const actions = document.createElement('div');
+      actions.className = 'msg-actions';
+      // 😊 react button (always)
+      const reactBtn = document.createElement('button');
+      reactBtn.className = 'msg-action-btn';
+      reactBtn.textContent = '😊';
+      reactBtn.onclick = (e) => { e.stopPropagation(); showReactionPicker(data.id, reactBtn); };
+      actions.appendChild(reactBtn);
+      if (isOwn) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'msg-action-btn';
+        editBtn.textContent = t('msg-edit-btn');
+        editBtn.onclick = (e) => { e.stopPropagation(); startEditMessage(data.id, bubble, data); };
+        actions.appendChild(editBtn);
       }
+      if (isOwn || isAdmin) {
+        const recallBtn = document.createElement('button');
+        recallBtn.className = 'msg-action-btn recall';
+        recallBtn.textContent = t('msg-recall-btn');
+        recallBtn.onclick = (e) => { e.stopPropagation(); doRecallMessage(data.id); };
+        actions.appendChild(recallBtn);
+      }
+      bubbleRow.appendChild(actions);
     }
 
     body.appendChild(bubbleRow);
+    if (data.reactions && Object.keys(data.reactions).length > 0) {
+      body.appendChild(buildReactionRow(data.id, data.reactions));
+    }
     msg.appendChild(body);
   }
 
@@ -1576,6 +1603,111 @@ function sendMessage() {
   document.getElementById('msg-input').value = '';
 }
 
+socket.on('message_rate_limited', function() {
+  appendMessage({ system: true, text: t('rate-limited-msg'), room: currentRoom });
+});
+
+// ── Emoji 反应 ────────────────────────────────────────────
+const QUICK_EMOJIS_DEFAULT = ['👍','❤️','😂','😮','😢','😡','🎉','🔥'];
+const MAX_RECENT_REACTION = 8;
+
+function _getRecentReactionEmojis() {
+  try { return JSON.parse(localStorage.getItem('recentReactionEmojis') || '[]'); }
+  catch { return []; }
+}
+
+function _recordRecentEmoji(emoji) {
+  let recent = _getRecentReactionEmojis();
+  recent = [emoji, ...recent.filter(e => e !== emoji)].slice(0, MAX_RECENT_REACTION);
+  localStorage.setItem('recentReactionEmojis', JSON.stringify(recent));
+}
+
+function _buildReactionQuickList() {
+  const recent = _getRecentReactionEmojis();
+  const fill = QUICK_EMOJIS_DEFAULT.filter(e => !recent.includes(e));
+  return [...recent, ...fill].slice(0, MAX_RECENT_REACTION);
+}
+
+function buildReactionRow(msgId, reactions) {
+  const row = document.createElement('div');
+  row.className = 'msg-reactions';
+  row.dataset.reactMsgId = msgId;
+  for (const [emoji, users] of Object.entries(reactions)) {
+    if (!users || !users.length) continue;
+    const pill = document.createElement('button');
+    pill.className = 'reaction-pill' + (users.includes(currentUser?.username) ? ' active' : '');
+    pill.textContent = emoji + ' ' + users.length;
+    pill.title = users.join(', ');
+    pill.onclick = () => toggleReaction(msgId, emoji);
+    row.appendChild(pill);
+  }
+  return row;
+}
+
+function showReactionPicker(msgId, anchorEl) {
+  document.getElementById('reaction-quick-bar')?.remove();
+  const bar = document.createElement('div');
+  bar.id = 'reaction-quick-bar';
+  _buildReactionQuickList().forEach(emoji => {
+    const btn = document.createElement('button');
+    btn.className = 'reaction-quick-btn';
+    btn.textContent = emoji;
+    btn.onclick = (e) => { e.stopPropagation(); toggleReaction(msgId, emoji); bar.remove(); };
+    bar.appendChild(btn);
+  });
+  // "+" button opens full emoji picker in reaction mode, positioned at bar location
+  const moreBtn = document.createElement('button');
+  moreBtn.className = 'reaction-quick-btn reaction-more-btn';
+  moreBtn.textContent = '＋';
+  moreBtn.onclick = (e) => {
+    e.stopPropagation();
+    const barRect = bar.getBoundingClientRect();
+    bar.remove();
+    _reactionMsgId = msgId;
+    const wrap = document.getElementById('emoji-picker-wrap');
+    const pickerW = 352;
+    const pickerH = 430;
+    const left = Math.max(4, Math.min(barRect.left, window.innerWidth - pickerW - 4));
+    const top = (barRect.top - pickerH - 4 >= 4)
+      ? barRect.top - pickerH - 4
+      : barRect.bottom + 4;
+    wrap.style.position = 'fixed';
+    wrap.style.bottom = 'auto';
+    wrap.style.top = top + 'px';
+    wrap.style.left = left + 'px';
+    _emojiOpen = true;
+    wrap.style.display = 'block';
+    document.getElementById('emoji-btn').classList.add('active');
+  };
+  bar.appendChild(moreBtn);
+  document.body.appendChild(bar);
+  const rect = anchorEl.getBoundingClientRect();
+  bar.style.left = Math.max(4, Math.min(rect.left - 20, window.innerWidth - bar.offsetWidth - 8)) + 'px';
+  bar.style.top = (rect.top - bar.offsetHeight - 6) + 'px';
+  setTimeout(() => document.addEventListener('click', () => bar.remove(), { once: true }), 0);
+}
+
+function toggleReaction(msgId, emoji) {
+  if (!currentUser) return;
+  _recordRecentEmoji(emoji);
+  socket.emit('add_reaction', { id: msgId, username: currentUser.username, emoji, room: currentRoom });
+}
+
+socket.on('reaction_updated', function(data) {
+  if (roomMessages[currentRoom]) {
+    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
+    if (idx !== -1) roomMessages[currentRoom][idx].reactions = data.reactions;
+  }
+  const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
+  if (!msgEl) return;
+  const body = msgEl.querySelector('.msg-body');
+  if (!body) return;
+  body.querySelector('.msg-reactions')?.remove();
+  if (data.reactions && Object.keys(data.reactions).length > 0) {
+    body.appendChild(buildReactionRow(data.id, data.reactions));
+  }
+});
+
 // ── Emoji 选择器 ──────────────────────────────────────────
 let _emojiOpen = false;
 
@@ -1591,7 +1723,9 @@ document.addEventListener('click', function(e) {
   const btn = document.getElementById('emoji-btn');
   if (!wrap.contains(e.target) && !btn.contains(e.target)) {
     _emojiOpen = false;
+    _reactionMsgId = null;
     wrap.style.display = 'none';
+    _resetEmojiPickerPos();
     btn.classList.remove('active');
   }
 });
