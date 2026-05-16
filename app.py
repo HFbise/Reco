@@ -582,7 +582,7 @@ def handle_recall_message(data):
         cur.execute('UPDATE messages SET recalled = true WHERE id = %s', (msg_id,))
         conn.commit()
         conn.close()
-        emit('message_recalled', {'id': msg_id}, to=room)
+        emit('message_recalled', {'id': msg_id, 'room': room}, to=room)
     except Exception as e:
         print('撤回失败:', e)
 
@@ -606,7 +606,7 @@ def handle_edit_message(data):
         cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s', (new_text, msg_id))
         conn.commit()
         conn.close()
-        emit('message_edited', {'id': msg_id, 'text': new_text}, to=room)
+        emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room}, to=room)
     except Exception as e:
         print('编辑失败:', e)
 
@@ -641,7 +641,7 @@ def handle_add_reaction(data):
         cur.execute('UPDATE messages SET reactions = %s WHERE id = %s', (_json.dumps(reactions), msg_id))
         conn.commit()
         conn.close()
-        emit('reaction_updated', {'id': msg_id, 'reactions': reactions}, to=room)
+        emit('reaction_updated', {'id': msg_id, 'reactions': reactions, 'room': room}, to=room)
     except Exception as e:
         print('反应失败:', e)
 

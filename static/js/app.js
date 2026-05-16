@@ -68,6 +68,7 @@ const i18n = {
     'msg-edit-confirm':'确认','msg-edit-cancel':'取消',
     'emoji-search-ph':'搜索表情…',
     'rate-limited-msg':'发送太频繁，请稍后再试',
+    'settings-sound-label':'🔔 消息提示音',
   },
   en: {
     'profile-btn':'Profile','logout-btn':'Logout','login-open-btn':'Login / Register',
@@ -136,6 +137,7 @@ const i18n = {
     'msg-edit-confirm':'Confirm','msg-edit-cancel':'Cancel',
     'emoji-search-ph':'Search emoji…',
     'rate-limited-msg':'You are sending messages too fast, please slow down',
+    'settings-sound-label':'🔔 Message sound',
   }
 };
 let currentLang = localStorage.getItem('lang') || 'zh';
@@ -207,6 +209,10 @@ function applyLang() {
   // Language buttons active state
   document.getElementById('lang-zh-btn')?.classList.toggle('active', currentLang === 'zh');
   document.getElementById('lang-en-btn')?.classList.toggle('active', currentLang === 'en');
+  const soundLbl = document.getElementById('settings-sound-label');
+  if (soundLbl) soundLbl.textContent = L['settings-sound-label'] || '🔔 消息提示音';
+  const soundToggle = document.getElementById('sound-toggle');
+  if (soundToggle) soundToggle.checked = _soundEnabled;
   // Re-populate security question select in correct language
   populateQuestionSelect();
 }
@@ -1289,15 +1295,22 @@ document.addEventListener('touchend', function(e) {
 }, { passive: true });
 
 const unreadCounts = {};
+let _totalUnread = 0;
+
+function _updateTabTitle() {
+  document.title = _totalUnread > 0 ? `(${_totalUnread}) Reco` : 'Reco';
+}
 
 function addUnread(room) {
   if (!room) return;
   unreadCounts[room] = (unreadCounts[room] || 0) + 1;
-  const count = unreadCounts[room];
+  _totalUnread++;
+  _updateTabTitle();
   const el = room.startsWith('dm:')
     ? document.getElementById('dm-item-' + getDmOtherUser(room))
     : document.getElementById('room-' + room);
   if (!el) return;
+  const count = unreadCounts[room];
   let badge = el.querySelector('.room-badge');
   if (!badge) { badge = document.createElement('span'); badge.className = 'room-badge'; el.appendChild(badge); }
   badge.textContent = count > 99 ? '99+' : count;
@@ -1305,11 +1318,76 @@ function addUnread(room) {
 
 function clearUnread(room) {
   if (!room) return;
+  const prev = unreadCounts[room] || 0;
   delete unreadCounts[room];
+  _totalUnread = Math.max(0, _totalUnread - prev);
+  _updateTabTitle();
   const el = room.startsWith('dm:')
     ? document.getElementById('dm-item-' + getDmOtherUser(room))
     : document.getElementById('room-' + room);
   if (el) { const badge = el.querySelector('.room-badge'); if (badge) badge.remove(); }
+}
+
+// ── 提示音 ───────────────────────────────────────────────
+let _soundEnabled = localStorage.getItem('notifSound') !== 'false';
+
+function playNotifSound() {
+  if (!_soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const tone = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.15, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.start(start); osc.stop(start + dur);
+    };
+    tone(660, ctx.currentTime, 0.12);
+    tone(880, ctx.currentTime + 0.1, 0.18);
+  } catch(e) {}
+}
+
+function toggleNotifSound(val) {
+  _soundEnabled = val;
+  localStorage.setItem('notifSound', val ? 'true' : 'false');
+}
+
+function playVoiceJoinSound() {
+  if (!_soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const tone = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.18, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.start(start); osc.stop(start + dur);
+    };
+    tone(440, ctx.currentTime, 0.15);
+    tone(880, ctx.currentTime + 0.13, 0.22);
+  } catch(e) {}
+}
+
+function playVoiceLeaveSound() {
+  if (!_soundEnabled) return;
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const tone = (freq, start, dur) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.type = 'sine'; osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.18, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + dur);
+      osc.start(start); osc.stop(start + dur);
+    };
+    tone(880, ctx.currentTime, 0.15);
+    tone(440, ctx.currentTime + 0.13, 0.22);
+  } catch(e) {}
 }
 
 function saveRoomOrder() {
@@ -1474,7 +1552,10 @@ socket.on('message', function(data) {
   appendMessage(data);
   const _msgRoom = data.room || currentRoom;
   if (!data.system && !_loadingHistory.has(_msgRoom)) bumpRoomToTop(_msgRoom);
-  if (!data.system && _msgRoom !== currentRoom && !_loadingHistory.has(_msgRoom)) addUnread(_msgRoom);
+  const _isUnread = !data.system && _msgRoom !== currentRoom && !_loadingHistory.has(_msgRoom);
+  if (_isUnread) addUnread(_msgRoom);
+  const _notOwnMsg = !data.system && data.username !== currentUser?.username;
+  if (_notOwnMsg && (_isUnread || document.hidden)) playNotifSound();
   if (data.system && data.room === currentRoom) {
     socket.emit('get_members', { room: currentRoom });
   }
@@ -1556,10 +1637,12 @@ function startEditMessage(msgId, bubble, data) {
 }
 
 socket.on('message_recalled', function(data) {
-  if (roomMessages[currentRoom]) {
-    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
-    if (idx !== -1) roomMessages[currentRoom][idx].recalled = true;
+  const room = data.room || currentRoom;
+  if (roomMessages[room]) {
+    const idx = roomMessages[room].findIndex(m => m.id == data.id);
+    if (idx !== -1) roomMessages[room][idx].recalled = true;
   }
+  if (room !== currentRoom) return;
   const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
   if (!msgEl) return;
   const isOwn = msgEl.classList.contains('own');
@@ -1575,10 +1658,12 @@ socket.on('message_recalled', function(data) {
 });
 
 socket.on('message_edited', function(data) {
-  if (roomMessages[currentRoom]) {
-    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
-    if (idx !== -1) { roomMessages[currentRoom][idx].text = data.text; roomMessages[currentRoom][idx].edited = true; }
+  const room = data.room || currentRoom;
+  if (roomMessages[room]) {
+    const idx = roomMessages[room].findIndex(m => m.id == data.id);
+    if (idx !== -1) { roomMessages[room][idx].text = data.text; roomMessages[room][idx].edited = true; }
   }
+  if (room !== currentRoom) return;
   const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
   if (!msgEl) return;
   const bubble = msgEl.querySelector('.msg-bubble');
@@ -1694,10 +1779,12 @@ function toggleReaction(msgId, emoji) {
 }
 
 socket.on('reaction_updated', function(data) {
-  if (roomMessages[currentRoom]) {
-    const idx = roomMessages[currentRoom].findIndex(m => m.id == data.id);
-    if (idx !== -1) roomMessages[currentRoom][idx].reactions = data.reactions;
+  const room = data.room || currentRoom;
+  if (roomMessages[room]) {
+    const idx = roomMessages[room].findIndex(m => m.id == data.id);
+    if (idx !== -1) roomMessages[room][idx].reactions = data.reactions;
   }
+  if (room !== currentRoom) return;
   const msgEl = document.querySelector(`.msg[data-msg-id="${data.id}"]`);
   if (!msgEl) return;
   const body = msgEl.querySelector('.msg-body');
@@ -2019,12 +2106,14 @@ async function joinVoice() {
     const myAv = getAvatarData(currentUser.username);
     addVoiceMember(currentUser.username, currentUser.screenname, myAv.expression, myAv.color);
     socket.emit('voice_join', { username: currentUser.username, screenname: currentUser.screenname, room: currentRoom, avatar_expression: myAv.expression, avatar_color: myAv.color });
+    playVoiceJoinSound();
   } catch (e) {
     alert('无法访问麦克风：' + e.message);
   }
 }
 
 function leaveVoice() {
+  playVoiceLeaveSound();
   if (localStream) {
     localStream.getTracks().forEach(t => t.stop());
     localStream = null;
