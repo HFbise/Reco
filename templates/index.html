@@ -114,7 +114,13 @@
       <div id="stream-panel"><div id="stream-grid"></div></div>
       <div id="stream-resize-handle"></div>
       <div id="messages"></div>
+      <div id="emoji-picker-wrap">
+        <emoji-picker id="emoji-picker"></emoji-picker>
+      </div>
       <div id="input-area">
+        <button id="emoji-btn" onclick="toggleEmojiPicker()" title="表情">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><path d="M8 14s1.5 2 4 2 4-2 4-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="9" cy="10" r="1" fill="currentColor"/><circle cx="15" cy="10" r="1" fill="currentColor"/></svg>
+        </button>
         <input id="msg-input" type="text" placeholder="输入消息..." />
         <button id="send-btn" onclick="sendMessage()">
           <svg width="17" height="17" viewBox="0 0 20 20" fill="none"><path d="M4.114 9.875h11.521M15.635 9.875L9.875 4.115M15.635 9.875L9.875 15.635" stroke="white" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -489,6 +495,7 @@
 </div>
 
 <script src="https://cdn.socket.io/4.6.0/socket.io.min.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@1/index.js"></script>
   <script src="/static/js/app.js"></script>
   <script>
     if ('serviceWorker' in navigator) {

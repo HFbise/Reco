@@ -1323,6 +1323,44 @@ function sendMessage() {
   document.getElementById('msg-input').value = '';
 }
 
+// ── Emoji 选择器 ──────────────────────────────────────────
+function toggleEmojiPicker() {
+  const wrap = document.getElementById('emoji-picker-wrap');
+  const btn = document.getElementById('emoji-btn');
+  const open = wrap.classList.toggle('open');
+  btn.classList.toggle('active', open);
+  if (open) {
+    // 延迟初始化事件，避免立即关闭
+    setTimeout(() => {
+      document.addEventListener('click', _closeEmojiOnOutside, { once: true });
+    }, 0);
+  }
+}
+
+function _closeEmojiOnOutside(e) {
+  const wrap = document.getElementById('emoji-picker-wrap');
+  if (wrap.contains(e.target) || e.target.id === 'emoji-btn') {
+    document.addEventListener('click', _closeEmojiOnOutside, { once: true });
+    return;
+  }
+  wrap.classList.remove('open');
+  document.getElementById('emoji-btn').classList.remove('active');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const picker = document.getElementById('emoji-picker');
+  if (picker) {
+    picker.addEventListener('emoji-click', e => {
+      const input = document.getElementById('msg-input');
+      const pos = input.selectionStart ?? input.value.length;
+      const val = input.value;
+      input.value = val.slice(0, pos) + e.detail.unicode + val.slice(pos);
+      input.focus();
+      input.setSelectionRange(pos + e.detail.unicode.length, pos + e.detail.unicode.length);
+    });
+  }
+});
+
 document.getElementById('msg-input').addEventListener('keypress', e => {
   if (e.key === 'Enter') sendMessage();
 });

@@ -120,11 +120,16 @@
     .msg.own .msg-text { color: #fff; }
 
     /* ── Input Area ── */
-    #input-area { padding: 10px 16px 14px; display: flex; gap: 10px; align-items: center; flex-shrink: 0; background: #f0f0f3; }
+    #input-area { padding: 10px 16px 14px; display: flex; gap: 8px; align-items: center; flex-shrink: 0; background: #f0f0f3; }
     body.dark #input-area { background: #2a2b2f; }
+    #emoji-btn { flex-shrink: 0; background: none; border: none; cursor: pointer; color: #87888c; padding: 6px; border-radius: 8px; display: flex; align-items: center; transition: color 0.12s, background 0.12s; }
+    #emoji-btn:hover, #emoji-btn.active { color: #4f8ef7; background: rgba(79,142,247,0.1); }
+    #emoji-picker-wrap { position: absolute; bottom: 70px; left: 16px; z-index: 200; display: none; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18)); }
+    #emoji-picker-wrap.open { display: block; }
     #msg-input { flex: 1; padding: 11px 16px; border: none; border-radius: 10px; background: #e4e4e8; color: inherit; font-size: 0.95rem; outline: none; }
     body.dark #msg-input { background: #383940; color: #e0e0e5; }
     #msg-input::placeholder { color: #87888c; }
+    body.dark emoji-picker { --background: #2a2b2f; --border-color: rgba(255,255,255,0.08); --indicator-color: #4f8ef7; --input-border-color: rgba(255,255,255,0.12); --input-font-color: #e0e0e5; --input-placeholder-color: #87888c; --category-font-color: #87888c; }
     #send-btn { background: #4f8ef7; border: none; border-radius: 10px; cursor: pointer; padding: 10px 14px; display: flex; align-items: center; justify-content: center; transition: background 0.12s; flex-shrink: 0; }
     #send-btn:hover { background: #3a7be0; }
 
@@ -320,6 +325,8 @@
       body.in-chat #members-sidebar { bottom: 0; }
 
       #msg-input { font-size: 16px; }
+      #emoji-picker-wrap { left: 0; right: 0; bottom: 60px; }
+      #emoji-picker-wrap emoji-picker { width: 100%; }
       #messages, #room-list, #member-list { -webkit-overflow-scrolling: touch; }
       .modal-box { width: 94vw; max-width: 94vw; padding: 18px 14px; }
     }
