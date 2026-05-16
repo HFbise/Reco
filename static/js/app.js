@@ -1019,6 +1019,9 @@ socket.on('join_result', function(data) {
     memberCache[data.room] = data.members;
     renderMembers(data.members);
   }
+  if (data.is_first_join) {
+    appendMessage({ system: true, text: `👋 欢迎加入 ${currentRoom}！`, room: currentRoom });
+  }
 });
 
 // ── 消息 ──────────────────────────────────────────────────
@@ -1303,7 +1306,12 @@ function formatMsgTime(ts) {
   if (!ts) return '';
   const d = new Date(ts);
   if (isNaN(d.getTime())) return ts;
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const now = new Date();
+  const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (isToday) return timeStr;
+  const dateStr = d.toLocaleDateString([], { month: 'numeric', day: 'numeric' });
+  return `${dateStr} ${timeStr}`;
 }
 
 function sendMessage() {

@@ -11,6 +11,7 @@ import json
 from datetime import datetime, timezone
 from flask import Flask, render_template, session, request, jsonify
 from flask_socketio import SocketIO, emit, join_room, leave_room
+from werkzeug.security import generate_password_hash, check_password_hash
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -42,6 +43,16 @@ def get_level(username, room_data):
     if username in (room_data.get('admins') or []):
         return 1
     return 0
+
+def hash_password(pw):
+    return generate_password_hash(pw)
+
+def verify_password(stored, provided, username=None):
+    """支持旧明文密码的懒迁移：验证通过后自动升级为哈希"""
+    if stored.startswith('pbkdf2:') or stored.startswith('scrypt:'):
+        return check_password_hash(stored, provided), False
+    # 明文，验证后标记需要迁移
+    return stored == provided, stored == provided
 
 # ── 内存状态 ─────────────────────────────────────────────
 rooms_voice = {}
@@ -165,7 +176,7 @@ def handle_register(data):
             return
         cur.execute(
             'INSERT INTO users (username, screenname, password, bio, security_question, security_answer) VALUES (%s, %s, %s, %s, %s, %s)',
-            (username, screenname, password, bio, security_q, security_a)
+            (username, screenname, hash_password(password), bio, security_q, security_a)
         )
         conn.commit()
         conn.close()
@@ -189,9 +200,14 @@ def handle_login(data):
         if not user:
             emit('login_result', {'success': False, 'msg': '用户名不存在'})
             return
-        if user['password'] != password:
+        ok, needs_migrate = verify_password(user['password'], password)
+        if not ok:
             emit('login_result', {'success': False, 'msg': '密码错误'})
             return
+        if needs_migrate:
+            conn2 = get_db(); cur2 = conn2.cursor()
+            cur2.execute('UPDATE users SET password = %s WHERE username = %s', (hash_password(password), username))
+            conn2.commit(); conn2.close()
 
         emit('login_result', {
             'success': True,
@@ -245,7 +261,8 @@ def handle_change_password(data):
         cur = conn.cursor()
         cur.execute('SELECT password FROM users WHERE username = %s', (data['username'],))
         user = cur.fetchone()
-        if user['password'] != data['old_password']:
+        ok, _ = verify_password(user['password'], data['old_password'])
+        if not ok:
             emit('change_password_result', {'success': False, 'msg': '旧密码错误'})
             conn.close()
             return
@@ -254,7 +271,7 @@ def handle_change_password(data):
             conn.close()
             return
         cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                    (data['new_password'], data['username']))
+                    (hash_password(data['new_password']), data['username']))
         conn.commit()
         conn.close()
         emit('change_password_result', {'success': True})
@@ -294,7 +311,7 @@ def handle_reset_password(data):
             conn.close()
             return
         cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                    (data['new_password'], data['username']))
+                    (hash_password(data['new_password']), data['username']))
         conn.commit()
         conn.close()
         emit('reset_password_result', {'success': True})
@@ -316,7 +333,7 @@ def handle_admin_reset(data):
             conn.close()
             return
         cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                    (DEFAULT_PASSWORD, data['target_username'].strip()))
+                    (hash_password(DEFAULT_PASSWORD), data['target_username'].strip()))
         conn.commit()
         conn.close()
         emit('admin_reset_result', {'success': True, 'msg': f"{data['target_username']} 的密码已重置为 {DEFAULT_PASSWORD}"})
@@ -446,7 +463,7 @@ def handle_join(data):
                 })
         conn.close()
 
-        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code})
+        emit('join_result', {'success': True, 'room': room, 'is_owner': is_owner, 'is_admin': is_admin, 'my_level': my_level, 'members': members_data, 'code': room_code, 'is_first_join': is_first_join})
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
             emit('voice_members_view', {
