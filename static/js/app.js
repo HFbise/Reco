@@ -427,14 +427,19 @@ const GROUP_SVG = groupSVG(24, 18);
 const userAvatarCache = {};  // { username: { expression, color } }
 
 // 恢复登录状态
-const savedUser = localStorage.getItem('currentUser');
-if (savedUser) {
-  currentUser = JSON.parse(savedUser);
-  if (!currentUser.avatar_expression) currentUser.avatar_expression = 'Smile';
-  if (!currentUser.avatar_color) currentUser.avatar_color = defaultAvatarColor(currentUser.username);
-  userAvatarCache[currentUser.username] = { expression: currentUser.avatar_expression, color: currentUser.avatar_color };
-  updateSidebarAvatar();
-}
+try {
+  const savedUser = localStorage.getItem('currentUser');
+  if (savedUser) {
+    currentUser = JSON.parse(savedUser);
+    if (!currentUser || !currentUser.username) { currentUser = null; localStorage.removeItem('currentUser'); }
+    else {
+      if (!currentUser.avatar_expression) currentUser.avatar_expression = 'Smile';
+      if (!currentUser.avatar_color) currentUser.avatar_color = defaultAvatarColor(currentUser.username);
+      userAvatarCache[currentUser.username] = { expression: currentUser.avatar_expression, color: currentUser.avatar_color };
+      updateSidebarAvatar();
+    }
+  }
+} catch(e) { localStorage.removeItem('currentUser'); }
 
 // 不支持 getDisplayMedia 的设备（如 iOS）隐藏直播/共享音频按钮
 if (!navigator.mediaDevices?.getDisplayMedia) {

@@ -1,7 +1,6 @@
-const CACHE = 'reco-v23';
+const CACHE = 'reco-v24';
 const PRECACHE = [
   '/static/css/main.css',
-  '/static/js/app.js',
   '/static/logo.svg',
   '/static/icon.svg',
   '/static/app-logo.png',
@@ -24,9 +23,9 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
-  // 主页和 socket.io 始终走网络
-  if (url.pathname === '/' || url.pathname.includes('socket.io')) return;
-  // 静态资源：缓存优先，没有再从网络取
+  // 主页、socket.io、app.js 始终走网络（确保代码始终最新）
+  if (url.pathname === '/' || url.pathname.includes('socket.io') || url.pathname === '/static/js/app.js') return;
+  // 其他静态资源：缓存优先，没有再从网络取
   if (url.pathname.startsWith('/static/')) {
     e.respondWith(
       caches.match(e.request).then(cached =>
