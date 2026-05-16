@@ -1324,28 +1324,24 @@ function sendMessage() {
 }
 
 // ── Emoji 选择器 ──────────────────────────────────────────
+let _emojiOpen = false;
+
 function toggleEmojiPicker() {
-  const wrap = document.getElementById('emoji-picker-wrap');
-  const btn = document.getElementById('emoji-btn');
-  const open = wrap.classList.toggle('open');
-  btn.classList.toggle('active', open);
-  if (open) {
-    // 延迟初始化事件，避免立即关闭
-    setTimeout(() => {
-      document.addEventListener('click', _closeEmojiOnOutside, { once: true });
-    }, 0);
-  }
+  _emojiOpen = !_emojiOpen;
+  document.getElementById('emoji-picker-wrap').style.display = _emojiOpen ? 'block' : 'none';
+  document.getElementById('emoji-btn').classList.toggle('active', _emojiOpen);
 }
 
-function _closeEmojiOnOutside(e) {
+document.addEventListener('click', function(e) {
+  if (!_emojiOpen) return;
   const wrap = document.getElementById('emoji-picker-wrap');
-  if (wrap.contains(e.target) || e.target.id === 'emoji-btn') {
-    document.addEventListener('click', _closeEmojiOnOutside, { once: true });
-    return;
+  const btn = document.getElementById('emoji-btn');
+  if (!wrap.contains(e.target) && !btn.contains(e.target)) {
+    _emojiOpen = false;
+    wrap.style.display = 'none';
+    btn.classList.remove('active');
   }
-  wrap.classList.remove('open');
-  document.getElementById('emoji-btn').classList.remove('active');
-}
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   const picker = document.getElementById('emoji-picker');
@@ -1357,6 +1353,9 @@ document.addEventListener('DOMContentLoaded', () => {
       input.value = val.slice(0, pos) + e.detail.unicode + val.slice(pos);
       input.focus();
       input.setSelectionRange(pos + e.detail.unicode.length, pos + e.detail.unicode.length);
+      _emojiOpen = false;
+      document.getElementById('emoji-picker-wrap').style.display = 'none';
+      document.getElementById('emoji-btn').classList.remove('active');
     });
   }
 });

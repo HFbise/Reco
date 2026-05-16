@@ -92,7 +92,7 @@
     #chat-area { flex: 1; display: flex; min-width: 0; overflow: hidden; background: #f0f0f3; }
     body.dark #chat-area { background: #2a2b2f; }
     #no-room { flex: 1; display: flex; align-items: center; justify-content: center; color: #87888c; font-size: 1.05rem; }
-    #chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+    #chat-main { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; position: relative; }
     #chat-header { height: 50px; padding: 0 16px; display: flex; align-items: center; justify-content: space-between; background: #f0f0f3; border-bottom: 1px solid rgba(0,0,0,0.07); flex-shrink: 0; }
     body.dark #chat-header { background: #2a2b2f; border-color: rgba(255,255,255,0.07); }
     #chat-title { background: none; border: none; cursor: pointer; font-size: 0.97rem; font-weight: 600; color: inherit; padding: 4px 8px; border-radius: 5px; display: inline-flex; align-items: center; gap: 8px; transition: background 0.12s; width: fit-content; max-width: 60%; }
