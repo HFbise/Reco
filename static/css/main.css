@@ -124,8 +124,16 @@
     body.dark #input-area { background: #2a2b2f; }
     #emoji-btn { flex-shrink: 0; background: none; border: none; cursor: pointer; color: #87888c; padding: 6px; border-radius: 8px; display: flex; align-items: center; transition: color 0.12s, background 0.12s; }
     #emoji-btn:hover, #emoji-btn.active { color: #4f8ef7; background: rgba(79,142,247,0.1); }
-    #emoji-picker-wrap { position: absolute; bottom: 70px; left: 16px; z-index: 200; display: none; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18)); }
-    #emoji-picker-wrap.open { display: block; }
+    #emoji-picker-wrap { position: absolute; bottom: 70px; left: 16px; z-index: 200; display: none; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.18)); border-radius: 12px; overflow: hidden; width: 352px; background: #fff; }
+    body.dark #emoji-picker-wrap { background: #2a2b2f; }
+    #emoji-search-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid rgba(0,0,0,0.08); }
+    body.dark #emoji-search-bar { border-color: rgba(255,255,255,0.08); }
+    #emoji-search-input { flex: 1; border: none; outline: none; font-size: 0.88rem; background: transparent; color: inherit; min-width: 0; }
+    #emoji-search-results { display: none; flex-wrap: wrap; gap: 2px; padding: 6px; max-height: 300px; overflow-y: auto; align-content: flex-start; }
+    #emoji-search-results.active { display: flex; }
+    .emoji-res-btn { font-size: 1.4rem; padding: 4px 5px; border: none; background: none; cursor: pointer; border-radius: 6px; line-height: 1; }
+    .emoji-res-btn:hover { background: rgba(0,0,0,0.07); }
+    body.dark .emoji-res-btn:hover { background: rgba(255,255,255,0.1); }
     #msg-input { flex: 1; padding: 11px 16px; border: none; border-radius: 10px; background: #e4e4e8; color: inherit; font-size: 0.95rem; outline: none; }
     body.dark #msg-input { background: #383940; color: #e0e0e5; }
     #msg-input::placeholder { color: #87888c; }
@@ -325,7 +333,7 @@
       body.in-chat #members-sidebar { bottom: 0; }
 
       #msg-input { font-size: 16px; }
-      #emoji-picker-wrap { left: 0; right: 0; bottom: 60px; }
+      #emoji-picker-wrap { left: 0; right: 0; bottom: 60px; width: auto; border-radius: 12px 12px 0 0; }
       #emoji-picker-wrap emoji-picker { width: 100%; }
       #messages, #room-list, #member-list { -webkit-overflow-scrolling: touch; }
       .modal-box { width: 94vw; max-width: 94vw; padding: 18px 14px; }

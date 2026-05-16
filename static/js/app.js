@@ -203,16 +203,95 @@ function setLang(lang) {
   applyEmojiPickerLang();
 }
 
+let _emojiDataCache = {};  // { lang: [...] }
+
+async function _loadEmojiData() {
+  if (_emojiDataCache[currentLang]) return _emojiDataCache[currentLang];
+  const url = currentLang === 'zh'
+    ? 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/zh/cldr-native/data.json'
+    : 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/en/cldr/data.json';
+  const data = await fetch(url).then(r => r.json());
+  const arr = Array.isArray(data) ? data : (data.emoji || []);
+  _emojiDataCache[currentLang] = arr;
+  return arr;
+}
+
+function _insertEmoji(unicode) {
+  const input = document.getElementById('msg-input');
+  const pos = input.selectionStart ?? input.value.length;
+  const val = input.value;
+  input.value = val.slice(0, pos) + unicode + val.slice(pos);
+  input.focus();
+  input.setSelectionRange(pos + unicode.length, pos + unicode.length);
+  _emojiOpen = false;
+  document.getElementById('emoji-picker-wrap').style.display = 'none';
+  document.getElementById('emoji-btn').classList.remove('active');
+  document.getElementById('emoji-search-input').value = '';
+  document.getElementById('emoji-search-results').classList.remove('active');
+}
+
+async function _onEmojiSearch() {
+  const q = document.getElementById('emoji-search-input').value.trim();
+  const resultsEl = document.getElementById('emoji-search-results');
+  const pickerEl = document.getElementById('emoji-picker');
+  if (!q) {
+    resultsEl.classList.remove('active');
+    resultsEl.innerHTML = '';
+    if (pickerEl) pickerEl.style.display = '';
+    return;
+  }
+  if (pickerEl) pickerEl.style.display = 'none';
+  resultsEl.classList.add('active');
+  resultsEl.innerHTML = '<span style="padding:8px;opacity:0.5;font-size:0.8rem">加载中…</span>';
+  const data = await _loadEmojiData();
+  const ql = q.toLowerCase();
+  const matches = data.filter(e => {
+    const ann = (e.annotation || '').toLowerCase();
+    const tags = (e.tags || []).join(' ').toLowerCase();
+    const sc = (e.shortcodes || []).join(' ').toLowerCase();
+    return ann.includes(ql) || tags.includes(ql) || sc.includes(ql);
+  }).slice(0, 80);
+  if (!matches.length) {
+    resultsEl.innerHTML = `<span style="padding:8px;opacity:0.5;font-size:0.8rem">${currentLang === 'zh' ? '未找到' : 'Not found'}</span>`;
+    return;
+  }
+  resultsEl.innerHTML = '';
+  matches.forEach(e => {
+    const btn = document.createElement('button');
+    btn.className = 'emoji-res-btn';
+    btn.title = e.annotation || '';
+    btn.textContent = e.emoji;
+    btn.onclick = () => _insertEmoji(e.emoji);
+    resultsEl.appendChild(btn);
+  });
+}
+
 function applyEmojiPickerLang() {
-  const picker = document.getElementById('emoji-picker');
-  if (!picker) return;
+  const wrap = document.getElementById('emoji-picker-wrap');
+  if (!wrap) return;
   const isZh = currentLang === 'zh';
+  const old = document.getElementById('emoji-picker');
+  if (old) old.remove();
+  const picker = document.createElement('emoji-picker');
+  picker.id = 'emoji-picker';
   picker.setAttribute('locale', isZh ? 'zh' : 'en');
   picker.setAttribute('data-source', isZh
     ? 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/zh/cldr-native/data.json'
     : 'https://cdn.jsdelivr.net/npm/emoji-picker-element-data@1/en/cldr/data.json'
   );
-  picker.i18n = isZh ? { search: '搜索表情', categories: {}, skinTones: {} } : {};
+  wrap.appendChild(picker);
+  // 隐藏 picker 内置搜索栏
+  picker.addEventListener('load', () => {
+    if (picker.shadowRoot) {
+      const s = document.createElement('style');
+      s.textContent = '.search-row { display: none !important; }';
+      picker.shadowRoot.appendChild(s);
+    }
+  });
+  picker.addEventListener('emoji-click', e => _insertEmoji(e.detail.unicode));
+  // 搜索框 placeholder
+  const searchInput = document.getElementById('emoji-search-input');
+  if (searchInput) searchInput.placeholder = isZh ? '搜索表情…' : 'Search emoji…';
 }
 
 function switchSettingsTab(tab) {
@@ -1358,20 +1437,7 @@ document.addEventListener('click', function(e) {
 
 document.addEventListener('DOMContentLoaded', () => {
   applyEmojiPickerLang();
-  const picker = document.getElementById('emoji-picker');
-  if (picker) {
-    picker.addEventListener('emoji-click', e => {
-      const input = document.getElementById('msg-input');
-      const pos = input.selectionStart ?? input.value.length;
-      const val = input.value;
-      input.value = val.slice(0, pos) + e.detail.unicode + val.slice(pos);
-      input.focus();
-      input.setSelectionRange(pos + e.detail.unicode.length, pos + e.detail.unicode.length);
-      _emojiOpen = false;
-      document.getElementById('emoji-picker-wrap').style.display = 'none';
-      document.getElementById('emoji-btn').classList.remove('active');
-    });
-  }
+  document.getElementById('emoji-search-input')?.addEventListener('input', _onEmojiSearch);
 });
 
 document.getElementById('msg-input').addEventListener('keypress', e => {

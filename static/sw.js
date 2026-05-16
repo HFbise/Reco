@@ -1,4 +1,4 @@
-const CACHE = 'reco-v11';
+const CACHE = 'reco-v13';
 const PRECACHE = [
   '/static/css/main.css',
   '/static/js/app.js',
