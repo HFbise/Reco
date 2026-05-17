@@ -406,6 +406,7 @@ if (localStorage.getItem('theme') === 'dark') {
 updateThemeIcon();
 
 let cachedQuestions = [];
+let _soundEnabled = localStorage.getItem('notifSound') !== 'false';
 
 // 应用语言（使用已保存的偏好）
 applyLang();
@@ -1334,7 +1335,6 @@ function clearUnread(room) {
 }
 
 // ── 提示音 ───────────────────────────────────────────────
-let _soundEnabled = localStorage.getItem('notifSound') !== 'false';
 
 function playNotifSound() {
   if (!_soundEnabled) return;
