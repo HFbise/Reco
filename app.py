@@ -240,6 +240,10 @@ def privacy_policy():
 <p>如有隐私相关问题，请联系：<a href="mailto:a1522a@gmail.com">a1522a@gmail.com</a></p>
 </body></html>''', 200, {'Content-Type': 'text/html; charset=utf-8'}
 
+@app.route('/favicon.ico')
+def favicon():
+    return send_from_directory('static', 'icon.svg', mimetype='image/svg+xml')
+
 @app.route('/sw.js')
 def service_worker():
     resp = app.send_static_file('sw.js')
