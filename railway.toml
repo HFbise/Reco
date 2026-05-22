@@ -1,5 +1,2 @@
-[build]
-buildCommand = "cd app && npm ci --legacy-peer-deps && npx expo export --platform web"
-
 [deploy]
 startCommand = "python app.py"

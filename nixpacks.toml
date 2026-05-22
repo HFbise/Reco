@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.build]
+cmds = ["pip install -r requirements.txt", "cd app && npm ci --legacy-peer-deps && node_modules/.bin/expo export --platform web"]
+
+[start]
+cmd = "python app.py"
