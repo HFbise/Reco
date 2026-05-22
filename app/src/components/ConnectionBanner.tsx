@@ -5,16 +5,19 @@ import { getSocket } from '../lib/socket';
 export function ConnectionBanner() {
   const [status, setStatus] = useState<'ok' | 'down' | 'back'>('ok');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wasDownRef = useRef(false);
 
   useEffect(() => {
     const socket = getSocket();
 
     const onDisconnect = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      wasDownRef.current = true;
       setStatus('down');
     };
     const onConnect = () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      if (!wasDownRef.current) return; // 首次连接不提示
       setStatus('back');
       timerRef.current = setTimeout(() => setStatus('ok'), 2000);
     };
