@@ -1,4 +1,11 @@
 .env
+.env.*
 __pycache__/
 *.pyc
+*.pyo
 index.html.bak
+.DS_Store
+Thumbs.db
+.claude/
+extract_group.py
+package.json
