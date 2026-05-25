@@ -115,6 +115,13 @@ const zh = {
   'ph-confirm-password': '确认新密码',
   'err-password-mismatch': '两次密码不一致',
 
+  // Feedback
+  'feedback-btn': '写反馈',
+  'feedback-title': '写反馈',
+  'feedback-ph': '告诉我们你的想法、遇到的问题或建议…',
+  'feedback-submit': '提交',
+  'feedback-sent': '感谢你的反馈！',
+
   // Account deletion
   'delete-account': '删除账号',
   'confirm-delete-title': '确认删除账号',
@@ -287,6 +294,13 @@ const en: Record<keyof typeof zh, string> = {
   'err-change-failed': 'Failed to change password',
   'ph-confirm-password': 'Confirm new password',
   'err-password-mismatch': 'Passwords do not match',
+
+  // Feedback
+  'feedback-btn': 'Feedback',
+  'feedback-title': 'Write Feedback',
+  'feedback-ph': 'Tell us your thoughts, issues, or suggestions…',
+  'feedback-submit': 'Submit',
+  'feedback-sent': 'Thanks for your feedback!',
 
   // Account deletion
   'delete-account': 'Delete Account',

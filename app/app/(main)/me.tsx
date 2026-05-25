@@ -36,6 +36,9 @@ export default function MeScreen() {
   const [deletePw, setDeletePw] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSending, setFeedbackSending] = useState(false);
 
   async function logout() {
     getSocket().emit('user_offline', { username: currentUser?.username });
@@ -51,6 +54,22 @@ export default function MeScreen() {
     setSelectedColor(currentUser?.avatar_color || AVATAR_COLORS_LIST[0]);
     setError('');
     setEditing(true);
+  }
+
+  function doSubmitFeedback() {
+    const text = feedbackText.trim();
+    if (!text) return;
+    setFeedbackSending(true);
+    const socket = getSocket();
+    socket.emit('submit_feedback', { username: currentUser?.username, text });
+    socket.once('feedback_result', (data: any) => {
+      setFeedbackSending(false);
+      if (data.success) {
+        setShowFeedback(false);
+        setFeedbackText('');
+        Alert.alert(t('feedback-sent'));
+      }
+    });
   }
 
   function doDeleteAccount() {
@@ -152,6 +171,9 @@ export default function MeScreen() {
           <TouchableOpacity style={[s.changePwBtn, { borderColor: c.border }]} onPress={() => { setOldPw(''); setNewPw(''); setConfirmPw(''); setPwError(''); setShowChangePw(true); }} activeOpacity={0.86}>
             <Text style={[s.changePwText, { color: c.text }]}>{t('change-password')}</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[s.changePwBtn, { borderColor: c.border }]} onPress={() => { setFeedbackText(''); setShowFeedback(true); }} activeOpacity={0.86}>
+            <Text style={[s.changePwText, { color: c.text }]}>{t('feedback-btn')}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[s.logoutBtn, { borderColor: c.danger }]} onPress={logout} activeOpacity={0.86}>
             <Text style={[s.logoutText, { color: c.danger }]}>{t('logout')}</Text>
           </TouchableOpacity>
@@ -176,6 +198,38 @@ export default function MeScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={[s.editBtn, { opacity: pwSaving ? 0.6 : 1 }]} onPress={doChangePassword} disabled={pwSaving} activeOpacity={0.86}>
                 <Text style={s.editBtnText}>{pwSaving ? t('saving') : t('save')}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal visible={showFeedback} transparent animationType="fade" onRequestClose={() => setShowFeedback(false)}>
+        <TouchableOpacity style={s.cpOverlay} onPress={() => setShowFeedback(false)} activeOpacity={1}>
+          <TouchableOpacity style={[s.cpBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
+            <Text style={[s.cpTitle, { color: c.text }]}>{t('feedback-title')}</Text>
+            <TextInput
+              style={[s.input, s.bioInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
+              placeholder={t('feedback-ph')}
+              placeholderTextColor={c.textMuted}
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+              multiline
+              numberOfLines={5}
+              textAlignVertical="top"
+              maxLength={2000}
+            />
+            <View style={s.cpBtns}>
+              <TouchableOpacity style={[s.cpCancel, { borderColor: c.border }]} onPress={() => setShowFeedback(false)}>
+                <Text style={[s.cpCancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.editBtn, { opacity: feedbackSending || !feedbackText.trim() ? 0.5 : 1 }]}
+                onPress={doSubmitFeedback}
+                disabled={feedbackSending || !feedbackText.trim()}
+                activeOpacity={0.86}
+              >
+                <Text style={s.editBtnText}>{feedbackSending ? t('saving') : t('feedback-submit')}</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

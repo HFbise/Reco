@@ -65,6 +65,9 @@ export function DesktopShell() {
   const [deletePw, setDeletePw] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackSending, setFeedbackSending] = useState(false);
 
   useEffect(() => {
     AsyncStorage.multiGet(['micDeviceId', 'speakerDeviceId']).then(pairs => {
@@ -105,6 +108,22 @@ export function DesktopShell() {
   function openChangePw() {
     setOldPw(''); setNewPw(''); setConfirmPw(''); setPwError('');
     setShowChangePw(true);
+  }
+
+  function doSubmitFeedback() {
+    const text = feedbackText.trim();
+    if (!text) return;
+    setFeedbackSending(true);
+    const socket = getSocket();
+    socket.emit('submit_feedback', { username: currentUser?.username, text });
+    socket.once('feedback_result', (data: any) => {
+      setFeedbackSending(false);
+      if (data.success) {
+        setShowFeedback(false);
+        setFeedbackText('');
+        Alert.alert(t('feedback-sent'));
+      }
+    });
   }
 
   function doDeleteAccount() {
@@ -306,6 +325,9 @@ export function DesktopShell() {
                   <TouchableOpacity style={[s.meEditBtn, { backgroundColor: c.accent }]} onPress={openEditProfile} activeOpacity={0.86}>
                     <Text style={s.meEditBtnText}>{t('edit-profile')}</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={[s.meLogoutBtn, { borderColor: c.border }]} onPress={() => { setFeedbackText(''); setShowFeedback(true); }} activeOpacity={0.86}>
+                    <Text style={[s.meLogoutText, { color: c.text }]}>{t('feedback-btn')}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={[s.meLogoutBtn, { borderColor: c.danger }]} onPress={logout} activeOpacity={0.86}>
                     <Text style={[s.meLogoutText, { color: c.danger }]}>{t('logout')}</Text>
                   </TouchableOpacity>
@@ -427,6 +449,37 @@ export function DesktopShell() {
             </View>
           </View>
         </View>
+      </Modal>
+
+      {/* 反馈弹窗 */}
+      <Modal visible={showFeedback} transparent animationType="fade" onRequestClose={() => setShowFeedback(false)}>
+        <TouchableOpacity style={s.modalOverlay} onPress={() => setShowFeedback(false)} activeOpacity={1}>
+          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
+            <Text style={[s.modalTitle, { color: c.text }]}>{t('feedback-title')}</Text>
+            <TextInput
+              style={[s.modalInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border, minHeight: 100, textAlignVertical: 'top' }]}
+              placeholder={t('feedback-ph')}
+              placeholderTextColor={c.textMuted}
+              value={feedbackText}
+              onChangeText={setFeedbackText}
+              multiline
+              maxLength={2000}
+            />
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowFeedback(false)}>
+                <Text style={[s.cancelBtnText, { color: c.textMuted }]}>{t('cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.saveBtn, { opacity: feedbackSending || !feedbackText.trim() ? 0.5 : 1 }]}
+                onPress={doSubmitFeedback}
+                disabled={feedbackSending || !feedbackText.trim()}
+                activeOpacity={0.86}
+              >
+                <Text style={s.saveBtnText}>{feedbackSending ? t('saving') : t('feedback-submit')}</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
 
       {/* 删除账号确认弹窗 */}
