@@ -2,10 +2,7 @@ import logging
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
-from state import (
-    is_site_admin, add_site_admin, remove_site_admin,
-    check_login_rate, record_login_fail, reset_login_attempts,
-)
+from state import check_login_rate, record_login_fail, reset_login_attempts
 from utils import hash_password, verify_password, SECURITY_QUESTIONS, DEFAULT_PASSWORD
 
 log = logging.getLogger(__name__)
@@ -68,10 +65,6 @@ def handle_login(data):
             emit('login_result', {'success': False, 'msg': '密码错误'})
             return
         reset_login_attempts(username)
-        if user.get('is_admin'):
-            add_site_admin(username)
-        else:
-            remove_site_admin(username)
         if needs_migrate:
             with get_db() as conn:
                 cur = conn.cursor()
@@ -83,7 +76,6 @@ def handle_login(data):
             'username': username,
             'screenname': user['screenname'],
             'bio': user.get('bio') or '',
-            'is_admin': is_site_admin(username),
             'avatar_expression': user.get('avatar_expression') or 'Smile',
             'avatar_color': user.get('avatar_color') or '#5865F2',
         })
@@ -194,29 +186,6 @@ def handle_reset_password(data):
     except Exception as e:
         log.error('reset_password error: %s', e)
         emit('reset_password_result', {'success': False, 'msg': str(e)})
-
-
-@socketio.on('admin_reset_password')
-def handle_admin_reset(data):
-    if not is_site_admin(data['requester']):
-        emit('admin_reset_result', {'success': False, 'msg': '无权限'})
-        return
-    try:
-        target = data['target_username'].strip()
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute('SELECT username FROM users WHERE username = %s', (target,))
-            if not cur.fetchone():
-                emit('admin_reset_result', {'success': False, 'msg': '用户不存在'})
-                return
-            cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                        (hash_password(DEFAULT_PASSWORD), target))
-            conn.commit()
-        emit('admin_reset_result', {'success': True,
-                                    'msg': f'{target} 的密码已重置为 {DEFAULT_PASSWORD}'})
-    except Exception as e:
-        log.error('admin_reset error: %s', e)
-        emit('admin_reset_result', {'success': False, 'msg': str(e)})
 
 
 @socketio.on('get_questions_list')

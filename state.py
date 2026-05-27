@@ -17,37 +17,8 @@ message_rate: dict = {}      # { username: [timestamps] }
 login_attempts: dict = {}    # { username: {'count': N, 'until': float} }
 push_tokens: dict = {}       # { username: [expo_push_token, ...] }
 
-_site_admins: set = set()
-
-# ── Admin helpers ─────────────────────────────────────────────
-
-def load_site_admins():
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute("SELECT username FROM users WHERE is_admin = TRUE")
-            _site_admins.clear()
-            _site_admins.update(row['username'] for row in cur.fetchall())
-    except Exception as e:
-        log.error('load_site_admins failed: %s', e)
-
-
-def is_site_admin(username: str) -> bool:
-    return username in _site_admins
-
-
-def add_site_admin(username: str):
-    _site_admins.add(username)
-
-
-def remove_site_admin(username: str):
-    _site_admins.discard(username)
-
-
 def get_level(username: str, room_data: dict) -> int:
-    """3=site admin, 2=owner, 1=room admin, 0=member"""
-    if is_site_admin(username):
-        return 3
+    """2=owner, 1=room admin, 0=member"""
     if username == (room_data.get('owner') or ''):
         return 2
     if username in (room_data.get('admins') or []):

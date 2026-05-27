@@ -7,7 +7,7 @@ from flask_socketio import emit, join_room
 from extensions import socketio
 from db import get_db
 from state import (
-    is_site_admin, get_level,
+    get_level,
     online_users, pending_invites, rooms_voice, rooms_stream,
     emit_system_msg,
 )
@@ -37,8 +37,6 @@ def _build_members_data(cur, room_data: dict) -> list:
         user_rows = {r['username']: r for r in cur.fetchall()}
     members = []
     for u in member_usernames:
-        if is_site_admin(u):
-            continue
         row = user_rows.get(u, {})
         members.append({
             'username': u,
@@ -96,12 +94,12 @@ def handle_join(data):
                 return
 
             kicked = list(room_data.get('kicked') or [])
-            if username in kicked and not is_site_admin(username):
+            if username in kicked:
                 emit('join_result', {'success': False, 'msg': '你已被踢出该房间'})
                 return
 
             room_pw = room_data.get('password')
-            if room_pw and not is_site_admin(username):
+            if room_pw:
                 invited = username in pending_invites.get(room, set())
                 if invited:
                     pending_invites[room].discard(username)
@@ -111,7 +109,7 @@ def handle_join(data):
 
             join_room(room)
             members = list(room_data['members'] or [])
-            is_first_join = username not in members and not is_site_admin(username)
+            is_first_join = username not in members
             if is_first_join:
                 members.append(username)
                 cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
@@ -173,7 +171,7 @@ def handle_join(data):
         })
         emit('members_list', {'room': room, 'members': members_data}, to=room)
 
-        if is_first_join and not is_site_admin(username):
+        if is_first_join:
             emit_system_msg(room, f'{joiner_screen} 加入了房间')
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
@@ -233,9 +231,7 @@ def handle_get_rooms(data=None):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            if is_site_admin(username):
-                cur.execute("SELECT name, password, code FROM rooms")
-            elif username:
+            if username:
                 cur.execute(
                     "SELECT name, password, code FROM rooms WHERE name = '大厅' OR %s = ANY(members)",
                     (username,)
@@ -342,7 +338,10 @@ def handle_set_admin(data):
                     cur.execute('UPDATE rooms SET admins = %s WHERE name = %s',
                                 (admins, data['room']))
                     conn.commit()
-        action = f"{data['target']} 被取消了管理员" if remove else f"{data['target']} 成为了管理员"
+            cur.execute('SELECT screenname FROM users WHERE username = %s', (data['target'],))
+            row = cur.fetchone()
+            target_screen = row['screenname'] if row else data['target']
+        action = f"{target_screen} 被取消了管理员" if remove else f"{target_screen} 成为了管理员"
         emit('set_admin_result', {'success': True, 'target': data['target'], 'remove': remove})
         emit_system_msg(data['room'], action)
     except Exception as e:
@@ -549,24 +548,6 @@ def handle_report_user(data):
     except Exception as e:
         log.error('report_user error: %s', e)
         emit('report_result', {'success': False})
-
-
-@socketio.on('get_reports')
-def handle_get_reports(data):
-    if not is_site_admin(data.get('username', '')):
-        return
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                'SELECT id, reporter, reported, reason, created_at'
-                ' FROM reports ORDER BY created_at DESC LIMIT 200'
-            )
-            rows = cur.fetchall()
-        emit('reports_list', {'reports': [dict(r) for r in rows]})
-    except Exception as e:
-        log.error('get_reports error: %s', e)
-        emit('reports_list', {'reports': []})
 
 
 @socketio.on('block_user')

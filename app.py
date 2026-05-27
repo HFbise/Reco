@@ -16,9 +16,12 @@ logging.basicConfig(
 from flask import send_from_directory, request, jsonify
 from extensions import app, socketio
 from db import get_db
-from state import load_site_admins, rooms_voice, online_users
+from state import rooms_voice, online_users
+from admin import admin_bp
 
 import handlers  # registers all socket event handlers
+
+app.register_blueprint(admin_bp)
 
 # ── Static / SPA ──────────────────────────────────────────────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
@@ -137,6 +140,7 @@ def _migrate():
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb")
+            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE")
@@ -184,6 +188,5 @@ def _migrate():
 
 if __name__ == '__main__':
     _migrate()
-    load_site_admins()
     port = int(os.environ.get('PORT', 5000))
     socketio.run(app, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True)

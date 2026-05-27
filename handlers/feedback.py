@@ -2,7 +2,6 @@ import logging
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
-from state import is_site_admin
 
 log = logging.getLogger(__name__)
 
@@ -29,21 +28,3 @@ def handle_submit_feedback(data):
     except Exception as e:
         log.error('submit_feedback error: %s', e)
         emit('feedback_result', {'success': False, 'msg': str(e)})
-
-
-@socketio.on('get_feedback')
-def handle_get_feedback(data):
-    if not is_site_admin(data.get('username', '')):
-        return
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                'SELECT id, username, text, created_at FROM feedback'
-                ' ORDER BY created_at DESC LIMIT 200'
-            )
-            rows = cur.fetchall()
-        emit('feedback_list', {'items': [dict(r) for r in rows]})
-    except Exception as e:
-        log.error('get_feedback error: %s', e)
-        emit('feedback_list', {'items': []})
