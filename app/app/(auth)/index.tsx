@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal,
   StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView,
@@ -33,6 +33,10 @@ export default function AuthScreen() {
   const [secAnswer, setSecAnswer] = useState('');
   const [showQPicker, setShowQPicker] = useState(false);
   const { setUser } = useAuthStore();
+  const screennameRef = useRef<TextInput>(null);
+  const passwordRef = useRef<TextInput>(null);
+  const secAnswerRef = useRef<TextInput>(null);
+  const forgotNewPwRef = useRef<TextInput>(null);
 
   // Forgot password state
   const [showForgot, setShowForgot] = useState(false);
@@ -124,67 +128,78 @@ export default function AuthScreen() {
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: c.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
-        <Text style={[s.logo, { color: c.accent }]}>Reco</Text>
+        <View style={s.column}>
+          <Text style={[s.logo, { color: c.accent }]}>Reco</Text>
 
-        <View style={[s.tabs, { borderColor: c.border, backgroundColor: c.surface }]}>
-          <TouchableOpacity style={[s.tab, tab === 'login' && { backgroundColor: c.accent }]} onPress={() => { setTab('login'); setError(''); }}>
-            <Text style={[s.tabText, { color: tab === 'login' ? '#fff' : c.textSub }]}>{t('login')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.tab, tab === 'register' && { backgroundColor: c.accent }]} onPress={() => { setTab('register'); setError(''); }}>
-            <Text style={[s.tabText, { color: tab === 'register' ? '#fff' : c.textSub }]}>{t('register')}</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={[s.tabs, { borderColor: c.border, backgroundColor: c.surface }]}>
+            <TouchableOpacity style={[s.tab, tab === 'login' && { backgroundColor: c.accent }]} onPress={() => { setTab('login'); setError(''); }}>
+              <Text style={[s.tabText, { color: tab === 'login' ? '#fff' : c.textSub }]}>{t('login')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[s.tab, tab === 'register' && { backgroundColor: c.accent }]} onPress={() => { setTab('register'); setError(''); }}>
+              <Text style={[s.tabText, { color: tab === 'register' ? '#fff' : c.textSub }]}>{t('register')}</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={s.form}>
-          <TextInput
-            style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-            placeholder={t('ph-username')} placeholderTextColor={c.textMuted}
-            value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
-            autoComplete="username" textContentType="username"
-          />
-          {tab === 'register' && (
+          <View style={s.form}>
             <TextInput
               style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-screenname')} placeholderTextColor={c.textMuted}
-              value={screenname} onChangeText={setScreenname}
-              autoComplete="name" textContentType="name"
+              placeholder={t('ph-username')} placeholderTextColor={c.textMuted}
+              value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
+              autoComplete="username" textContentType="username"
+              returnKeyType="next" blurOnSubmit={false}
+              onSubmitEditing={() => (tab === 'register' ? screennameRef : passwordRef).current?.focus()}
             />
-          )}
-          <TextInput
-            style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-            placeholder={t('ph-password')} placeholderTextColor={c.textMuted}
-            value={password} onChangeText={setPassword} secureTextEntry
-            autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
-            textContentType={tab === 'login' ? 'password' : 'newPassword'}
-          />
-          {tab === 'register' && (
-            <>
-              <TouchableOpacity
-                style={[s.input, s.qPicker, { backgroundColor: c.surface, borderColor: c.border }]}
-                onPress={() => setShowQPicker(true)}
-                activeOpacity={0.8}
-              >
-                <Text style={[s.qPickerText, { color: c.text }]} numberOfLines={2}>{secQuestion}</Text>
-              </TouchableOpacity>
+            {tab === 'register' && (
               <TextInput
                 style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-                placeholder={t('ph-security-answer')}
-                placeholderTextColor={c.textMuted}
-                value={secAnswer}
-                onChangeText={setSecAnswer}
-                autoComplete="off"
+                placeholder={t('ph-screenname')} placeholderTextColor={c.textMuted}
+                value={screenname} onChangeText={setScreenname}
+                autoComplete="name" textContentType="name"
+                ref={screennameRef} returnKeyType="next" blurOnSubmit={false}
+                onSubmitEditing={() => passwordRef.current?.focus()}
               />
-            </>
-          )}
-          {!!error && <Text style={[s.error, { color: c.danger }]}>{error}</Text>}
-          <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }]} onPress={tab === 'login' ? doLogin : doRegister} activeOpacity={0.86}>
-            <Text style={s.btnText}>{tab === 'login' ? t('login') : t('register')}</Text>
-          </TouchableOpacity>
-          {tab === 'login' && (
-            <TouchableOpacity onPress={openForgot} activeOpacity={0.7}>
-              <Text style={[s.forgotLink, { color: c.textMuted }]}>{t('forgot-password')}</Text>
+            )}
+            <TextInput
+              style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+              placeholder={t('ph-password')} placeholderTextColor={c.textMuted}
+              value={password} onChangeText={setPassword} secureTextEntry
+              autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
+              textContentType={tab === 'login' ? 'password' : 'newPassword'}
+              ref={passwordRef} returnKeyType={tab === 'login' ? 'go' : 'next'}
+              blurOnSubmit={tab === 'login'}
+              onSubmitEditing={() => (tab === 'login' ? doLogin() : secAnswerRef.current?.focus())}
+            />
+            {tab === 'register' && (
+              <>
+                <TouchableOpacity
+                  style={[s.input, s.qPicker, { backgroundColor: c.surface, borderColor: c.border }]}
+                  onPress={() => setShowQPicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[s.qPickerText, { color: c.text }]} numberOfLines={2}>{secQuestion}</Text>
+                </TouchableOpacity>
+                <TextInput
+                  style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                  placeholder={t('ph-security-answer')}
+                  placeholderTextColor={c.textMuted}
+                  value={secAnswer}
+                  onChangeText={setSecAnswer}
+                  autoComplete="off"
+                  ref={secAnswerRef} returnKeyType="go"
+                  onSubmitEditing={doRegister}
+                />
+              </>
+            )}
+            {!!error && <Text style={[s.error, { color: c.danger }]}>{error}</Text>}
+            <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }]} onPress={tab === 'login' ? doLogin : doRegister} activeOpacity={0.86}>
+              <Text style={s.btnText}>{tab === 'login' ? t('login') : t('register')}</Text>
             </TouchableOpacity>
-          )}
+            {tab === 'login' && (
+              <TouchableOpacity onPress={openForgot} activeOpacity={0.7}>
+                <Text style={[s.forgotLink, { color: c.textMuted }]}>{t('forgot-password')}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </ScrollView>
 
@@ -224,6 +239,8 @@ export default function AuthScreen() {
                   onChangeText={setForgotUsername}
                   autoCapitalize="none"
                   autoCorrect={false}
+                  returnKeyType="go"
+                  onSubmitEditing={() => { if (!forgotLoading) getForgotQuestion(); }}
                 />
                 <View style={s.modalBtns}>
                   <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowForgot(false)}>
@@ -248,6 +265,8 @@ export default function AuthScreen() {
                   placeholderTextColor={c.textMuted}
                   value={forgotAnswer}
                   onChangeText={setForgotAnswer}
+                  returnKeyType="next" blurOnSubmit={false}
+                  onSubmitEditing={() => forgotNewPwRef.current?.focus()}
                 />
                 <TextInput
                   style={[s.input, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
@@ -257,6 +276,8 @@ export default function AuthScreen() {
                   onChangeText={setForgotNewPw}
                   secureTextEntry
                   autoComplete="new-password" textContentType="newPassword"
+                  ref={forgotNewPwRef} returnKeyType="go"
+                  onSubmitEditing={() => { if (!forgotLoading) doResetPassword(); }}
                 />
                 <View style={s.modalBtns}>
                   <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setForgotStep('username')}>
@@ -283,6 +304,7 @@ export default function AuthScreen() {
 const s = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.xxl + 8 },
+  column: { width: '100%', maxWidth: 360, alignSelf: 'center' },
   logo: { fontSize: 36, fontWeight: String(Fonts.heavy) as any, textAlign: 'center', marginBottom: 40 },
   tabs: { flexDirection: 'row', marginBottom: Spacing.xl, borderRadius: Radius.md, overflow: 'hidden', borderWidth: 1 },
   tab: { flex: 1, paddingVertical: 9, alignItems: 'center' },
@@ -297,8 +319,8 @@ const s = StyleSheet.create({
   qPickerText: { fontSize: 15 },
   qOption: { paddingVertical: 13, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth },
   qOptionText: { fontSize: 14 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', padding: Spacing.xxl },
-  modalBox: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xxl },
+  modalBox: { width: '100%', maxWidth: 400, borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md },
   modalTitle: { fontSize: 17, fontWeight: String(Fonts.bold) as any },
   questionText: { fontSize: 14, fontWeight: String(Fonts.semibold) as any },
   modalBtns: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'flex-end', marginTop: Spacing.xs },
