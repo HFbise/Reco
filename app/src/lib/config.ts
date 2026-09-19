@@ -5,6 +5,6 @@ const DEV_URL = Platform.OS === 'web'
   ? 'http://localhost:5000'
   : 'http://192.168.86.27:5000';
 
-const PROD_URL = Platform.OS === 'web' ? '' : 'https://web-production-133e4.up.railway.app';
+const PROD_URL = Platform.OS === 'web' ? '' : 'https://chat-5wg8.onrender.com';
 
 export const SERVER_URL = __DEV__ ? DEV_URL : PROD_URL;
