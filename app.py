@@ -19,6 +19,7 @@ log = logging.getLogger('app')
 
 from flask import jsonify, request, send_from_directory
 
+import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
 from admin import admin_bp
 from auth_session import verify_token
 from db import get_db
