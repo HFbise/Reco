@@ -9,6 +9,10 @@ import { useAuthStore } from '../../src/store/authStore';
 import { getSocket, connectSocket } from '../../src/lib/socket';
 import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
+import { useLangStore } from '../../src/store/langStore';
+import { useThemeStore } from '../../src/store/themeStore';
+import { IconMoon, IconSun } from '../../src/components/Icon';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fonts, Radius, Spacing } from '../../src/theme';
 
 type Tab = 'login' | 'register';
@@ -19,6 +23,9 @@ const SECURITY_QUESTIONS = ['birth_city', 'primary_school', 'pet_name', 'mother_
 export default function AuthScreen() {
   const c = useColors();
   const t = useT();
+  const insets = useSafeAreaInsets();
+  const { lang, setLang } = useLangStore();
+  const { isDark, toggle: toggleTheme } = useThemeStore();
   const { mode } = useLocalSearchParams<{ mode?: string }>();
   const [tab, setTab] = useState<Tab>(mode === 'register' ? 'register' : 'login');
   const [username, setUsername] = useState('');
@@ -220,6 +227,18 @@ export default function AuthScreen() {
         </View>
       </ScrollView>
 
+      {/* language + theme, available before signing in */}
+      <View style={[s.corner, { top: insets.top + Spacing.md }]}>
+        <TouchableOpacity onPress={() => setLang(lang === 'zh' ? 'en' : 'zh')} style={[s.cornerBtn, { backgroundColor: c.surface, borderColor: c.border }]}
+          activeOpacity={0.7} accessibilityLabel={t('language')}>
+          <Text style={[s.cornerText, { color: c.textSub }]}>{lang === 'zh' ? 'EN' : '中文'}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={toggleTheme} style={[s.cornerBtn, { backgroundColor: c.surface, borderColor: c.border }]}
+          activeOpacity={0.7} accessibilityLabel={t('dark-mode')}>
+          {isDark ? <IconSun size={17} color={c.textSub} /> : <IconMoon size={17} color={c.textSub} />}
+        </TouchableOpacity>
+      </View>
+
       {/* 安全问题选择器 */}
       <Modal visible={showQPicker} transparent animationType="fade" onRequestClose={() => setShowQPicker(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowQPicker(false)} activeOpacity={1}>
@@ -320,6 +339,9 @@ export default function AuthScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
+  corner: { position: 'absolute', right: Spacing.lg, flexDirection: 'row', gap: Spacing.sm },
+  cornerBtn: { minWidth: 38, height: 34, paddingHorizontal: 10, borderRadius: Radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cornerText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.xxl + 8 },
   column: { width: '100%', maxWidth: 360, alignSelf: 'center' },
   logo: { fontSize: 36, fontWeight: String(Fonts.heavy) as any, textAlign: 'center', marginBottom: 40 },

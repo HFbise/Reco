@@ -119,6 +119,7 @@ export function MessageBubble({ msg, currentUsername, onLongPress, onReactionPre
             delayLongPress={350}
             activeOpacity={0.85}
             disabled={!onLongPress}
+            style={s.bubbleTouch}
           >
             <View style={[s.bubble, isOwn ? s.bubbleOwn : { backgroundColor: c.bubbleOther }]}>
               {bubbleContent}
@@ -169,10 +170,13 @@ const s = StyleSheet.create({
 
   name: { fontSize: 13, fontWeight: String(Fonts.semibold) as any, marginBottom: 1 },
 
+  // Without shrink the bubble grows to the text's full length instead of wrapping
+  bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%' },
   bubble: { borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '100%' },
   bubbleOwn: { backgroundColor: '#4f8ef7' },
 
-  text: { fontSize: 15, lineHeight: 22 },
+  // web: long URLs / unbroken strings wrap instead of widening the bubble
+  text: { fontSize: 15, lineHeight: 22, ...(Platform.OS === 'web' ? { wordBreak: 'break-word' } : {}) } as any,
   editedLabel: { fontSize: 11, marginTop: 2 },
   recalled: { fontSize: 14, fontStyle: 'italic' },
 

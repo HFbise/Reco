@@ -160,3 +160,29 @@ def test_guest_cannot_see_random_match(server, browser, demo_room, shots):
     page.get_by_text('Take a look first').click()
     page.get_by_text('Reco Demo', exact=True).first.wait_for()
     assert page.get_by_role('tab', name='Match').count() == 0
+
+
+def test_long_messages_wrap_on_a_phone(server, browser, demo_room, shots):
+    context = browser.new_context(
+        viewport={'width': 320, 'height': 640}, has_touch=True, is_mobile=True, locale='en-US'
+    )
+    page = context.new_page()
+    shots.append(page)
+    page.goto(URL)
+    page.get_by_text('Take a look first').click()
+    page.get_by_text('Reco Demo', exact=True).first.click()
+    page.get_by_text('Welcome to the Reco demo', exact=False).wait_for()
+    page.wait_for_timeout(1000)  # screen transition
+    too_wide = page.evaluate(
+        "() => [...document.querySelectorAll('div')].filter(e => e.getBoundingClientRect().right > innerWidth + 1).length"
+    )
+    assert too_wide == 0
+
+
+def test_language_can_be_switched_before_logging_in(server, browser, shots):
+    page = new_page(browser, locale='zh-CN')
+    shots.append(page)
+    page.goto(URL)
+    page.get_by_placeholder('用户名').wait_for()
+    page.get_by_label('语言').click()
+    page.get_by_placeholder('Username').wait_for()
