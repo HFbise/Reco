@@ -1,21 +1,25 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_TAGS, normalizeTag, parseTagInput } from '../matchTags';
+import { ALL_TAGS, MAX_TAGS, TAG_CATEGORIES, knownTags, toggleTag } from '../matchTags';
+import { hasKey } from '../i18n';
 
-test('normalizeTag strips #, trims, lowercases and caps length', () => {
-  assert.equal(normalizeTag('  #Music '), 'music');
-  assert.equal(normalizeTag('##Indie   Rock'), 'indie rock');
-  assert.equal(normalizeTag('x'.repeat(40)).length, 20);
+test('toggleTag selects, unselects and ignores unknown tags', () => {
+  assert.deepEqual(toggleTag([], 'music'), ['music']);
+  assert.deepEqual(toggleTag(['music', 'anime'], 'music'), ['anime']);
+  assert.deepEqual(toggleTag(['music'], 'not-a-tag'), ['music']);
 });
 
-test('parseTagInput splits on commas and skips duplicates and blanks', () => {
-  assert.deepEqual(parseTagInput('Music, games,,music，anime', []), ['music', 'games', 'anime']);
-  assert.deepEqual(parseTagInput('games', ['games']), ['games']);
-  assert.deepEqual(parseTagInput('音乐, c++, 🎮', []), ['音乐']);
-});
-
-test('parseTagInput never goes past the limit', () => {
-  const full = ['a', 'b', 'c', 'd', 'e'];
+test('toggleTag never goes past the limit', () => {
+  const full = ['music', 'movies', 'anime', 'books', 'kpop'];
   assert.equal(full.length, MAX_TAGS);
-  assert.deepEqual(parseTagInput('f, g', full), full);
+  assert.deepEqual(toggleTag(full, 'travel'), full);
+});
+
+test('knownTags drops tags that are not in the catalog', () => {
+  assert.deepEqual(knownTags(['music', 'old free text', 'hiking']), ['music', 'hiking']);
+});
+
+test('every category and tag has a label', () => {
+  for (const category of TAG_CATEGORIES) assert.ok(hasKey(`tagcat-${category.id}`), `tagcat-${category.id}`);
+  for (const tag of ALL_TAGS) assert.ok(hasKey(`tag-${tag}`), `tag-${tag}`);
 });

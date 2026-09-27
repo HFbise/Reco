@@ -134,12 +134,12 @@ def test_random_match_text_chat_then_both_keep_in_touch(server, browser, shots):
     for page, name in ((dave, 'dave'), (erin, 'erin')):
         log_in(page, name)
         page.get_by_role('tab', name='Match').click()
-        page.get_by_placeholder('Type and press Enter, e.g. music').fill('music')
-        page.get_by_placeholder('Type and press Enter, e.g. music').press('Enter')
+        page.get_by_role('tab', name='Entertainment').click()
+        page.get_by_role('checkbox', name='Music').click()
         page.get_by_text('Start', exact=True).click()
 
     for page in (dave, erin):
-        page.get_by_text('You both like: #music').wait_for(timeout=10000)
+        page.get_by_text('You both like: Music').wait_for(timeout=10000)
     assert dave.get_by_text('Erin').count() == 0  # anonymous until both agree
 
     dave.get_by_placeholder('Type a message...').fill('hi stranger')

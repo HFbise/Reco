@@ -2,7 +2,7 @@
 
 import pytest
 
-from matching import RELAX_AFTER, MatchQueue, Ticket, normalize_tags
+from matching import RELAX_AFTER, TAGS, MatchQueue, Ticket, normalize_tags
 
 
 class Clock:
@@ -88,13 +88,25 @@ def test_leave_removes_you_from_the_queue(clock):
 @pytest.mark.parametrize(
     'raw, expected',
     [
-        (['Music', ' music ', '#Games'], ['music', 'games']),
-        (['音乐', 'k-pop', 'a  b'], ['音乐', 'k-pop', 'a b']),
-        (['<script>', 'ok'], ['ok']),
-        (['x' * 50], ['x' * 20]),
-        ([str(i) for i in range(10)], ['0', '1', '2', '3', '4']),
+        (['Music', ' music ', 'hiking'], ['music', 'hiking']),
+        (['音乐', 'free text', '<script>', 'anime'], ['anime']),  # only catalog ids
+        ([None, 3, 'coffee'], ['coffee']),
+        (
+            ['music', 'movies', 'anime', 'books', 'kpop', 'podcasts', 'travel'],
+            ['music', 'movies', 'anime', 'books', 'kpop'],
+        ),
         ('not a list', []),
     ],
 )
 def test_tags_are_normalized(raw, expected):
     assert normalize_tags(raw) == expected
+
+
+def test_catalog_tags_are_unique_ids():
+    import json
+    from pathlib import Path
+
+    catalog = json.loads((Path(__file__).parents[1] / 'app/src/lib/matchTags.json').read_text(encoding='utf-8'))
+    ids = [tag for category in catalog['categories'] for tag in category['tags']]
+    assert len(ids) == len(set(ids)) == len(TAGS)
+    assert all(tag.isascii() and tag == tag.lower() and ' ' not in tag for tag in ids)

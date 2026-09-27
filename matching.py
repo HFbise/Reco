@@ -4,7 +4,9 @@ Pure queue logic (no sockets, no database) so it can be tested directly; the
 Socket.IO side lives in handlers/match.py.
 
 Rules:
-  * One queue per mode ('text', 'voice').
+  * One queue per mode ('text', or 'voice' which also has text chat).
+  * Tags come from a fixed catalog (app/src/lib/matchTags.json, shared with the
+    client) so people actually overlap; they're ids, labels are translated.
   * Prefer the waiting person sharing the most interest tags (ties: longest wait).
   * Nobody is matched with someone who has blocked them or whom they blocked,
     nor straight back with the partner they just left.
@@ -13,27 +15,29 @@ Rules:
     user counts don't stall.
 """
 
-import re
+import json
 import threading
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 
 MODES = ('text', 'voice')
 MAX_TAGS = 5
-MAX_TAG_LEN = 20
+_CATALOG = json.loads((Path(__file__).parent / 'app' / 'src' / 'lib' / 'matchTags.json').read_text(encoding='utf-8'))
+TAGS = frozenset(tag for category in _CATALOG['categories'] for tag in category['tags'])
 RELAX_AFTER = 10.0  # seconds
 
 
 def normalize_tags(raw) -> list[str]:
-    """Lowercased, trimmed, de-duplicated tags (letters of any script, digits, spaces, - _)."""
+    """Known catalog tag ids only, de-duplicated, in the order given, at most MAX_TAGS."""
     if not isinstance(raw, list):
         return []
     tags = []
     for item in raw:
         if not isinstance(item, str):
             continue
-        tag = re.sub(r'\s+', ' ', item.strip().lstrip('#').lower())[:MAX_TAG_LEN]
-        if tag and re.fullmatch(r'[\w\- ]+', tag) and tag not in tags:
+        tag = item.strip().lower()
+        if tag in TAGS and tag not in tags:
             tags.append(tag)
         if len(tags) == MAX_TAGS:
             break

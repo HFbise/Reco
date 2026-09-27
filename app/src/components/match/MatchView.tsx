@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Platform, KeyboardAvoidingView,
+  View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, FlatList, Platform, KeyboardAvoidingView, ScrollView,
 } from 'react-native';
 import { AvatarView } from '../AvatarView';
 import { MessageBubble, type Message } from '../MessageBubble';
@@ -10,7 +10,8 @@ import { useT } from '../../hooks/useT';
 import { useMatch, type MatchMode, type Revealed } from '../../hooks/useMatch';
 import { useMatchVoice } from '../../hooks/useMatchVoice';
 import { showAlert } from '../../lib/alert';
-import { RELAX_AFTER_MS, parseTagInput } from '../../lib/matchTags';
+import { MAX_TAGS, RELAX_AFTER_MS, TAG_CATEGORIES, knownTags, toggleTag } from '../../lib/matchTags';
+import type { I18nKey } from '../../lib/i18n';
 import { Fonts, Radius, Spacing } from '../../theme';
 
 interface Props {
@@ -48,7 +49,7 @@ export function MatchView({ onOpenDm }: Props) {
           <Text style={[s.headerName, { color: c.text }]}>{t('stranger')}</Text>
           {match.sharedTags.length > 0 && (
             <Text style={[s.headerSub, { color: c.textMuted }]} numberOfLines={1}>
-              {t('match-shared')}: {match.sharedTags.map((tag) => `#${tag}`).join(' ')}
+              {t('match-shared')}: {match.sharedTags.map(t.tag).join(' · ')}
             </Text>
           )}
         </View>
@@ -113,13 +114,10 @@ function MatchStart({ onStart, lastMode, lastTags }: { onStart: (m: MatchMode, t
   const c = useColors();
   const t = useT();
   const [mode, setMode] = useState<MatchMode>(lastMode);
-  const [tags, setTags] = useState<string[]>(lastTags);
-  const [draft, setDraft] = useState('');
-
-  function addDraft() {
-    setTags((prev) => parseTagInput(draft, prev));
-    setDraft('');
-  }
+  const [tags, setTags] = useState<string[]>(() => knownTags(lastTags));
+  const [category, setCategory] = useState(TAG_CATEGORIES[0].id);
+  const shown = TAG_CATEGORIES.find((x) => x.id === category) ?? TAG_CATEGORIES[0];
+  const full = tags.length >= MAX_TAGS;
 
   const modeBtn = (value: MatchMode, label: string) => (
     <TouchableOpacity key={value} onPress={() => setMode(value)} activeOpacity={0.85}
@@ -130,7 +128,7 @@ function MatchStart({ onStart, lastMode, lastTags }: { onStart: (m: MatchMode, t
   );
 
   return (
-    <View style={[s.fill, s.center, { backgroundColor: c.bg }]}>
+    <ScrollView style={{ backgroundColor: c.bg }} contentContainerStyle={s.startScroll}>
       <View style={[s.startCard, { backgroundColor: c.surface }]}>
         <View style={[s.startIcon, { backgroundColor: c.accentBg }]}><IconShuffle size={28} color={c.accent} /></View>
         <Text style={[s.title, { color: c.text }]}>{t('match-title')}</Text>
@@ -139,27 +137,67 @@ function MatchStart({ onStart, lastMode, lastTags }: { onStart: (m: MatchMode, t
           {modeBtn('text', t('match-text'))}
           {modeBtn('voice', t('match-voice'))}
         </View>
-        <Text style={[s.label, { color: c.textMuted }]}>{t('match-tags-label')}</Text>
-        <View style={[s.tagBox, { borderColor: c.border, backgroundColor: c.bg }]}>
-          {tags.map((tag) => (
-            <TouchableOpacity key={tag} style={[s.chip, { backgroundColor: c.accentBg }]}
-              onPress={() => setTags((prev) => prev.filter((x) => x !== tag))} activeOpacity={0.7}>
-              <Text style={[s.chipText, { color: c.accent }]}>#{tag} ×</Text>
-            </TouchableOpacity>
-          ))}
-          {tags.length < 5 && (
-            <TextInput style={[s.tagInput, { color: c.text }]} value={draft} onChangeText={setDraft}
-              onSubmitEditing={addDraft} onBlur={addDraft} blurOnSubmit={false}
-              placeholder={tags.length ? '' : t('match-tags-ph')} placeholderTextColor={c.textMuted} autoCapitalize="none" />
-          )}
+
+        <View style={[s.row, { marginTop: Spacing.sm }]}>
+          <Text style={[s.label, { color: c.textMuted, flex: 1 }]}>{t('match-tags-label')}</Text>
+          <Text style={[s.label, { color: full ? c.accent : c.textMuted }]}>{t('match-tags-count', { n: tags.length, max: MAX_TAGS })}</Text>
         </View>
-        <TouchableOpacity style={[s.startBtn, { backgroundColor: c.accent }]} activeOpacity={0.86}
-          onPress={() => onStart(mode, parseTagInput(draft, tags))}>
+
+        {/* categories */}
+        <View style={s.catRow}>
+          {TAG_CATEGORIES.map((cat) => {
+            const on = cat.id === category;
+            const picked = cat.tags.filter((tag) => tags.includes(tag)).length;
+            return (
+              <TouchableOpacity key={cat.id} onPress={() => setCategory(cat.id)} activeOpacity={0.8}
+                accessibilityRole="tab" accessibilityState={{ selected: on }}
+                style={[s.catTab, { backgroundColor: on ? c.accent : c.bg }]}>
+                <Text style={[s.catText, { color: on ? '#fff' : c.text }]}>{t(`tagcat-${cat.id}` as I18nKey)}</Text>
+                {picked > 0 && (
+                  <View style={[s.catBadge, { backgroundColor: on ? '#fff' : c.accent }]}>
+                    <Text style={[s.catBadgeText, { color: on ? c.accent : '#fff' }]}>{picked}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* tags in the chosen category */}
+        <View style={s.tagGrid}>
+          {shown.tags.map((tag) => {
+            const on = tags.includes(tag);
+            const disabled = !on && full;
+            return (
+              <TouchableOpacity key={tag} onPress={() => setTags((prev) => toggleTag(prev, tag))} disabled={disabled}
+                activeOpacity={0.75} accessibilityRole="checkbox" accessibilityState={{ checked: on, disabled }}
+                style={[s.chip, { borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accent : 'transparent' },
+                  disabled && { opacity: 0.4 }]}>
+                <Text style={[s.chipText, { color: on ? '#fff' : c.text }]}>{t.tag(tag)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {/* everything picked so far, across categories */}
+        {tags.length > 0 && (
+          <View style={[s.picked, { borderTopColor: c.border }]}>
+            {tags.map((tag) => (
+              <TouchableOpacity key={tag} style={[s.pickedChip, { backgroundColor: c.accentBg }]}
+                onPress={() => setTags((prev) => toggleTag(prev, tag))} activeOpacity={0.7}
+                accessibilityLabel={`${t.tag(tag)} ×`}>
+                <Text style={[s.pickedText, { color: c.accent }]}>{t.tag(tag)} ×</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        <TouchableOpacity style={[s.startBtn, { backgroundColor: c.accent }]} activeOpacity={0.86} onPress={() => onStart(mode, tags)}>
           <Text style={s.startText}>{t('match-start')}</Text>
         </TouchableOpacity>
         <Text style={[s.note, { color: c.textMuted }]}>{t('match-private-note')}</Text>
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
@@ -180,7 +218,7 @@ function Searching({ tags, since, onCancel }: { tags: string[]; since: number; o
     <View style={[s.fill, s.center, { backgroundColor: c.bg }]}>
       <ActivityIndicator size="large" color={c.accent} />
       <Text style={[s.searchText, { color: c.text }]}>
-        {tags.length ? t('match-searching-tags', { tags: tags.map((x) => `#${x}`).join(' ') }) : t('match-searching')}
+        {tags.length ? t('match-searching-tags', { tags: tags.map(t.tag).join(' · ') }) : t('match-searching')}
       </Text>
       {widened && <Text style={[s.subtitle, { color: c.textMuted }]}>{t('match-widening')}</Text>}
       <TouchableOpacity style={[s.pill, { borderColor: c.border, marginTop: Spacing.lg }]} onPress={onCancel} activeOpacity={0.8}>
@@ -312,7 +350,8 @@ const s = StyleSheet.create({
   fill: { flex: 1 },
   center: { alignItems: 'center', justifyContent: 'center', padding: Spacing.xl },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  startCard: { width: '100%', maxWidth: 440, borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, alignItems: 'stretch' },
+  startScroll: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.lg },
+  startCard: { width: '100%', maxWidth: 520, borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, alignItems: 'stretch' },
   startIcon: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', alignSelf: 'center' },
   title: { fontSize: 22, fontWeight: String(Fonts.bold) as any, textAlign: 'center' },
   subtitle: { fontSize: 14, textAlign: 'center', lineHeight: 20 },
@@ -320,10 +359,17 @@ const s = StyleSheet.create({
   label: { fontSize: 12, fontWeight: String(Fonts.semibold) as any, marginTop: Spacing.sm },
   modeBtn: { flex: 1, flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: Radius.md, borderWidth: 1.5 },
   modeText: { fontSize: 15, fontWeight: String(Fonts.semibold) as any },
-  tagBox: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, borderWidth: 1, borderRadius: Radius.md, padding: 8, minHeight: 46, alignItems: 'center' },
-  chip: { borderRadius: 14, paddingHorizontal: 10, paddingVertical: 5 },
+  catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  catTab: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 16, paddingHorizontal: 12, paddingVertical: 7 },
+  catText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
+  catBadge: { minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  catBadgeText: { fontSize: 11, fontWeight: String(Fonts.bold) as any },
+  tagGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 16, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 7 },
   chipText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
-  tagInput: { flexGrow: 1, minWidth: 120, fontSize: 14, paddingVertical: 4, outlineStyle: 'none' } as any,
+  picked: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.md },
+  pickedChip: { borderRadius: 12, paddingHorizontal: 9, paddingVertical: 4 },
+  pickedText: { fontSize: 12, fontWeight: String(Fonts.semibold) as any },
   startBtn: { borderRadius: Radius.md, padding: 13, alignItems: 'center', marginTop: Spacing.sm },
   startText: { color: '#fff', fontSize: 16, fontWeight: String(Fonts.bold) as any },
   searchText: { fontSize: 16, fontWeight: String(Fonts.semibold) as any, marginTop: Spacing.lg, textAlign: 'center' },

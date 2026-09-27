@@ -1,0 +1,10 @@
+{
+  "categories": [
+    { "id": "chat", "tags": ["just_chat", "make_friends", "deep_talk", "advice", "late_night", "language_exchange", "memes"] },
+    { "id": "entertainment", "tags": ["music", "movies", "tv_shows", "anime", "books", "kpop", "podcasts"] },
+    { "id": "games", "tags": ["pc_games", "console_games", "mobile_games", "esports", "minecraft", "indie_games", "board_games"] },
+    { "id": "sports", "tags": ["fitness", "basketball", "soccer", "running", "hiking", "cycling", "swimming"] },
+    { "id": "lifestyle", "tags": ["food", "cooking", "travel", "pets", "photography", "fashion", "coffee"] },
+    { "id": "learning", "tags": ["programming", "design", "science", "languages", "study_buddy", "career", "startups"] }
+  ]
+}

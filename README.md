@@ -29,7 +29,10 @@ first load can take up to a minute.
   selection and screen sharing. Voice goes through a self-hosted TURN server using
   short-lived HMAC credentials.
 - **Random matching:**
-  - Pick text or voice and optional interest tags, then get paired with a stranger.
+  - Pick text or voice + text, plus up to five interests from a categorized catalog,
+    then get paired with a stranger. Tags are ids from one JSON file that both the
+    client and the server read, so labels are translated and Chinese and English
+    users who share an interest still match.
   - The queue prefers the most shared interests and widens to anyone after 10
     seconds. It never re-pairs you with your last partner or with someone you
     blocked.
