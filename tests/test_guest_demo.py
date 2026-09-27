@@ -123,3 +123,22 @@ def test_demo_seed_failure_does_not_roll_back_the_migration(monkeypatch):
 def test_demo_messages_carry_a_display_time(demo_room):
     rows = query('SELECT time FROM messages WHERE room = %s', demo.DEMO_ROOM)
     assert rows and all(r['time'] for r in rows)
+
+
+def test_demo_seeds_on_a_database_that_requires_security_questions():
+    """Production's users table predates this code and has NOT NULL security columns."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM users WHERE username = ANY(%s)', (list(demo.PERSONAS),))
+        cur.execute('ALTER TABLE users ALTER COLUMN security_question SET NOT NULL')
+        cur.execute('ALTER TABLE users ALTER COLUMN security_answer SET NOT NULL')
+        conn.commit()
+        try:
+            demo.seed(cur)
+            conn.commit()
+        finally:
+            conn.rollback()
+            cur.execute('ALTER TABLE users ALTER COLUMN security_question DROP NOT NULL')
+            cur.execute('ALTER TABLE users ALTER COLUMN security_answer DROP NOT NULL')
+            conn.commit()
+    assert len(query('SELECT 1 FROM users WHERE username = ANY(%s)', list(demo.PERSONAS))) == len(demo.PERSONAS)

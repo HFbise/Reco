@@ -12,7 +12,7 @@ import json
 import logging
 import secrets
 
-from utils import hash_password
+from utils import SECURITY_QUESTIONS, hash_password
 
 log = logging.getLogger(__name__)
 
@@ -57,11 +57,21 @@ def seed(cur):
     for username, (screenname, expression, color) in PERSONAS.items():
         if username in existing:
             continue  # hashing is deliberately slow; don't redo it on every startup
-        # Unusable random password: these accounts exist only to author the demo
+        # Unusable random password and security answer: these accounts exist only to
+        # author the demo. (Older databases require a security question on every user.)
         cur.execute(
-            'INSERT INTO users (username, screenname, password, bio, avatar_expression, avatar_color)'
-            " VALUES (%s, %s, %s, 'Demo account', %s, %s) ON CONFLICT (username) DO NOTHING",
-            (username, screenname, hash_password(secrets.token_urlsafe(32)), expression, color),
+            'INSERT INTO users (username, screenname, password, bio, security_question, security_answer,'
+            " avatar_expression, avatar_color) VALUES (%s, %s, %s, 'Demo account', %s, %s, %s, %s)"
+            ' ON CONFLICT (username) DO NOTHING',
+            (
+                username,
+                screenname,
+                hash_password(secrets.token_urlsafe(32)),
+                SECURITY_QUESTIONS[0],
+                hash_password(secrets.token_urlsafe(32)),
+                expression,
+                color,
+            ),
         )
 
     cur.execute(
