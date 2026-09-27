@@ -103,3 +103,23 @@ def test_demo_script_refreshes_when_version_changes(demo_room, monkeypatch):
         demo.seed(conn.cursor())  # idempotent
         conn.commit()
     assert query('SELECT count(*) AS n FROM messages WHERE room = %s', demo.DEMO_ROOM)[0]['n'] == 2
+
+
+def test_demo_seed_failure_does_not_roll_back_the_migration(monkeypatch):
+    import app as app_module
+    from state import LOBBY
+
+    def broken_seed(cur):
+        cur.execute('SELECT 1 FROM no_such_table')
+
+    with get_db() as conn:
+        conn.cursor().execute('DELETE FROM rooms WHERE name = %s', (LOBBY,))
+        conn.commit()
+    monkeypatch.setattr(demo, 'seed', broken_seed)
+    app_module._migrate()
+    assert query('SELECT name FROM rooms WHERE name = %s', LOBBY)
+
+
+def test_demo_messages_carry_a_display_time(demo_room):
+    rows = query('SELECT time FROM messages WHERE room = %s', demo.DEMO_ROOM)
+    assert rows and all(r['time'] for r in rows)

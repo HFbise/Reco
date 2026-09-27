@@ -81,19 +81,22 @@ def seed(cur):
         if author == 'system':
             code, params = text, extras
             cur.execute(
-                'INSERT INTO messages (room, username, screenname, text, system, meta, created_at)'
-                " VALUES (%s, 'system', '系统', %s, TRUE, %s::jsonb, NOW() - make_interval(mins => %s))",
+                'INSERT INTO messages (room, username, screenname, text, system, meta, created_at, time)'
+                " VALUES (%s, 'system', '系统', %s, TRUE, %s::jsonb, NOW() - make_interval(mins => %s),"
+                " to_char(NOW() - make_interval(mins => %s), 'HH24:MI'))",
                 (
                     DEMO_ROOM,
                     f'{params["name"]} 加入了房间',
                     json.dumps({'system': {'code': code, 'params': params}, 'demo_version': DEMO_VERSION}),
                     minutes_ago,
+                    minutes_ago,
                 ),
             )
             continue
         cur.execute(
-            'INSERT INTO messages (room, username, screenname, text, edited, reactions, meta, created_at)'
-            ' VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, NOW() - make_interval(mins => %s))',
+            'INSERT INTO messages (room, username, screenname, text, edited, reactions, meta, created_at, time)'
+            ' VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, NOW() - make_interval(mins => %s),'
+            " to_char(NOW() - make_interval(mins => %s), 'HH24:MI'))",
             (
                 DEMO_ROOM,
                 author,
@@ -102,6 +105,7 @@ def seed(cur):
                 bool(extras.get('edited')),
                 json.dumps(extras.get('reactions', {})),
                 json.dumps({'demo_version': DEMO_VERSION}),
+                minutes_ago,
                 minutes_ago,
             ),
         )

@@ -257,17 +257,21 @@ def _migrate():
                 if cur.rowcount:
                     log.info('converted %d legacy "%s" system messages', cur.rowcount, code)
 
-            demo.seed(cur)
-            conn.commit()
-            match_handlers.purge_expired()  # 7-day retention for match transcripts
-
             # The lobby belongs to nobody: it is moderated only from the admin panel
             cur.execute(
                 "INSERT INTO rooms (name, admins, members, owner) VALUES (%s, '{}', '{}', NULL)"
                 " ON CONFLICT (name) DO UPDATE SET owner = NULL, admins = '{}'",
                 (LOBBY,),
             )
-            conn.commit()
+            conn.commit()  # schema first: nothing below may roll it back
+
+            try:
+                demo.seed(cur)
+                conn.commit()
+            except Exception as e:
+                conn.rollback()
+                log.exception('demo seed failed: %s', e)
+        match_handlers.purge_expired()  # 7-day retention for match transcripts
     except Exception as e:
         log.exception('migration failed: %s', e)
 
