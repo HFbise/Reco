@@ -40,7 +40,15 @@ export async function loadMessageCache(username: string) {
   } catch {}
 }
 
-/** Forget the in-memory cache (on logout). The owner's saved copy stays on disk. */
+/** Signing out: forget the cache and delete the saved copy, so private messages
+ *  don't stay readable in this browser / on this device. */
+export async function clearMessageCache() {
+  const key = owner ? keyFor(owner) : null;
+  resetMessageCache();
+  if (key) await AsyncStorage.removeItem(key).catch(() => {});
+}
+
+/** Forget the in-memory cache (switching accounts); the saved copy stays on disk. */
 export function resetMessageCache() {
   if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
   cache.clear();

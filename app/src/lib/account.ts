@@ -1,5 +1,4 @@
-import { router } from 'expo-router';
-import { disconnectSocket, getSocket } from './socket';
+import { endSession, getSocket } from './socket';
 import { useAuthStore } from '../store/authStore';
 import { unregisterPushToken } from '../hooks/usePushNotifications';
 
@@ -20,12 +19,6 @@ export function request<T = any>(event: string, payload: object, resultEvent: st
   });
 }
 
-async function endSession() {
-  disconnectSocket();
-  await useAuthStore.getState().clearUser();
-  router.replace('/(auth)');
-}
-
 export async function logout() {
   unregisterPushToken();
   getSocket().emit('user_offline', {});
@@ -43,7 +36,8 @@ export async function changePassword(oldPassword: string, newPassword: string) {
 }
 
 export async function updateProfile(profile: { screenname: string; bio: string; expression: string; color: string }) {
-  getSocket().emit('save_avatar', { expression: profile.expression, color: profile.color });
+  const avatar = await request('save_avatar', { expression: profile.expression, color: profile.color }, 'save_avatar_result');
+  if (!avatar.success) return avatar;
   const reply = await request('update_profile', { screenname: profile.screenname, bio: profile.bio }, 'update_profile_result');
   if (reply.success) {
     const { currentUser, setUser } = useAuthStore.getState();

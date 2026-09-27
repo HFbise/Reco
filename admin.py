@@ -518,7 +518,7 @@ def rooms():
         rows_html += (
             f'<tr><td><b>{rname}</b> {pw}</td>'
             f'<td class="mono">{r["code"] or ""}</td>'
-            f'<td class="mono">{r["owner"] or ""}</td>'
+            f'<td class="mono">{_esc(r["owner"] or "")}</td>'
             f'<td>{mc}</td>'
             f'<td><a href="/admin/rooms/{_url(r["name"])}/detail" class="btn btn-ghost">详情</a> {close_btn}</td></tr>'
         )

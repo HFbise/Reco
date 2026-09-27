@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { AvatarView } from '../AvatarView';
 import { MessageBubble, type Message } from '../MessageBubble';
+import { isSendKey } from '../../lib/keys';
 import { IconChat, IconMic, IconMicOff, IconSend, IconShuffle } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
@@ -305,7 +306,7 @@ function MatchComposer({ onSend, onTyping, keepLabel, keepDisabled, onKeep }: {
           placeholder={t('ph-message')} placeholderTextColor={c.textMuted} value={text} onChangeText={change}
           onSubmitEditing={send} returnKeyType="send" multiline
           onKeyPress={(e: any) => {
-            if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+            if (Platform.OS === 'web' && isSendKey(e.nativeEvent)) {
               e.preventDefault?.();
               send();
             }

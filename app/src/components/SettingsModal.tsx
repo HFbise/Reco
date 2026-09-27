@@ -139,8 +139,13 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
             </View>
           ) : (
             <View style={s.panel}>
-              <Text style={[s.label, { color: c.text }]}>{t('settings-mic-label')}</Text>
-              {slider(voice.micVolume, voice.setMicVolume)}
+              {/* Mic volume is applied with Web Audio, which the native app doesn't have */}
+              {Platform.OS === 'web' && (
+                <>
+                  <Text style={[s.label, { color: c.text }]}>{t('settings-mic-label')}</Text>
+                  {slider(voice.micVolume, voice.setMicVolume)}
+                </>
+              )}
               <Text style={[s.label, { color: c.text, marginTop: 12 }]}>{t('settings-speaker-label')}</Text>
               {slider(voice.speakerVolume, voice.setSpeakerVolume)}
               {Platform.OS === 'web' && mics.length > 0 && (

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Image, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -40,6 +40,9 @@ export default function RoomsScreen() {
 
   function slideIn() {
     Animated.timing(slideAnim, { toValue: -SW, duration: 280, easing: EASE, useNativeDriver: true }).start();
+    // The open chat gets a browser history entry, so the phone's back gesture
+    // closes it instead of leaving the site
+    window.history.pushState({ recoChat: true }, '');
   }
 
   function slideOut(cb: () => void) {
@@ -89,12 +92,27 @@ export default function RoomsScreen() {
     }
   }
 
-  function closeRoom() {
+  function hideChat() {
     slideOut(() => {
       setActiveRoom(null);
       setActiveDmMeta(null);
     });
   }
+
+  function closeRoom() {
+    // Going back through history keeps it in step; popstate below hides the chat
+    if (IS_WEB && window.history.state?.recoChat) window.history.back();
+    else hideChat();
+  }
+
+  const hideChatRef = useRef(hideChat);
+  hideChatRef.current = hideChat;
+  useEffect(() => {
+    if (!IS_WEB) return;
+    const onPop = () => hideChatRef.current();
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   function handlePlusPress() {
     plusBtnRef.current?.measure((_fx, _fy, w, h, px, py) => {

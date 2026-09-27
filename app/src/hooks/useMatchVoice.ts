@@ -29,9 +29,11 @@ export function useMatchVoice(matchId: number | null, active: boolean, initiator
     let pc: any = null;
     let closed = false;
     const pendingIce: any[] = [];
+    // The other side may be faster (no mic prompt, say): hold what arrives before our connection exists
+    const early: { type: string; payload: any }[] = [];
 
     const onSignal = async ({ type, payload }: { type: string; payload: any }) => {
-      if (!pc) return;
+      if (!pc) { early.push({ type, payload }); return; }
       try {
         if (type === 'offer') {
           await pc.setRemoteDescription(new (SDP as any)(payload));
@@ -83,6 +85,7 @@ export function useMatchVoice(matchId: number | null, active: boolean, initiator
         await pc.setLocalDescription(offer);
         socket.emit('match_signal', { type: 'offer', payload: pc.localDescription });
       }
+      for (const signal of early.splice(0)) await onSignal(signal);
     })();
 
     return () => {

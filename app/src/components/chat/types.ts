@@ -8,6 +8,8 @@ export interface ExternalVoice {
   isDeafened: boolean;
   ping: number | null;
   micVolume: number;
+  /** Whether micVolume actually changes what peers hear (web only) */
+  micGainSupported: boolean;
   speakerVolume: number;
   isStreamingAudio: boolean;
   isStreaming: boolean;

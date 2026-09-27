@@ -27,13 +27,15 @@ export function unregisterPushToken() {
 
 export function usePushNotifications(onNotificationTap?: (roomName: string) => void) {
   const username = useAuthStore(s => s.currentUser?.username);
+  const isGuest = useAuthStore(s => !!s.currentUser?.guest);
   const responseListenerRef = useRef<Notifications.Subscription | null>(null);
   const onTapRef = useRef(onNotificationTap);
   onTapRef.current = onNotificationTap;
 
   useEffect(() => {
-    if (username) registerForPushAsync();
-  }, [username]);
+    // Demo guests have no account to notify (and the server would refuse them)
+    if (username && !isGuest) registerForPushAsync();
+  }, [username, isGuest]);
 
   useEffect(() => {
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {

@@ -38,13 +38,6 @@ def handle_guest_login(data=None):
     emit('guest_login_result', {'success': True, 'username': guest, 'token': token})
 
 
-@socketio.on('user_online')
-@readable
-def handle_user_online(username, data):
-    # Kept for older clients; binding already marks the user online.
-    pass
-
-
 @socketio.on('user_offline')
 @readable
 def handle_user_offline(username, data):

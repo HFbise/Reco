@@ -50,7 +50,9 @@ export function MessageList(p: Props) {
       return (
         <View style={[s.inviteCard, { backgroundColor: c.surface, borderColor: c.border }]}>
           <Text style={[s.inviteTitle, { color: c.text }]}>
-            {t('invite-text', { name: msg.screenname, room: t.room(invite.room) })}
+            {msg.isOwn
+              ? t('invite-sent-text', { room: t.room(invite.room) })
+              : t('invite-text', { name: msg.screenname, room: t.room(invite.room) })}
           </Text>
           <TouchableOpacity style={[s.inviteBtn, { backgroundColor: c.accent }]} onPress={() => p.onOpenRoom(invite.room)} activeOpacity={0.85}>
             <Text style={s.inviteBtnText}>{t.room(invite.room)}</Text>

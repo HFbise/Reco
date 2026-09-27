@@ -2,7 +2,7 @@ import json
 import logging
 import random
 import string
-from datetime import UTC, datetime
+from datetime import datetime
 
 from flask_socketio import emit, join_room
 
@@ -505,17 +505,17 @@ def handle_invite_to_room(inviter, data):
             text = f'{inviter_screen} 邀请你加入房间 {room}'
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, meta)'
-                ' VALUES (%s, %s, %s, %s, %s, %s::jsonb) RETURNING id',
+                ' VALUES (%s, %s, %s, %s, %s, %s::jsonb) RETURNING id, created_at',
                 (dm_room, inviter, inviter_screen, text, datetime.now().strftime('%H:%M'), meta),
             )
-            msg_id = cur.fetchone()['id']
+            saved = cur.fetchone()
             conn.commit()
         msg_data = {
-            'id': msg_id,
+            'id': saved['id'],
             'username': inviter,
             'screenname': inviter_screen,
             'text': text,
-            'time': datetime.now(UTC).isoformat(),
+            'time': saved['created_at'].isoformat(),
             'room': dm_room,
             'meta': {'invite': {'room': room, 'code': room_code}},
         }

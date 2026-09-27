@@ -1,12 +1,12 @@
-// 与 web 端 main.css 保持一致的设计 token
+// Design tokens
 export const Colors = {
-  // 主色
+  // Accent
   accent: '#4f8ef7',
   accentDark: '#3a7be0',
   accentBg: 'rgba(79,142,247,0.12)',
   accentBgDark: 'rgba(79,142,247,0.2)',
 
-  // 背景
+  // Backgrounds
   bgLight: '#f0f0f3',
   bgDark: '#2a2b2f',
   surfaceLight: '#ffffff',
@@ -14,23 +14,23 @@ export const Colors = {
   surface2Light: '#383940',
   surface2Dark: '#1e1f23',
 
-  // 文字
+  // Text
   textLight: '#2e3338',
   textDark: '#e0e0e5',
   textMuted: '#87888c',
   textSub: '#5c5e66',
   textSubDark: '#949ba4',
 
-  // 边框
+  // Borders
   borderLight: 'rgba(0,0,0,0.08)',
   borderDark: 'rgba(255,255,255,0.08)',
 
-  // 消息气泡
+  // Message bubbles
   bubbleOwn: '#4f8ef7',
   bubbleOther: '#ffffff',
   bubbleOtherDark: '#383940',
 
-  // 状态色
+  // Status colors
   danger: '#ed4245',
   success: '#3ba55c',
   warning: '#FAA61A',
@@ -62,7 +62,7 @@ export const Spacing = {
   xxl: 24,
 };
 
-// useTheme hook 用
+// Light / dark palette, used by useColors()
 export function getTheme(dark: boolean) {
   return {
     bg: dark ? Colors.bgDark : Colors.bgLight,

@@ -3,6 +3,7 @@ import { GuestBanner } from '../GuestBanner';
 import { IconEmoji, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
+import { isSendKey } from '../../lib/keys';
 import { Fonts, Radius, Spacing } from '../../theme';
 
 interface Props {
@@ -71,8 +72,9 @@ export function Composer(p: Props) {
         returnKeyType="send"
         multiline
         onKeyPress={(e: any) => {
-          // Web: Enter sends, Shift+Enter adds a line
-          if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey) {
+          // Web: Enter sends, Shift+Enter adds a line. Not while an input method is composing:
+          // there Enter picks the candidate (e.g. pinyin), it doesn't mean "send"
+          if (Platform.OS === 'web' && isSendKey(e.nativeEvent)) {
             e.preventDefault?.();
             p.onSend();
           }

@@ -1,12 +1,13 @@
 import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { showAlert } from '../../src/lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
-import { getSocket, connectSocket } from '../../src/lib/socket';
+import { connectSocket } from '../../src/lib/socket';
+import { request } from '../../src/lib/account';
 import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
 import { useLangStore } from '../../src/store/langStore';
@@ -16,6 +17,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fonts, Radius, Spacing } from '../../src/theme';
 
 type Tab = 'login' | 'register';
+
+// A sleeping free-tier server takes up to a minute to answer the first request
+const AUTH_TIMEOUT_MS = 70_000;
+const SLOW_AFTER_MS = 4_000;
 
 // Ids understood by the server (utils.SECURITY_QUESTIONS); text comes from i18n
 const SECURITY_QUESTIONS = ['birth_city', 'primary_school', 'pet_name', 'mother_maiden_name', 'first_car', 'favorite_teacher'];
@@ -50,57 +55,65 @@ export default function AuthScreen() {
   const [forgotStep, setForgotStep] = useState<'username' | 'answer'>('username');
   const [forgotError, setForgotError] = useState('');
   const [forgotLoading, setForgotLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [slow, setSlow] = useState(false);
 
-  function doLogin() {
+  /** One request at a time, with a spinner, and a "waking up" note if the server is slow. */
+  async function ask(event: string, payload: object, resultEvent: string) {
+    connectSocket();
+    setBusy(true);
+    const timer = setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    try {
+      return await request<any>(event, payload, resultEvent, AUTH_TIMEOUT_MS);
+    } finally {
+      clearTimeout(timer);
+      setBusy(false);
+      setSlow(false);
+    }
+  }
+
+  async function doLogin() {
+    if (busy) return;
     if (!username || !password) { setError(t('err-fill-user-pass')); return; }
     setError('');
-    connectSocket();
-    const socket = getSocket();
-    socket.emit('login', { username, password });
-    socket.once('login_result', async (data: any) => {
-      if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
-      await setUser({
-        username: data.username,
-        screenname: data.screenname,
-        bio: data.bio || '',
-        avatar_expression: data.avatar_expression || 'Smile',
-        avatar_color: data.avatar_color,
-        token: data.token,
-      });
-      router.replace('/(main)');
+    const data = await ask('login', { username, password }, 'login_result');
+    if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
+    await setUser({
+      username: data.username,
+      screenname: data.screenname,
+      bio: data.bio || '',
+      avatar_expression: data.avatar_expression || 'Smile',
+      avatar_color: data.avatar_color,
+      token: data.token,
     });
+    router.replace('/(main)');
   }
 
-  function viewDemo() {
-    connectSocket();
-    const socket = getSocket();
-    socket.emit('guest_login', {});
-    socket.once('guest_login_result', async (data: any) => {
-      if (!data.success) return;
-      await setUser({
-        username: data.username,
-        screenname: t('guest-name'),
-        bio: '',
-        avatar_expression: 'Smile',
-        avatar_color: '#9C84EC',
-        token: data.token,
-        guest: true,
-      });
-      router.replace('/(main)');
+  async function viewDemo() {
+    if (busy) return;
+    setError('');
+    const data = await ask('guest_login', {}, 'guest_login_result');
+    if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
+    await setUser({
+      username: data.username,
+      screenname: t('guest-name'),
+      bio: '',
+      avatar_expression: 'Smile',
+      avatar_color: '#9C84EC',
+      token: data.token,
+      guest: true,
     });
+    router.replace('/(main)');
   }
 
-  function doRegister() {
+  async function doRegister() {
+    if (busy) return;
     if (!username || !screenname || !password || !secAnswer.trim()) { setError(t('err-fill-required')); return; }
     setError('');
-    connectSocket();
-    const socket = getSocket();
-    socket.emit('register', { username, screenname, password, bio: '', security_question: secQuestion, security_answer: secAnswer.trim() });
-    socket.once('register_result', (data: any) => {
-      if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
-      showAlert(t('register-success'), t('please-login'));
-      setTab('login');
-    });
+    const data = await ask('register', { username, screenname, password, bio: '', security_question: secQuestion, security_answer: secAnswer.trim() }, 'register_result');
+    if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
+    showAlert(t('register-success'), t('please-login'));
+    setTab('login');
   }
 
   function openForgot() {
@@ -113,37 +126,31 @@ export default function AuthScreen() {
     setShowForgot(true);
   }
 
-  function getForgotQuestion() {
+  async function getForgotQuestion() {
     if (!forgotUsername.trim()) { setForgotError(t('err-fill-required')); return; }
     setForgotError('');
     setForgotLoading(true);
     connectSocket();
-    const socket = getSocket();
-    socket.emit('get_security_question', { username: forgotUsername.trim() });
-    socket.once('security_question_result', (data: any) => {
-      setForgotLoading(false);
-      if (!data.success || !data.question) { setForgotError(t.server(data, 'err-reset-failed')); return; }
-      setForgotQuestion(data.question);
-      setForgotStep('answer');
-    });
+    const data = await request<any>('get_security_question', { username: forgotUsername.trim() }, 'security_question_result', AUTH_TIMEOUT_MS);
+    setForgotLoading(false);
+    if (!data.success || !data.question) { setForgotError(t.server(data, 'err-reset-failed')); return; }
+    setForgotQuestion(data.question);
+    setForgotStep('answer');
   }
 
-  function doResetPassword() {
+  async function doResetPassword() {
     if (!forgotAnswer.trim() || !forgotNewPw.trim()) { setForgotError(t('err-fill-required')); return; }
     setForgotError('');
     setForgotLoading(true);
-    const socket = getSocket();
-    socket.emit('reset_password', {
+    const data = await request<any>('reset_password', {
       username: forgotUsername.trim(),
       answer: forgotAnswer.trim(),
       new_password: forgotNewPw.trim(),
-    });
-    socket.once('reset_password_result', (data: any) => {
-      setForgotLoading(false);
-      if (!data.success) { setForgotError(t.server(data, 'err-reset-failed')); return; }
-      setShowForgot(false);
-      showAlert(t('password-changed'), t('please-login'));
-    });
+    }, 'reset_password_result', AUTH_TIMEOUT_MS);
+    setForgotLoading(false);
+    if (!data.success) { setForgotError(t.server(data, 'err-reset-failed')); return; }
+    setShowForgot(false);
+    showAlert(t('password-changed'), t('please-login'));
   }
 
   return (
@@ -212,15 +219,17 @@ export default function AuthScreen() {
               </>
             )}
             {!!error && <Text style={[s.error, { color: c.danger }]}>{error}</Text>}
-            <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }]} onPress={tab === 'login' ? doLogin : doRegister} activeOpacity={0.86}>
-              <Text style={s.btnText}>{tab === 'login' ? t('login') : t('register')}</Text>
+            <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }, busy && { opacity: 0.7 }]}
+              onPress={tab === 'login' ? doLogin : doRegister} activeOpacity={0.86} disabled={busy}>
+              {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{tab === 'login' ? t('login') : t('register')}</Text>}
             </TouchableOpacity>
+            {slow && <Text style={[s.slowNote, { color: c.textMuted }]}>{t('server-waking')}</Text>}
             {tab === 'login' && (
               <TouchableOpacity onPress={openForgot} activeOpacity={0.7}>
                 <Text style={[s.forgotLink, { color: c.textMuted }]}>{t('forgot-password')}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[s.demoBtn, { borderColor: c.border }]} onPress={viewDemo} activeOpacity={0.8}>
+            <TouchableOpacity style={[s.demoBtn, { borderColor: c.border }]} onPress={viewDemo} activeOpacity={0.8} disabled={busy}>
               <Text style={[s.demoBtnText, { color: c.accent }]}>{t('demo-view')} →</Text>
             </TouchableOpacity>
           </View>
@@ -239,7 +248,7 @@ export default function AuthScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* 安全问题选择器 */}
+      {/* Security question picker */}
       <Modal visible={showQPicker} transparent animationType="fade" onRequestClose={() => setShowQPicker(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowQPicker(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
@@ -258,7 +267,7 @@ export default function AuthScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* 忘记密码弹窗 */}
+      {/* Forgot password */}
       <Modal visible={showForgot} transparent animationType="fade" onRequestClose={() => setShowForgot(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowForgot(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
@@ -351,7 +360,8 @@ const s = StyleSheet.create({
   form: { gap: Spacing.md },
   input: { borderRadius: Radius.md, padding: 13, fontSize: 15, borderWidth: 1 },
   error: { fontSize: 13 },
-  btn: { borderRadius: Radius.md, padding: 13, alignItems: 'center', marginTop: Spacing.xs },
+  btn: { borderRadius: Radius.md, padding: 13, alignItems: 'center', marginTop: Spacing.xs, minHeight: 46, justifyContent: 'center' },
+  slowNote: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
   btnText: { color: '#fff', fontWeight: String(Fonts.bold) as any, fontSize: 15 },
   forgotLink: { textAlign: 'center', fontSize: 13 },
   demoBtn: { borderRadius: Radius.md, borderWidth: 1, padding: 11, alignItems: 'center', marginTop: Spacing.lg },

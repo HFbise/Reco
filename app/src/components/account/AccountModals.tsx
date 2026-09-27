@@ -71,8 +71,11 @@ export function EditProfileModal({ visible, onClose }: DialogProps) {
   useOnOpen(visible, () => {
     setScreenname(currentUser?.screenname ?? '');
     setBio(currentUser?.bio ?? '');
-    setExpression(currentUser?.avatar_expression || 'Smile');
-    setColor(currentUser?.avatar_color || AVATAR_COLORS_LIST[0]);
+    // Older accounts may hold values the picker (and the server) no longer accept
+    const expr = currentUser?.avatar_expression ?? '';
+    const col = currentUser?.avatar_color ?? '';
+    setExpression((EXPRESSIONS as readonly string[]).includes(expr) ? expr : 'Smile');
+    setColor(AVATAR_COLORS_LIST.includes(col) ? col : AVATAR_COLORS_LIST[0]);
     setError('');
   });
 

@@ -82,7 +82,7 @@ export function MessageBubble({ msg, currentUsername, onLongPress, onReactionPre
     />
   );
 
-  // Desktop hover actions — static row: [😊] [编辑?] [撤回?]
+  // Desktop hover actions — static row: [😊] [edit?] [recall?]
   // Clicking 😊 measures its position and hands off to ChatPanel for the popup
   const hoverActions = showHoverActions ? (
     <View style={s.hoverActions}>

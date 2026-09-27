@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadMessageCache, resetMessageCache } from '../lib/messageCache';
+import { clearMessageCache, loadMessageCache } from '../lib/messageCache';
 
 export interface User {
   username: string;
@@ -30,7 +30,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   clearUser: async () => {
     await AsyncStorage.removeItem('currentUser');
-    resetMessageCache();
+    await clearMessageCache();
     set({ currentUser: null });
   },
 

@@ -98,10 +98,12 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   useEffect(() => {
     if (!currentUser) return;
     const socket = getSocket();
-    socket.emit('get_rooms', { username: currentUser.username });
-    socket.emit('get_dms', { username: currentUser.username });
-    socket.emit('user_online', { username: currentUser.username });
-    socket.emit('get_blocked_users', { username: currentUser.username });
+    const load = () => {
+      socket.emit('get_rooms', {});
+      socket.emit('get_dms', {});
+      socket.emit('get_blocked_users', {});
+    };
+    load();
 
     const onRoomsList = (data: { rooms: { name: string; has_password: boolean; needs_password?: boolean; code?: string }[] }) => {
       setRoomsLoading(false);
@@ -179,7 +181,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       });
     };
 
-    const onNewDmNotification = (data: { dm_room: string; from_username: string; from_screenname: string }) => {
+    const onNewDmNotification = (data: { dm_room: string; from_username: string; from_screenname: string; avatar_expression?: string; avatar_color?: string }) => {
       setEntries(prev => {
         const existing = prev.find(e => e.key === data.dm_room);
         if (existing) {
@@ -193,13 +195,13 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           key: data.dm_room,
           displayName: data.from_screenname,
           otherUsername: data.from_username,
-          avatarExpression: 'Smile',
-          avatarColor: '#5865F2',
+          avatarExpression: data.avatar_expression || 'Smile',
+          avatarColor: data.avatar_color || '#5865F2',
           unread: 1,
           lastActivity: Date.now(),
         }];
       });
-      socket.emit('join_dm', { username: currentUser?.username, dm_room: data.dm_room, since: null });
+      socket.emit('room_subscribe', { room: data.dm_room });
     };
 
     const onJoinResult = (data: any) => {
@@ -239,33 +241,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
 
     const onBlockedList = (data: { users: string[] }) => setBlocked(data.users);
 
-    const onConnect = () => {
-      socket.emit('get_rooms', { username: currentUser.username });
-      socket.emit('get_dms', { username: currentUser.username });
-      socket.emit('user_online', { username: currentUser.username });
-      socket.emit('get_blocked_users', { username: currentUser.username });
-    };
-
-    const onRoomInvite = (data: { from: string; room: string }) => {
-      showAlert(
-        t('room-invite-title'),
-        `${data.from} ${t('room-invite-msg')} 「${t.room(data.room)}」`,
-        [
-          { text: t('cancel'), style: 'cancel' },
-          { text: t('join'), onPress: () => {
-            if (onRoomSelectRef.current) {
-              onRoomSelectRef.current(data.room);
-            } else {
-              router.push({ pathname: '/(main)/room/[name]', params: { name: data.room } });
-            }
-          }},
-        ]
-      );
-    };
-
-    socket.on('connect', onConnect);
+    socket.on('connect', load);
     socket.on('blocked_users_list', onBlockedList);
-    socket.on('room_invite', onRoomInvite);
     socket.on('rooms_list', onRoomsList);
     socket.on('new_room_created', onNewRoomCreated);
     socket.on('create_room_result', onCreateRoomResult);
@@ -287,9 +264,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     socket.on('message', onMessage);
 
     return () => {
-      socket.off('connect', onConnect);
+      socket.off('connect', load);
       socket.off('blocked_users_list', onBlockedList);
-      socket.off('room_invite', onRoomInvite);
       socket.off('rooms_list', onRoomsList);
       socket.off('new_room_created', onNewRoomCreated);
       socket.off('create_room_result', onCreateRoomResult);
@@ -305,8 +281,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
   }, [currentUser, setBlocked, t]);
 
-  // Sort by lastActivity desc
-  // 不排序：顺序由服务器决定，新消息到达时 onMessage 把房间移到第0位（同老 web bumpRoomToTop）
+  // Server order (lobby first), with each room moved to the top when a message arrives (see onMessage)
   const sorted = entries.filter(e => e.displayName.toLowerCase().includes(search.toLowerCase()));
 
   function navigateTo(entry: Entry, password?: string) {
@@ -357,7 +332,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   function closeDm(entry: Entry) {
     setEntries(prev => prev.filter(e => e.key !== entry.key));
     setHoveredKey(null);
-    getSocket().emit('close_dm', { username: currentUser?.username, dm_room: entry.key });
+    getSocket().emit('close_dm', { dm_room: entry.key });
     onDmClose?.(entry.key);
   }
 
@@ -389,14 +364,14 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     if (!currentUser) return;
     setCreateError('');
     pendingCreatePwRef.current = newRoomPw.trim();
-    getSocket().emit('create_room', { username: currentUser.username, room: trimmed, password: newRoomPw.trim() });
+    getSocket().emit('create_room', { room: trimmed, password: newRoomPw.trim() });
   }
 
   function doFind() {
     const code = findCode.trim();
     if (!code) return;
     setFindError('');
-    getSocket().emit('find_room', { code, username: currentUser?.username });
+    getSocket().emit('find_room', { code });
   }
 
   function doJoinWithPw() {
@@ -516,7 +491,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         })}
       </ScrollView>
 
-      {/* 创建房间 */}
+      {/* Create room */}
       <Modal visible={showCreate} transparent animationType="fade" onRequestClose={() => setShowCreate(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowCreate(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
@@ -553,7 +528,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         </TouchableOpacity>
       </Modal>
 
-      {/* 搜索房间 */}
+      {/* Find room by code */}
       <Modal visible={showFind} transparent animationType="fade" onRequestClose={() => setShowFind(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowFind(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
@@ -581,7 +556,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         </TouchableOpacity>
       </Modal>
 
-      {/* 密码保护房间 */}
+      {/* Password for a protected room */}
       <Modal visible={showPwModal} transparent animationType="fade" onRequestClose={() => setShowPwModal(false)}>
         <TouchableOpacity style={s.overlay} onPress={() => setShowPwModal(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>

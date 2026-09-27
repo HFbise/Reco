@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import UTC, datetime
+from datetime import datetime
 
 from flask_socketio import emit
 
@@ -59,12 +59,13 @@ def handle_message(username, data):
                 msg['avatar_color'] = row.get('avatar_color')
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time)'
-                ' VALUES (%s, %s, %s, %s, %s) RETURNING id',
+                ' VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at',
                 (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M')),
             )
-            msg['id'] = cur.fetchone()['id']
+            saved = cur.fetchone()
             conn.commit()
-        msg['time'] = datetime.now(UTC).isoformat()
+        # The stored timestamp, not the clock now: clients resume history from it
+        msg['id'], msg['time'] = saved['id'], saved['created_at'].isoformat()
     except Exception as e:
         # Never show a message that wasn't stored: it would vanish on reload
         log.exception('message save error: %s', e)
@@ -83,6 +84,8 @@ def handle_message(username, data):
                         'dm_room': room,
                         'from_username': username,
                         'from_screenname': msg['screenname'],
+                        'avatar_expression': msg.get('avatar_expression'),
+                        'avatar_color': msg.get('avatar_color'),
                     },
                     to=sid,
                 )

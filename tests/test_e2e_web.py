@@ -186,3 +186,20 @@ def test_language_can_be_switched_before_logging_in(server, browser, shots):
     page.get_by_placeholder('用户名').wait_for()
     page.get_by_label('语言').click()
     page.get_by_placeholder('Username').wait_for()
+
+
+def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, shots):
+    create_user('frank')
+    context = browser.new_context(
+        viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
+    )
+    page = context.new_page()
+    shots.append(page)
+    log_in(page, 'frank')
+    page.get_by_text('Lobby', exact=True).first.click()
+    page.get_by_placeholder('Type a message...').wait_for()
+    page.go_back()
+    page.wait_for_timeout(800)  # slide-out animation
+    assert page.url.startswith(URL)
+    assert page.get_by_placeholder('Rooms').is_visible()
+    assert not page.get_by_placeholder('Type a message...').is_visible()

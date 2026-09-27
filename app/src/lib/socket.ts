@@ -8,11 +8,14 @@ import { showAlert } from './alert';
 
 let socket: Socket | null = null;
 
-async function endSession() {
+/** Sign out locally and go to the login screen. */
+export async function endSession() {
   disconnectSocket();
   await useAuthStore.getState().clearUser();
   router.replace('/(auth)');
 }
+
+const tr = (key: Parameters<typeof t>[1]) => t(useLangStore.getState().lang, key);
 
 export function getSocket(): Socket {
   if (!socket) {
@@ -21,10 +24,14 @@ export function getSocket(): Socket {
       // Re-read on every (re)connect so a fresh token after login / password change is used
       auth: (cb) => cb({ token: useAuthStore.getState().currentUser?.token }),
     });
-    // Token rejected (expired, password changed elsewhere, account deleted)
-    socket.on('session_expired', endSession);
+    // Token rejected (expired, password changed elsewhere, account renamed or deleted)
+    socket.on('session_expired', () => {
+      const wasSignedIn = !!useAuthStore.getState().currentUser && !useAuthStore.getState().currentUser?.guest;
+      endSession();
+      if (wasSignedIn) showAlert(tr('session-expired-title'), tr('session-expired-msg'));
+    });
     // Demo visitors tried something that needs an account
-    socket.on('guest_read_only', () => showAlert(t(useLangStore.getState().lang, 'srv-guest_read_only')));
+    socket.on('guest_read_only', () => showAlert(tr('srv-guest_read_only')));
     socket.on('auth_required', () => {
       if (useAuthStore.getState().currentUser) endSession();
     });

@@ -79,7 +79,6 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
           callbacks.current.onJoinFailed(data);
           return;
         }
-        socket.emit('get_members', { room: name });
         setHasOlder(!!data.has_older);
         setRoom((r) => ({
           ...r,

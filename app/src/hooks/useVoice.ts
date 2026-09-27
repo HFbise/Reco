@@ -41,6 +41,8 @@ export function useVoice(room: string) {
   const [isDeafened, setIsDeafened] = useState(false);
   const [ping, setPing] = useState<number | null>(null);
   const [micVolume, setMicVolumeState] = useState(100);
+  /** Mic volume only works where Web Audio can process the outgoing track (web) */
+  const [micGainSupported, setMicGainSupported] = useState(false);
   const [speakerVolume, setSpeakerVolumeState] = useState(100);
   const [isStreamingAudio, setIsStreamingAudio] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -49,7 +51,11 @@ export function useVoice(room: string) {
   // Stable refs — safe to read inside async socket handlers
   const inVoiceRef = useRef(false);
   const iceConfigRef = useRef<RTCConfiguration | any>(STUN_ONLY);
+  /** What peers receive: the mic after the volume (gain) stage, or the raw mic */
   const localStreamRef = useRef<any>(null);
+  const rawMicRef = useRef<any>(null);
+  const micGainRef = useRef<any>(null);
+  const micVolumeRef = useRef(100);
   const peerConnsRef = useRef<Record<string, any>>({});
   const remoteStreamsRef = useRef<Record<string, any>>({});
   const roomRef = useRef(room);
@@ -76,12 +82,7 @@ export function useVoice(room: string) {
   function makeIceHandler(targetUsername: string) {
     return ({ candidate }: any) => {
       if (candidate) {
-        getSocket().emit('voice_ice', {
-          room: roomRef.current,
-          from: userRef.current?.username,
-          to: targetUsername,
-          candidate,
-        });
+        getSocket().emit('voice_ice', { room: roomRef.current, to: targetUsername, candidate });
       }
     };
   }
@@ -113,30 +114,36 @@ export function useVoice(room: string) {
       try {
         const offer = await pc.createOffer();
         await pc.setLocalDescription(offer);
-        getSocket().emit('voice_offer', { room: roomRef.current, from: userRef.current?.username, to: targetUsername, offer: pc.localDescription });
+        getSocket().emit('voice_offer', { room: roomRef.current, to: targetUsername, offer: pc.localDescription });
       } catch (e) { console.warn('renegotiation failed', e); }
     };
   }
 
-  async function connectToPeer(targetUsername: string) {
-    if (!PC || !localStreamRef.current) return;
+  /** A connection to one peer carrying our mic, plus our screen share if one is running
+   * (so someone who joins mid-share still gets it). */
+  function setupPeer(targetUsername: string) {
     const pc = new (PC as any)(iceConfigRef.current);
     peerConnsRef.current[targetUsername] = pc;
-    localStreamRef.current.getTracks().forEach((track: any) => {
-      pc.addTrack(track, localStreamRef.current);
-    });
+    localStreamRef.current.getTracks().forEach((track: any) => pc.addTrack(track, localStreamRef.current));
+    const display = displayStreamRef.current;
+    if (display) {
+      display.getTracks().forEach((track: any) => {
+        if (track.readyState === 'live') pc.addTrack(track, display);
+      });
+    }
     pc.onicecandidate = makeIceHandler(targetUsername);
     pc.ontrack = makeTrackHandler(targetUsername);
     pc.onnegotiationneeded = makeNegotiationHandler(targetUsername, pc);
+    return pc;
+  }
+
+  async function connectToPeer(targetUsername: string) {
+    if (!PC || !localStreamRef.current) return;
+    const pc = setupPeer(targetUsername);
     try {
       const offer = await pc.createOffer({});
       await pc.setLocalDescription(offer);
-      getSocket().emit('voice_offer', {
-        room: roomRef.current,
-        from: userRef.current?.username,
-        to: targetUsername,
-        offer: pc.localDescription,
-      });
+      getSocket().emit('voice_offer', { room: roomRef.current, to: targetUsername, offer: pc.localDescription });
     } catch (e) {
       console.warn('voice offer error', e);
     }
@@ -145,25 +152,15 @@ export function useVoice(room: string) {
   async function answerPeer(targetUsername: string, offerSdp: any) {
     if (!PC || !SDP || !localStreamRef.current) return;
     let pc = peerConnsRef.current[targetUsername];
-    if (!pc || pc.signalingState === 'closed') {
-      pc = new (PC as any)(iceConfigRef.current);
-      peerConnsRef.current[targetUsername] = pc;
-      localStreamRef.current.getTracks().forEach((track: any) => {
-        pc.addTrack(track, localStreamRef.current);
-      });
-      pc.onicecandidate = makeIceHandler(targetUsername);
-      pc.ontrack = makeTrackHandler(targetUsername);
-      pc.onnegotiationneeded = makeNegotiationHandler(targetUsername, pc);
+    if (!pc || pc.signalingState === 'closed') pc = setupPeer(targetUsername);
+    try {
+      await pc.setRemoteDescription(new (SDP as any)(offerSdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      getSocket().emit('voice_answer', { room: roomRef.current, to: targetUsername, answer: pc.localDescription });
+    } catch (e) {
+      console.warn('voice answer error', e);
     }
-    await pc.setRemoteDescription(new (SDP as any)(offerSdp));
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    getSocket().emit('voice_answer', {
-      room: roomRef.current,
-      from: userRef.current?.username,
-      to: targetUsername,
-      answer: pc.localDescription,
-    });
   }
 
   function closePeer(username: string) {
@@ -175,7 +172,11 @@ export function useVoice(room: string) {
 
   function stopLocalStream() {
     localStreamRef.current?.getTracks().forEach((t: any) => t.stop());
+    rawMicRef.current?.getTracks().forEach((t: any) => t.stop());
     localStreamRef.current = null;
+    rawMicRef.current = null;
+    micGainRef.current = null;
+    setMicGainSupported(false);
     Object.keys(peerConnsRef.current).forEach(closePeer);
   }
 
@@ -211,9 +212,9 @@ export function useVoice(room: string) {
       setVoiceMembers(prev =>
         prev.some(m => m.username === data.username) ? prev : [...prev, data]
       );
-      if (inVoiceRef.current && data.username !== userRef.current?.username && localStreamRef.current) {
-        await actions.current.connectToPeer(data.username);
-      }
+      // They will send us an offer. Drop any connection left over from an earlier
+      // session of theirs (e.g. they reconnected) so the new one starts clean.
+      if (data.username !== userRef.current?.username) actions.current.closePeer(data.username);
     };
 
     const onVoiceUserLeft = (data: { username: string; room?: string }) => {
@@ -290,12 +291,7 @@ export function useVoice(room: string) {
     const onConnect = () => {
       if (inVoiceRef.current && userRef.current && roomRef.current) {
         Object.keys(peerConnsRef.current).forEach(actions.current.closePeer);
-        socket.emit('voice_join', {
-          username: userRef.current.username,
-          screenname: userRef.current.screenname,
-          room: roomRef.current,
-          avatar_color: userRef.current.avatar_color || '',
-        });
+        socket.emit('voice_join', { room: roomRef.current });
       }
     };
 
@@ -347,10 +343,7 @@ export function useVoice(room: string) {
         actions.current.stopLive(false);
         actions.current.stopStreamAudio(false);
         actions.current.stopLocalStream();
-        getSocket().emit('voice_leave', {
-          username: userRef.current?.username,
-          room: roomRef.current,
-        });
+        getSocket().emit('voice_leave', { room: roomRef.current });
         inVoiceRef.current = false;
       }
     };
@@ -373,27 +366,46 @@ export function useVoice(room: string) {
       ]);
       if (!stream) throw new Error(T('voice-stream-error'));
       iceConfigRef.current = iceConfig;
+      rawMicRef.current = stream;
       localStreamRef.current = stream;
       inVoiceRef.current = true;
       setInVoice(true);
       setIsMuted(false);
       setIsDeafened(false);
       setPing(null);
-      getSocket().emit('voice_join', {
-        username: currentUser?.username,
-        screenname: currentUser?.screenname,
-        room,
-        avatar_color: currentUser?.avatar_color || '',
-      });
+      // Web Audio (web only): mic volume and speaking detection
+      const AC = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
+      let actx: any = null;
+      let src: any = null;
+      if (AC) {
+        try {
+          actx = new AC();
+          // resume() can stay pending forever without a user gesture (Safari): don't wait on it
+          await Promise.race([actx.resume?.(), new Promise((r) => setTimeout(r, 300))]);
+          src = actx.createMediaStreamSource(stream);
+          speakAudioCtxRef.current = actx;
+          // Only send the processed track if the context really runs: a suspended
+          // one (possible on Safari) would send silence, so keep the raw mic then
+          if (actx.state === 'running' && actx.createMediaStreamDestination) {
+            const gain = actx.createGain();
+            gain.gain.value = micVolumeRef.current / 100;
+            const dest = actx.createMediaStreamDestination();
+            src.connect(gain);
+            gain.connect(dest);
+            micGainRef.current = gain;
+            localStreamRef.current = dest.stream;
+            setMicGainSupported(true);
+          }
+        } catch {
+          src = null;
+        }
+      }
+
+      getSocket().emit('voice_join', { room });
       playVoiceJoinSound();
 
-      // Speaking detection via Web Audio API (web only)
-      const AC = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
-      if (AC && stream) {
+      if (actx && src) {
         try {
-          const actx = new AC();
-          speakAudioCtxRef.current = actx;
-          const src = actx.createMediaStreamSource(stream);
           const analyser = actx.createAnalyser();
           analyser.fftSize = 256;
           src.connect(analyser);
@@ -406,11 +418,7 @@ export function useVoice(room: string) {
             const nowSpeaking = avg > 10;
             if (nowSpeaking !== wasSpeaking) {
               wasSpeaking = nowSpeaking;
-              getSocket().emit('voice_speaking', {
-                room: roomRef.current,
-                username: userRef.current?.username,
-                speaking: nowSpeaking,
-              });
+              getSocket().emit('voice_speaking', { room: roomRef.current, speaking: nowSpeaking });
               setVoiceMembers(prev => prev.map(m =>
                 m.username === userRef.current?.username ? { ...m, isSpeaking: nowSpeaking } : m
               ));
@@ -436,7 +444,7 @@ export function useVoice(room: string) {
     stopLive(false);
     stopStreamAudio(false);
     stopLocalStream();
-    getSocket().emit('voice_leave', { username: currentUser?.username, room });
+    getSocket().emit('voice_leave', { room });
     inVoiceRef.current = false;
     setInVoice(false);
     setIsMuted(false);
@@ -447,9 +455,12 @@ export function useVoice(room: string) {
   function toggleMute() {
     if (!localStreamRef.current) return;
     const next = !isMuted;
-    localStreamRef.current.getAudioTracks().forEach((t: any) => { t.enabled = !next; });
+    // The raw mic too: speaking detection listens to it, and it feeds the volume stage
+    for (const stream of [localStreamRef.current, rawMicRef.current]) {
+      stream?.getAudioTracks().forEach((t: any) => { t.enabled = !next; });
+    }
     setIsMuted(next);
-    getSocket().emit('voice_mute_status', { room, username: currentUser?.username, muted: next });
+    getSocket().emit('voice_mute_status', { room, muted: next });
   }
 
   function toggleDeafen() {
@@ -459,8 +470,9 @@ export function useVoice(room: string) {
   }
 
   function setMicVolume(v: number) {
+    micVolumeRef.current = v;
     setMicVolumeState(v);
-    // Mic gain requires Web Audio API; tracks enabled/disabled via toggleMute
+    if (micGainRef.current) micGainRef.current.gain.value = v / 100;
   }
 
   function setSpeakerVolume(v: number) {
@@ -493,7 +505,7 @@ export function useVoice(room: string) {
     for (const pc of Object.values(peerConnsRef.current) as any[]) {
       try { pc.addTrack(streamAudioTrackRef.current, stream); } catch {}
     }
-    getSocket().emit('stream_audio_start', { room, username: currentUser?.username });
+    getSocket().emit('stream_audio_start', { room });
     (streamAudioTrackRef.current as any).onended = () => stopStreamAudio(true);
   }
 
@@ -512,7 +524,7 @@ export function useVoice(room: string) {
       displayStreamRef.current = null;
     }
     setIsStreamingAudio(false);
-    if (emit) getSocket().emit('stream_audio_stop', { room, username: currentUser?.username });
+    if (emit) getSocket().emit('stream_audio_stop', { room });
   }
 
   async function startLive() {
@@ -532,7 +544,7 @@ export function useVoice(room: string) {
       try { pc.addTrack(videoTrack, stream); } catch {}
       if (streamAudioTrackRef.current) try { pc.addTrack(streamAudioTrackRef.current, stream); } catch {}
     }
-    getSocket().emit('stream_start', { room, username: currentUser?.username, screenname: currentUser?.screenname });
+    getSocket().emit('stream_start', { room });
     (videoTrack as any).onended = () => stopLive(true);
   }
 
@@ -552,7 +564,7 @@ export function useVoice(room: string) {
     streamAudioTrackRef.current = null;
     setIsStreaming(false);
     setIsStreamingAudio(false);
-    if (emit) getSocket().emit('stream_stop', { room, username: currentUser?.username });
+    if (emit) getSocket().emit('stream_stop', { room });
   }
 
   function closeRemoteVideoStream(username: string) {
@@ -561,7 +573,7 @@ export function useVoice(room: string) {
 
   return {
     inVoice, voiceMembers, isMuted, isDeafened, ping,
-    micVolume, speakerVolume,
+    micVolume, micGainSupported, speakerVolume,
     isStreamingAudio, isStreaming,
     remoteVideoStreams,
     joinVoice, leaveVoice, toggleMute, toggleDeafen,

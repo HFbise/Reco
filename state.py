@@ -1,6 +1,6 @@
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import datetime
 
 from db import get_db
 
@@ -96,19 +96,19 @@ def emit_system_msg(room: str, code: str, **params):
             cur = conn.cursor()
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, system, meta)'
-                ' VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) RETURNING id',
+                ' VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) RETURNING id, created_at',
                 (room, 'system', '系统', text, datetime.now().strftime('%H:%M'), True, json.dumps(meta)),
             )
-            msg_id = cur.fetchone()['id']
+            saved = cur.fetchone()
             conn.commit()
         socketio.emit(
             'message',
             {
-                'id': msg_id,
+                'id': saved['id'],
                 'username': 'system',
                 'screenname': '系统',
                 'text': text,
-                'time': datetime.now(UTC).isoformat(),
+                'time': saved['created_at'].isoformat(),
                 'room': room,
                 'system': True,
                 'meta': meta,

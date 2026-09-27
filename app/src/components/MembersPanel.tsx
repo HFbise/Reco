@@ -51,11 +51,10 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
     setMembers(membersCache.get(room) ?? []);
     socket.emit('get_members', { room });
 
-    const onMembersList = (data: { room?: string; members: Member[] }) => {
-      if (!data.room || data.room === room) {
-        membersCache.set(data.room ?? room, data.members);
-        setMembers(data.members);
-      }
+    const onMembersList = (data: { room: string; members: Member[] }) => {
+      if (data.room !== room) return;
+      membersCache.set(room, data.members);
+      setMembers(data.members);
     };
     const onOnlineStatus = (data: { username: string; online: boolean }) => {
       setMembers(prev => prev.map(m => m.username === data.username ? { ...m, is_online: data.online } : m));
@@ -89,7 +88,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
       {
         text: t('ok'), style: 'destructive', onPress: () => {
           setSelectedMember(null);
-          getSocket().emit('kick_member', { room, username: currentUsername, target: target.username });
+          getSocket().emit('kick_member', { room, target: target.username });
         },
       },
     ]);
@@ -97,27 +96,21 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
 
   function doSetAdmin(target: Member, remove: boolean) {
     setSelectedMember(null);
-    getSocket().emit('set_admin', { room, username: currentUsername, target: target.username, remove });
+    getSocket().emit('set_admin', { room, target: target.username, remove });
   }
 
   function doInvite(target: Member) {
     setSelectedMember(null);
-    const { currentUser } = useAuthStore.getState();
-    getSocket().emit('invite_to_room', {
-      inviter: currentUsername,
-      inviter_screen: currentUser?.screenname ?? currentUsername,
-      target: target.username,
-      room,
-    });
+    getSocket().emit('invite_to_room', { target: target.username, room });
   }
 
   function doBlock(target: Member) {
     const isBlocked = blocked.includes(target.username);
     if (isBlocked) {
-      getSocket().emit('unblock_user', { blocker: currentUsername, blocked: target.username });
+      getSocket().emit('unblock_user', { blocked: target.username });
       removeBlocked(target.username);
     } else {
-      getSocket().emit('block_user', { blocker: currentUsername, blocked: target.username });
+      getSocket().emit('block_user', { blocked: target.username });
       addBlocked(target.username);
     }
     setSelectedMember(null);
@@ -125,15 +118,15 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
 
   function doReport(target: Member) {
     const reason = reportReason.trim();
-    getSocket().emit('report_user', { reporter: currentUsername, reported: target.username, reason });
+    getSocket().emit('report_user', { reported: target.username, reason });
     setShowReportInput(false);
     setReportReason('');
     setSelectedMember(null);
     showAlert(t('report-sent'));
   }
 
-  const BAN_DURATIONS = [
-    { label: t('unban-voice'), seconds: null },
+  const MUTE_DURATIONS = [
+    { label: t('unmute'), seconds: null },
     { label: t('duration-1m'), seconds: 60 },
     { label: t('duration-5m'), seconds: 300 },
     { label: t('duration-10m'), seconds: 600 },
@@ -147,19 +140,19 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
     setSelectedMember(null);
     setShowBanPicker(false);
     if (seconds === null) {
-      getSocket().emit('text_unmute', { room, username: currentUsername, target: target.username });
+      getSocket().emit('text_unmute', { room, target: target.username });
     } else {
-      getSocket().emit('text_mute', { room, username: currentUsername, target: target.username, duration_seconds: seconds });
+      getSocket().emit('text_mute', { room, target: target.username, duration_seconds: seconds });
     }
   }
 
   return (
     <View style={[s.container, { backgroundColor: c.surface, borderLeftColor: c.border }]}>
 
-      {/* 语音区 */}
+      {/* Voice */}
       {voice && !isGuest && (
         <View style={[s.voiceSection, { borderBottomColor: c.border }]}>
-          {/* 标题行 + ping */}
+          {/* Title + ping */}
           <View style={s.voiceTitleRow}>
             <Text style={[s.voiceTitle, { color: c.text }]}>
               {t('voice-chat')}{(roomVoiceMembers ?? voice.voiceMembers).length > 0 ? ` (${(roomVoiceMembers ?? voice.voiceMembers).length})` : ''}
@@ -175,13 +168,13 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
             </TouchableOpacity>
           ) : (
             <>
-              {/* 控制按钮行 */}
+              {/* Controls */}
               <View style={s.voiceControls}>
                 <VoiceIconBtn
                   isRed={voice.isMuted}
                   onPress={voice.toggleMute}
                   icon={voice.isMuted ? <IconMicOff size={15} color="#fff" /> : <IconMic size={15} color="#fff" />}
-                  sliderValue={voice.micVolume}
+                  sliderValue={voice.micGainSupported ? voice.micVolume : undefined}
                   onSlider={voice.setMicVolume}
                   c={c}
                 />
@@ -198,7 +191,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                 </TouchableOpacity>
               </View>
 
-              {/* 共享音频 / 直播 */}
+              {/* Share audio / screen */}
               <TouchableOpacity
                 style={[s.voiceShareBtn, { backgroundColor: voice.isStreamingAudio ? '#ed4245' : '#4f5660' }]}
                 onPress={() => voice.isStreamingAudio ? voice.stopStreamAudio() : voice.startStreamAudio()}
@@ -216,7 +209,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
             </>
           )}
 
-          {/* 语音成员列表（带名字） */}
+          {/* Who is in voice */}
           {(roomVoiceMembers ?? voice.voiceMembers).length > 0 && (
             <View style={s.voiceMembersList}>
               {(roomVoiceMembers ?? voice.voiceMembers).map(m => {
@@ -237,7 +230,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                     activeOpacity={0.7}
                   >
                     <AvatarView
-                      expression={undefined}
+                      expression={m.avatar_expression}
                       color={m.avatar_color}
                       username={m.username}
                       screenname={m.screenname}
@@ -262,7 +255,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
         </View>
       )}
 
-      {/* 成员列表标题 */}
+      {/* Members header */}
       <View style={[s.header, { borderBottomColor: c.border }]}>
         <Text style={[s.headerText, { color: c.text }]}>{t('members')}{members.length > 0 ? ` (${members.length})` : ''}</Text>
       </View>
@@ -273,7 +266,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
         ))}
       </ScrollView>
 
-      {/* 用户 Card */}
+      {/* Member card */}
       <Modal visible={!!selectedMember} transparent animationType="fade" onRequestClose={() => { setSelectedMember(null); setShowBanPicker(false); setShowReportInput(false); setReportReason(''); }}>
         <TouchableOpacity style={s.cardOverlay} onPress={() => { setSelectedMember(null); setShowBanPicker(false); setShowReportInput(false); setReportReason(''); }} activeOpacity={1}>
           <TouchableOpacity style={[s.cardBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
@@ -330,7 +323,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                     >
                       <Text style={[s.cardDmBtnText, { color: c.text }]}>{t('invite-to-room')}</Text>
                     </TouchableOpacity>
-                    {/* 屏蔽 */}
+                    {/* Block */}
                     <TouchableOpacity
                       style={[s.cardDmBtn, { backgroundColor: blocked.includes(selectedMember.username) ? c.isDark ? 'rgba(237,66,69,0.15)' : 'rgba(237,66,69,0.08)' : c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
                       onPress={() => doBlock(selectedMember)}
@@ -340,7 +333,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                         {blocked.includes(selectedMember.username) ? t('unblock') : t('block')}
                       </Text>
                     </TouchableOpacity>
-                    {/* 举报 */}
+                    {/* Report */}
                     {!showReportInput ? (
                       <TouchableOpacity
                         style={[s.cardDmBtn, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }]}
@@ -386,7 +379,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                         <Text style={[s.adminBtnText, { color: c.text }]}>{t('remove-admin')}</Text>
                       </TouchableOpacity>
                     )}
-                    {/* 禁言 / 时长选择 */}
+                    {/* Mute, with duration */}
                     {!showBanPicker ? (
                       <TouchableOpacity
                         style={[s.adminBtn, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.06)' }]}
@@ -397,7 +390,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                       </TouchableOpacity>
                     ) : (
                       <View style={[s.banPickerBox, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.04)', borderColor: c.border }]}>
-                        {BAN_DURATIONS.map(({ label, seconds }) => (
+                        {MUTE_DURATIONS.map(({ label, seconds }) => (
                           <TouchableOpacity
                             key={label}
                             style={[s.banPickerItem, { borderBottomColor: c.border }]}

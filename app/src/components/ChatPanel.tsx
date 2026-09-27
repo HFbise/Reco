@@ -98,6 +98,7 @@ export function ChatPanel({
   const inVoiceElsewhere = voice.inVoice && !!activeVoiceRoom && activeVoiceRoom !== name;
 
   // ── server state for this room ──
+  const lastSentRef = useRef('');
   const chat = useRoomChat({
     name,
     password,
@@ -112,7 +113,11 @@ export function ChatPanel({
       showAlert(reply.wrong_password ? t('wrong-password') : t('join-failed'), t.server(reply, 'join-failed'));
       handleBack();
     },
-    onToast: (kind) => showToast(t(TOAST_TEXT[kind])),
+    onToast: (kind) => {
+      showToast(t(TOAST_TEXT[kind]));
+      // Not delivered: give the text back rather than losing it
+      if (kind === 'send-failed' || kind === 'rate-limited') setInput((cur) => cur || lastSentRef.current);
+    },
   });
   const showVoiceBar = !hideVoiceBar && !isDm && !isGuest && (inVoiceHere || chat.voiceMembers.length > 0);
 
@@ -137,6 +142,7 @@ export function ChatPanel({
   }
 
   function send() {
+    lastSentRef.current = input;
     chat.send(input);
     setInput('');
   }
