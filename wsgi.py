@@ -1,6 +1,6 @@
 """Production entry point.
 
-    gunicorn -w 1 --threads 100 --bind 0.0.0.0:$PORT wsgi:app
+    gunicorn wsgi:app        (settings in gunicorn.conf.py)
 
 Exactly one worker: presence, voice rooms and rate limits live in process
 memory, so a second worker would not see the first one's sockets. Threads give

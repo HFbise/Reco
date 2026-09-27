@@ -52,7 +52,11 @@ SCRIPT = [
 
 def seed(cur):
     """Create or refresh the demo room. Idempotent; called from _migrate()."""
+    cur.execute('SELECT username FROM users WHERE username = ANY(%s)', (list(PERSONAS),))
+    existing = {r['username'] for r in cur.fetchall()}
     for username, (screenname, expression, color) in PERSONAS.items():
+        if username in existing:
+            continue  # hashing is deliberately slow; don't redo it on every startup
         # Unusable random password: these accounts exist only to author the demo
         cur.execute(
             'INSERT INTO users (username, screenname, password, bio, avatar_expression, avatar_color)'
