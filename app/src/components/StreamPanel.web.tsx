@@ -60,7 +60,7 @@ export function StreamPanel({ streams }: Props) {
 
 // ── shared helpers ────────────────────────────────────────────
 
-function useVideoStream(videoRef: React.RefObject<HTMLVideoElement>, stream: MediaStream) {
+function useVideoStream(videoRef: React.RefObject<HTMLVideoElement | null>, stream: MediaStream) {
   useEffect(() => {
     const v = videoRef.current;
     if (v) { v.srcObject = stream; v.play().catch(() => {}); }

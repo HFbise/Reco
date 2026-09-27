@@ -1,38 +1,49 @@
 import logging
 from flask import request
+from flask_socketio import emit
 from extensions import socketio
-from state import online_users, sid_to_voice, rooms_voice
+from state import sid_to_voice, rooms_voice
+from auth_session import verify_token, bind, unbind, authenticated
 
 log = logging.getLogger(__name__)
 
 
+@socketio.on('connect')
+def handle_connect(auth=None):
+    # Unauthenticated sockets are allowed (login / register / forgot password),
+    # they just can't call any @authenticated handler.
+    token = (auth or {}).get('token') if isinstance(auth, dict) else None
+    if not token:
+        return
+    try:
+        username = verify_token(token)
+    except Exception as e:
+        log.error('verify_token error: %s', e)
+        return
+    if username:
+        bind(username)
+        emit('session_ready', {'username': username})
+    else:
+        emit('session_expired', {})
+
+
 @socketio.on('user_online')
-def handle_user_online(data):
-    username = data['username']
-    online_users.setdefault(username, set()).add(request.sid)
-    socketio.emit('online_status_changed', {'username': username, 'online': True})
+@authenticated
+def handle_user_online(username, data):
+    # Kept for older clients; binding already marks the user online.
+    pass
 
 
 @socketio.on('user_offline')
-def handle_user_offline(data):
-    username = data['username']
-    if username in online_users:
-        online_users[username].discard(request.sid)
-        if not online_users[username]:
-            del online_users[username]
-            socketio.emit('online_status_changed', {'username': username, 'online': False})
+@authenticated
+def handle_user_offline(username, data):
+    unbind(request.sid)
 
 
 @socketio.on('disconnect')
-def handle_disconnect():
+def handle_disconnect(*_args):
     sid = request.sid
-    for username, sids in list(online_users.items()):
-        if sid in sids:
-            sids.discard(sid)
-            if not sids:
-                del online_users[username]
-                socketio.emit('online_status_changed', {'username': username, 'online': False})
-            break
+    unbind(sid)
     if sid in sid_to_voice:
         username, room = sid_to_voice.pop(sid)
         if room in rooms_voice:

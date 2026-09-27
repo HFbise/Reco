@@ -8,6 +8,7 @@ export interface User {
   is_admin: boolean;
   avatar_expression: string;
   avatar_color: string;
+  token: string; // signed session token from login_result; sent in the socket handshake
 }
 
 interface AuthState {
@@ -35,6 +36,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       const raw = await AsyncStorage.getItem('currentUser');
       if (raw) {
         const user = JSON.parse(raw);
+        // Sessions saved before token auth existed can't be resumed: log in again
+        if (!user?.token) {
+          await AsyncStorage.removeItem('currentUser');
+          return null;
+        }
         set({ currentUser: user });
         return user;
       }

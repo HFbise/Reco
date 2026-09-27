@@ -2,23 +2,26 @@ import logging
 from flask_socketio import emit, join_room
 from extensions import socketio
 from db import get_db
+from auth_session import authenticated, dm_participants
 
 log = logging.getLogger(__name__)
 
 
 @socketio.on('get_dms')
-def handle_get_dms(data):
-    username = data.get('username', '')
-    if not username:
-        emit('dms_list', {'dms': []})
-        return
+@authenticated
+def handle_get_dms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            # A closed DM stays hidden until a newer message arrives
             cur.execute(
-                "SELECT DISTINCT room FROM messages"
-                " WHERE room LIKE 'dm:%%:%%' AND (room LIKE %s OR room LIKE %s)",
-                (f'dm:{username}:%', f'dm:%:{username}')
+                "SELECT m.room FROM messages m"
+                " WHERE m.room LIKE 'dm:%%:%%' AND (m.room LIKE %s OR m.room LIKE %s)"
+                " GROUP BY m.room"
+                " HAVING MAX(m.created_at) > COALESCE("
+                "   (SELECT c.closed_at FROM dm_closed c WHERE c.username = %s AND c.dm_room = m.room),"
+                "   '-infinity'::timestamptz)",
+                (f'dm:{username}:%', f'dm:%:{username}', username)
             )
             dm_rooms = [r['room'] for r in cur.fetchall()]
             dms = []
@@ -47,12 +50,30 @@ def handle_get_dms(data):
         emit('dms_list', {'dms': []})
 
 
+@socketio.on('close_dm')
+@authenticated
+def handle_close_dm(username, data):
+    dm_room = data.get('dm_room', '')
+    if username not in (dm_participants(dm_room) or ()):
+        return
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                'INSERT INTO dm_closed (username, dm_room, closed_at) VALUES (%s, %s, NOW())'
+                ' ON CONFLICT (username, dm_room) DO UPDATE SET closed_at = NOW()',
+                (username, dm_room)
+            )
+            conn.commit()
+    except Exception as e:
+        log.error('close_dm error: %s', e)
+
+
 @socketio.on('join_dm')
-def handle_join_dm(data):
-    username = data['username']
-    dm_room = data['dm_room']
-    parts = dm_room.split(':')
-    if len(parts) != 3 or parts[0] != 'dm' or username not in [parts[1], parts[2]]:
+@authenticated
+def handle_join_dm(username, data):
+    dm_room = data.get('dm_room', '')
+    if username not in (dm_participants(dm_room) or ()):
         emit('join_dm_result', {'success': False})
         return
     join_room(dm_room)

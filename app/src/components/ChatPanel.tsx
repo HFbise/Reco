@@ -8,7 +8,6 @@ import { useAuthStore } from '../store/authStore';
 import { getSocket } from '../lib/socket';
 import { MessageBubble, type Message, formatMsgTime } from './MessageBubble';
 import { getCached, getLastTs, cacheMsg, patchCached } from '../lib/messageCache';
-import { clearRoomPassword } from '../lib/roomPasswordCache';
 import { EmojiPicker } from './EmojiPicker';
 import { loadRecentEmojis, recordRecentEmoji, buildReactionQuickList } from '../lib/recentEmojis';
 import { AvatarView } from './AvatarView';
@@ -175,7 +174,6 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           if (data.members) setMemberCount(data.members.length);
           if (data.is_owner) setIsOwner(true);
         } else if (data.wrong_password) {
-          clearRoomPassword(name);
           Alert.alert(t('wrong-password'), data.msg);
           onClose?.();
         }

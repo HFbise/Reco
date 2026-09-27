@@ -180,6 +180,7 @@ export default function RoomsScreen() {
                 ref={roomsPanelRef}
                 onRoomSelect={openRoom}
                 onDmSelect={openDm}
+                onDmClose={(dmRoom) => { if (activeRoom === dmRoom) closeRoom(); }}
               />
               <BottomTabBar />
             </View>

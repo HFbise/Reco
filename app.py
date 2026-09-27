@@ -17,6 +17,7 @@ from flask import send_from_directory, request, jsonify
 from extensions import app, socketio
 from db import get_db
 from state import rooms_voice, online_users
+from auth_session import verify_token
 from admin import admin_bp
 
 import handlers  # registers all socket event handlers
@@ -92,7 +93,7 @@ def api_voice_leave():
         data = json.loads(request.get_data(as_text=True))
     except Exception:
         data = {}
-    username = data.get('username', '')
+    username = verify_token(data.get('token', ''))
     room = data.get('room', '')
     if username and room and room in rooms_voice:
         rooms_voice[room]['voice_members'] = [
@@ -110,7 +111,8 @@ TURN_SECRET = os.environ.get('TURN_SECRET', '')
 
 @app.route('/api/ice-servers')
 def get_ice_servers():
-    username = request.args.get('u', '').strip()
+    # TURN relays cost bandwidth: only hand credentials to logged-in users
+    username = verify_token(request.args.get('t', ''))
     if not username or not TURN_SECRET:
         return jsonify([])
     expiry    = int(time.time()) + 86400
@@ -133,6 +135,18 @@ def _migrate():
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            # Base tables (no-ops on an existing database; lets a fresh DB bootstrap itself)
+            cur.execute('''CREATE TABLE IF NOT EXISTS users (
+                username TEXT PRIMARY KEY, screenname TEXT NOT NULL, password TEXT NOT NULL,
+                bio TEXT DEFAULT '', security_question TEXT, security_answer TEXT)''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS rooms (
+                name TEXT PRIMARY KEY, admins TEXT[] DEFAULT '{}', members TEXT[] DEFAULT '{}')''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS messages (
+                id SERIAL PRIMARY KEY, room TEXT NOT NULL, username TEXT NOT NULL,
+                screenname TEXT, text TEXT NOT NULL, time TEXT,
+                created_at TIMESTAMPTZ DEFAULT NOW())''')
+            cur.execute("CREATE INDEX IF NOT EXISTS messages_room_created_idx ON messages(room, created_at)")
+            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta JSONB")
             cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
             cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
             cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
@@ -152,6 +166,9 @@ def _migrate():
             cur.execute('''CREATE TABLE IF NOT EXISTS feedback (
                 id SERIAL PRIMARY KEY, username TEXT NOT NULL, text TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW())''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS dm_closed (
+                username TEXT NOT NULL, dm_room TEXT NOT NULL,
+                closed_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (username, dm_room))''')
             cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL")
 
             # Backfill missing room codes

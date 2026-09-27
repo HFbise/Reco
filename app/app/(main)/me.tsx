@@ -92,9 +92,11 @@ export default function MeScreen() {
     setPwSaving(true);
     const socket = getSocket();
     socket.emit('change_password', { username: currentUser?.username, old_password: oldPw, new_password: newPw });
-    socket.once('change_password_result', (data: any) => {
+    socket.once('change_password_result', async (data: any) => {
       setPwSaving(false);
       if (!data.success) { setPwError(data.msg || t('err-change-failed')); return; }
+      // Old tokens are invalidated by the password change; keep this device signed in
+      if (data.token) await setUser({ ...useAuthStore.getState().currentUser!, token: data.token });
       setShowChangePw(false);
       Alert.alert(t('password-changed'));
     });

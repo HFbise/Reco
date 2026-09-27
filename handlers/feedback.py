@@ -2,15 +2,16 @@ import logging
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
+from auth_session import authenticated
 
 log = logging.getLogger(__name__)
 
 
 @socketio.on('submit_feedback')
-def handle_submit_feedback(data):
-    username = data.get('username', '').strip()
+@authenticated
+def handle_submit_feedback(username, data):
     text = data.get('text', '').strip()
-    if not username or not text:
+    if not text:
         emit('feedback_result', {'success': False, 'msg': '内容不能为空'})
         return
     if len(text) > 2000:

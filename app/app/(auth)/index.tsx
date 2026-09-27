@@ -63,8 +63,8 @@ export default function AuthScreen() {
         is_admin: data.is_admin,
         avatar_expression: data.avatar_expression || 'Smile',
         avatar_color: data.avatar_color,
+        token: data.token,
       });
-      socket.emit('user_online', { username: data.username });
       router.replace('/(main)');
     });
   }

@@ -3,7 +3,7 @@ import logging
 import random
 import string
 from datetime import datetime, timezone
-from flask_socketio import emit, join_room
+from flask_socketio import emit, join_room, leave_room, close_room
 from extensions import socketio
 from db import get_db
 from state import (
@@ -11,6 +11,7 @@ from state import (
     online_users, pending_invites, rooms_voice, rooms_stream,
     emit_system_msg,
 )
+from auth_session import authenticated, in_room, dm_participants
 
 log = logging.getLogger(__name__)
 
@@ -51,11 +52,31 @@ def _build_members_data(cur, room_data: dict) -> list:
     return members
 
 
+MAX_ROOM_NAME_LEN = 32
+
+
+def _evict(username: str, room: str):
+    """Remove all of a user's sockets from a Socket.IO room (after kick)."""
+    for sid in list(online_users.get(username, [])):
+        leave_room(room, sid=sid, namespace='/')
+
+
+def _needs_password(username: str, room_data: dict) -> bool:
+    """Owner, room admins and existing members never need the room password."""
+    if not room_data.get('password'):
+        return False
+    return username not in (room_data.get('members') or []) and get_level(username, room_data) == 0
+
+
 @socketio.on('create_room')
-def handle_create_room(data):
-    username = data['username']
-    room = data['room'].strip()
-    password = data.get('password', '').strip() or None
+@authenticated
+def handle_create_room(username, data):
+    room = (data.get('room') or '').strip()
+    password = (data.get('password') or '').strip() or None
+    # 'dm:' is reserved for direct-message rooms
+    if not room or len(room) > MAX_ROOM_NAME_LEN or room.lower().startswith('dm:'):
+        emit('create_room_result', {'success': False, 'msg': '房间名无效'})
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -74,16 +95,16 @@ def handle_create_room(data):
             'success': True, 'room': room,
             'has_password': bool(password), 'code': code,
         })
-        socketio.emit('new_room_created', {'room': room, 'has_password': bool(password)})
+        socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username})
     except Exception as e:
         log.error('create_room error: %s', e)
         emit('create_room_result', {'success': False, 'msg': str(e)})
 
 
 @socketio.on('join')
-def handle_join(data):
-    username = data['username']
-    room = data['room'].strip()
+@authenticated
+def handle_join(username, data):
+    room = (data.get('room') or '').strip()
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -99,7 +120,7 @@ def handle_join(data):
                 return
 
             room_pw = room_data.get('password')
-            if room_pw:
+            if _needs_password(username, room_data):
                 invited = username in pending_invites.get(room, set())
                 if invited:
                     pending_invites[room].discard(username)
@@ -188,9 +209,9 @@ def handle_join(data):
 
 
 @socketio.on('leave_room')
-def handle_leave_room(data):
-    username = data['username']
-    room = data['room'].strip()
+@authenticated
+def handle_leave_room(username, data):
+    room = (data.get('room') or '').strip()
     if room == '大厅':
         emit('leave_room_result', {'success': False, 'msg': '无法退出大厅'})
         return
@@ -218,6 +239,7 @@ def handle_leave_room(data):
             cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
             row = cur.fetchone()
             leaver_screen = row['screenname'] if row else username
+        _evict(username, room)
         emit('leave_room_result', {'success': True, 'room': room})
         emit_system_msg(room, f'{leaver_screen} 离开了房间')
     except Exception as e:
@@ -226,19 +248,18 @@ def handle_leave_room(data):
 
 
 @socketio.on('get_rooms')
-def handle_get_rooms(data=None):
-    username = (data or {}).get('username', '')
+@authenticated
+def handle_get_rooms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            if username:
-                cur.execute(
-                    "SELECT name, password, code FROM rooms WHERE name = '大厅' OR %s = ANY(members)",
-                    (username,)
-                )
-            else:
-                cur.execute("SELECT name, password, code FROM rooms WHERE name = '大厅'")
+            cur.execute(
+                "SELECT name, password, code, owner, admins, members FROM rooms"
+                " WHERE name = '大厅' OR %s = ANY(members)",
+                (username,)
+            )
             rooms = [{'name': r['name'], 'has_password': bool(r['password']),
+                      'needs_password': _needs_password(username, r),
                       'code': r.get('code') or ''} for r in cur.fetchall()]
         lobby = next((r for r in rooms if r['name'] == '大厅'), None)
         if lobby:
@@ -251,7 +272,11 @@ def handle_get_rooms(data=None):
 
 
 @socketio.on('get_members')
-def handle_get_members(data):
+@authenticated
+def handle_get_members(_username, data):
+    if not in_room(data.get('room')):
+        emit('members_list', {'members': []})
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -268,10 +293,10 @@ def handle_get_members(data):
 
 
 @socketio.on('kick_member')
-def handle_kick_member(data):
-    requester = data['requester']
-    target = data['target']
-    room = data['room']
+@authenticated
+def handle_kick_member(requester, data):
+    target = data.get('target', '')
+    room = data.get('room', '')
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -299,6 +324,7 @@ def handle_kick_member(data):
         if target in online_users:
             for sid in list(online_users[target]):
                 socketio.emit('kicked_from_room', {'room': room}, to=sid)
+            _evict(target, room)
         emit_system_msg(room, f'{target_screen} 被踢出了房间')
         emit('kick_result', {'success': True})
     except Exception as e:
@@ -307,7 +333,8 @@ def handle_kick_member(data):
 
 
 @socketio.on('set_admin')
-def handle_set_admin(data):
+@authenticated
+def handle_set_admin(requester, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -316,7 +343,7 @@ def handle_set_admin(data):
             if not room_data:
                 emit('set_admin_result', {'success': False, 'msg': '无权限'})
                 return
-            req_level = get_level(data['requester'], room_data)
+            req_level = get_level(requester, room_data)
             tgt_level = get_level(data['target'], room_data)
             remove = data.get('remove', False)
             if req_level < 2 or tgt_level >= 2:
@@ -350,9 +377,9 @@ def handle_set_admin(data):
 
 
 @socketio.on('set_room_password')
-def handle_set_room_password(data):
-    room = data['room']
-    requester = data['requester']
+@authenticated
+def handle_set_room_password(requester, data):
+    room = data.get('room', '')
     password = data.get('password') or None
     try:
         with get_db() as conn:
@@ -372,15 +399,16 @@ def handle_set_room_password(data):
 
 
 @socketio.on('close_room')
-def handle_close_room(data):
-    if data['room'] == '大厅':
+@authenticated
+def handle_close_room(requester, data):
+    if data.get('room') == '大厅':
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
             room_data = cur.fetchone()
-            if not room_data or get_level(data['requester'], room_data) < 2:
+            if not room_data or get_level(requester, room_data) < 2:
                 emit('close_room_result', {'success': False, 'msg': '无权限'})
                 return
             emit('message', {'screenname': '系统', 'text': '房间已被管理员关闭', 'system': True},
@@ -389,24 +417,27 @@ def handle_close_room(data):
             cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
             cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))
             conn.commit()
+        close_room(data['room'])
     except Exception as e:
         log.error('close_room error: %s', e)
 
 
 @socketio.on('find_room')
-def handle_find_room(data):
+@authenticated
+def handle_find_room(username, data):
     code = data.get('code', '').strip()
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT name, password, code FROM rooms WHERE code = %s', (code,))
+            cur.execute('SELECT name, password, code, owner, admins, members FROM rooms WHERE code = %s', (code,))
             room = cur.fetchone()
         if not room:
             emit('find_room_result', {'success': False, 'msg': '找不到该房间号'})
             return
         emit('find_room_result', {
             'success': True, 'room': room['name'],
-            'has_password': bool(room['password']), 'code': room['code'],
+            'has_password': bool(room['password']),
+            'needs_password': _needs_password(username, room), 'code': room['code'],
         })
     except Exception as e:
         log.error('find_room error: %s', e)
@@ -414,13 +445,28 @@ def handle_find_room(data):
 
 
 @socketio.on('room_subscribe')
-def handle_room_subscribe(data):
-    join_room(data['room'])
+@authenticated
+def handle_room_subscribe(username, data):
+    room = data.get('room', '')
+    participants = dm_participants(room)
+    if participants is not None:
+        if username in participants:
+            join_room(room)
+        return
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT members, kicked FROM rooms WHERE name = %s', (room,))
+            row = cur.fetchone()
+        if row and username in (row['members'] or []) and username not in (row['kicked'] or []):
+            join_room(room)
+    except Exception as e:
+        log.error('room_subscribe error: %s', e)
 
 
 @socketio.on('get_my_admin_rooms')
-def handle_get_my_admin_rooms(data):
-    username = data.get('username', '')
+@authenticated
+def handle_get_my_admin_rooms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -436,15 +482,24 @@ def handle_get_my_admin_rooms(data):
 
 
 @socketio.on('invite_to_room')
-def handle_invite_to_room(data):
+@authenticated
+def handle_invite_to_room(inviter, data):
     """Send a DM message with invite metadata to the target user."""
-    inviter = data['inviter']
-    inviter_screen = data.get('inviter_screen', inviter)
-    target = data['target']
-    room = data['room']
+    target = data.get('target', '')
+    room = data.get('room', '')
+    if not target or target == inviter or not in_room(room):
+        emit('invite_sent', {'success': False, 'msg': '无权限'})
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)',
+                        ([inviter, target],))
+            users = {u['username']: u['screenname'] for u in cur.fetchall()}
+            if target not in users:
+                emit('invite_sent', {'success': False, 'msg': '用户不存在'})
+                return
+            inviter_screen = users.get(inviter, inviter)
             cur.execute('SELECT code FROM rooms WHERE name = %s', (room,))
             row = cur.fetchone()
             room_code = row['code'] if row else ''
@@ -477,7 +532,8 @@ def handle_invite_to_room(data):
 # ── Text mute ─────────────────────────────────────────────────
 
 @socketio.on('text_mute')
-def handle_text_mute(data):
+@authenticated
+def handle_text_mute(requester, data):
     from state import rooms_text_muted
     import time
     try:
@@ -487,7 +543,7 @@ def handle_text_mute(data):
             room_data = cur.fetchone()
         if not room_data:
             return
-        req_level = get_level(data['username'], room_data)
+        req_level = get_level(requester, room_data)
         tgt_level = get_level(data['target'], room_data)
         if req_level < 1 or req_level <= tgt_level:
             return
@@ -510,14 +566,15 @@ def handle_text_mute(data):
 
 
 @socketio.on('text_unmute')
-def handle_text_unmute(data):
+@authenticated
+def handle_text_unmute(requester, data):
     from state import rooms_text_muted
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
             room_data = cur.fetchone()
-        req_level = get_level(data['username'], room_data) if room_data else 0
+        req_level = get_level(requester, room_data) if room_data else 0
         tgt_level = get_level(data['target'], room_data) if room_data else 0
         if not room_data or req_level < 1 or req_level <= tgt_level:
             return
@@ -532,8 +589,8 @@ def handle_text_unmute(data):
 # ── Block / Report ────────────────────────────────────────────
 
 @socketio.on('report_user')
-def handle_report_user(data):
-    reporter = data.get('reporter', '')
+@authenticated
+def handle_report_user(reporter, data):
     reported = data.get('reported', '')
     reason = data.get('reason', '').strip()
     if not reporter or not reported or reporter == reported:
@@ -551,8 +608,8 @@ def handle_report_user(data):
 
 
 @socketio.on('block_user')
-def handle_block_user(data):
-    blocker = data.get('blocker', '')
+@authenticated
+def handle_block_user(blocker, data):
     blocked = data.get('blocked', '')
     if not blocker or not blocked or blocker == blocked:
         return
@@ -571,8 +628,8 @@ def handle_block_user(data):
 
 
 @socketio.on('unblock_user')
-def handle_unblock_user(data):
-    blocker = data.get('blocker', '')
+@authenticated
+def handle_unblock_user(blocker, data):
     blocked = data.get('blocked', '')
     if not blocker or not blocked:
         return
@@ -589,10 +646,8 @@ def handle_unblock_user(data):
 
 
 @socketio.on('get_blocked_users')
-def handle_get_blocked_users(data):
-    username = data.get('username', '')
-    if not username:
-        return
+@authenticated
+def handle_get_blocked_users(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()

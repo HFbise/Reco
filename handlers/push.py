@@ -5,15 +5,16 @@ import urllib.request as _req
 from flask_socketio import emit
 from extensions import socketio
 from state import push_tokens
+from auth_session import authenticated
 
 log = logging.getLogger(__name__)
 
 
 @socketio.on('register_push_token')
-def handle_register_push_token(data):
-    username = data.get('username', '')
+@authenticated
+def handle_register_push_token(username, data):
     token = data.get('token', '')
-    if not username or not token:
+    if not token:
         return
     tokens = push_tokens.setdefault(username, [])
     if token not in tokens:

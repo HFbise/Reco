@@ -1,9 +1,11 @@
 import logging
+from flask import request
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
 from state import check_login_rate, record_login_fail, reset_login_attempts
 from utils import hash_password, verify_password, SECURITY_QUESTIONS, DEFAULT_PASSWORD
+from auth_session import make_token, bind, unbind, authenticated
 
 log = logging.getLogger(__name__)
 
@@ -33,7 +35,7 @@ def handle_register(data):
             cur.execute(
                 'INSERT INTO users (username, screenname, password, bio, security_question, security_answer)'
                 ' VALUES (%s, %s, %s, %s, %s, %s)',
-                (username, screenname, hash_password(password), bio, security_q, security_a)
+                (username, screenname, hash_password(password), bio, security_q, hash_password(security_a))
             )
             conn.commit()
         emit('register_result', {'success': True})
@@ -65,15 +67,19 @@ def handle_login(data):
             emit('login_result', {'success': False, 'msg': '密码错误'})
             return
         reset_login_attempts(username)
+        stored_hash = user['password']
         if needs_migrate:
+            stored_hash = hash_password(password)
             with get_db() as conn:
                 cur = conn.cursor()
                 cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                            (hash_password(password), username))
+                            (stored_hash, user['username']))
                 conn.commit()
+        bind(user['username'])
         emit('login_result', {
             'success': True,
-            'username': username,
+            'username': user['username'],
+            'token': make_token(user['username'], stored_hash),
             'screenname': user['screenname'],
             'bio': user.get('bio') or '',
             'avatar_expression': user.get('avatar_expression') or 'Smile',
@@ -85,13 +91,14 @@ def handle_login(data):
 
 
 @socketio.on('get_profile')
-def handle_get_profile(data):
+@authenticated
+def handle_get_profile(_username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
                 'SELECT screenname, bio, avatar_expression, avatar_color FROM users WHERE username = %s',
-                (data['username'],)
+                (data.get('username', ''),)
             )
             user = cur.fetchone()
         if not user:
@@ -110,14 +117,15 @@ def handle_get_profile(data):
 
 
 @socketio.on('update_profile')
-def handle_update_profile(data):
+@authenticated
+def handle_update_profile(username, data):
     try:
         screenname = data['screenname'].strip()
         bio = data['bio'].strip()
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute('UPDATE users SET screenname = %s, bio = %s WHERE username = %s',
-                        (screenname, bio, data['username']))
+                        (screenname, bio, username))
             conn.commit()
         emit('update_profile_result', {'success': True, 'screenname': screenname, 'bio': bio})
     except Exception as e:
@@ -126,11 +134,12 @@ def handle_update_profile(data):
 
 
 @socketio.on('change_password')
-def handle_change_password(data):
+@authenticated
+def handle_change_password(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT password FROM users WHERE username = %s', (data['username'],))
+            cur.execute('SELECT password FROM users WHERE username = %s', (username,))
             user = cur.fetchone()
             ok, _ = verify_password(user['password'], data['old_password'])
             if not ok:
@@ -139,10 +148,10 @@ def handle_change_password(data):
             if len(data['new_password']) < 6:
                 emit('change_password_result', {'success': False, 'msg': '新密码至少6位'})
                 return
-            cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                        (hash_password(data['new_password']), data['username']))
+            new_hash = hash_password(data['new_password'])
+            cur.execute('UPDATE users SET password = %s WHERE username = %s', (new_hash, username))
             conn.commit()
-        emit('change_password_result', {'success': True})
+        emit('change_password_result', {'success': True, 'token': make_token(username, new_hash)})
     except Exception as e:
         log.error('change_password error: %s', e)
         emit('change_password_result', {'success': False, 'msg': str(e)})
@@ -170,17 +179,30 @@ def handle_reset_password(data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT security_answer FROM users WHERE username = %s',
-                        (data['username'].strip(),))
+            username = data['username'].strip()
+            answer = data['answer'].strip().lower()
+            rate_key = f'reset:{username.lower()}'
+            allowed, secs = check_login_rate(rate_key)
+            if not allowed:
+                emit('reset_password_result', {'success': False, 'msg': f'尝试过多，请 {secs} 秒后重试'})
+                return
+            cur.execute('SELECT security_answer FROM users WHERE username = %s', (username,))
             user = cur.fetchone()
-            if not user or user['security_answer'] != data['answer'].strip().lower():
+            ok, needs_migrate = (verify_password(user['security_answer'], answer)
+                                 if user and user['security_answer'] else (False, False))
+            if not ok:
+                record_login_fail(rate_key)
                 emit('reset_password_result', {'success': False, 'msg': '答案错误'})
                 return
+            reset_login_attempts(rate_key)
             if len(data['new_password']) < 6:
                 emit('reset_password_result', {'success': False, 'msg': '新密码至少6位'})
                 return
             cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                        (hash_password(data['new_password']), data['username']))
+                        (hash_password(data['new_password']), username))
+            if needs_migrate:
+                cur.execute('UPDATE users SET security_answer = %s WHERE username = %s',
+                            (hash_password(answer), username))
             conn.commit()
         emit('reset_password_result', {'success': True})
     except Exception as e:
@@ -194,8 +216,8 @@ def handle_get_questions():
 
 
 @socketio.on('save_avatar')
-def handle_save_avatar(data):
-    username = data.get('username', '')
+@authenticated
+def handle_save_avatar(username, data):
     expression = data.get('expression', 'Smile')
     color = data.get('color', '#5865F2')
     try:
@@ -213,10 +235,10 @@ def handle_save_avatar(data):
 
 
 @socketio.on('delete_account')
-def handle_delete_account(data):
-    username = data.get('username', '').strip().lower()
+@authenticated
+def handle_delete_account(username, data):
     password = data.get('password', '')
-    if not username or not password:
+    if not password:
         emit('delete_account_result', {'success': False, 'msg': '参数缺失'})
         return
     try:
@@ -240,6 +262,7 @@ def handle_delete_account(data):
                         (username, username))
             cur.execute('DELETE FROM users WHERE username = %s', (username,))
             conn.commit()
+        unbind(request.sid)
         emit('delete_account_result', {'success': True})
     except Exception as e:
         log.error('delete_account error: %s', e)

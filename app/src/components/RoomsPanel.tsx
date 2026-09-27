@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet,
-  TextInput, Modal, ScrollView, Alert, Dimensions, ActivityIndicator,
+  View, Text, TouchableOpacity, Pressable, StyleSheet,
+  TextInput, Modal, ScrollView, Alert, Dimensions, ActivityIndicator, Platform,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
@@ -9,11 +9,10 @@ import { getSocket } from '../lib/socket';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
-import { IconSearch, IconPlus, IconLock, IconGroup } from './Icon';
+import { IconSearch, IconPlus, IconLock, IconGroup, IconClose } from './Icon';
 import { Fonts, Radius, Spacing } from '../theme';
 import { playNotifSound } from '../lib/sounds';
 import { useSoundStore } from '../store/soundStore';
-import { getSavedRoomPassword, saveRoomPassword } from '../lib/roomPasswordCache';
 import { useBlockStore } from '../store/blockStore';
 
 // Unified entry — room or DM
@@ -22,6 +21,7 @@ interface Entry {
   key: string;           // room name or dm_room
   displayName: string;
   hasPassword?: boolean;
+  needsPassword?: boolean; // false for owner / room admins / existing members
   otherUsername?: string;
   avatarExpression?: string;
   avatarColor?: string;
@@ -42,6 +42,7 @@ export interface DmEntry {
 interface Props {
   onRoomSelect?: (name: string, password?: string) => void;
   onDmSelect?: (dm: DmEntry) => void;
+  onDmClose?: (dmRoom: string) => void;
   selectedRoom?: string | null;
   showSidebarHeader?: boolean;
 }
@@ -50,7 +51,7 @@ export interface RoomsPanelHandle {
   openDropdown: (pos: { top: number; right: number }) => void;
 }
 
-export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPanel({ onRoomSelect, onDmSelect, selectedRoom, showSidebarHeader = false }: Props, ref) {
+export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPanel({ onRoomSelect, onDmSelect, onDmClose, selectedRoom, showSidebarHeader = false }: Props, ref) {
   const { currentUser } = useAuthStore();
   const c = useColors();
   const t = useT();
@@ -80,7 +81,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   const [showPwModal, setShowPwModal] = useState(false);
   const [roomPwInput, setRoomPwInput] = useState('');
   const [roomPwError, setRoomPwError] = useState('');
-  const [rememberPw, setRememberPw] = useState(false);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   // Stable refs
   const selectedRoomRef = useRef(selectedRoom);
@@ -101,7 +102,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     socket.emit('user_online', { username: currentUser.username });
     socket.emit('get_blocked_users', { username: currentUser.username });
 
-    const onRoomsList = (data: { rooms: { name: string; has_password: boolean; code?: string }[] }) => {
+    const onRoomsList = (data: { rooms: { name: string; has_password: boolean; needs_password?: boolean; code?: string }[] }) => {
       setRoomsLoading(false);
       setEntries(prev => {
         const existing = new Map(prev.map(e => [e.key, e]));
@@ -111,6 +112,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           key: r.name,
           displayName: r.name,
           hasPassword: r.has_password,
+          needsPassword: r.needs_password,
           unread: existing.get(r.name)?.unread ?? 0,
           lastActivity: existing.get(r.name)?.lastActivity ?? 0,
         }));
@@ -119,11 +121,15 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       });
     };
 
-    const onNewRoomCreated = (data: { room: string; has_password: boolean }) => {
+    const onNewRoomCreated = (data: { room: string; has_password: boolean; owner?: string }) => {
       setEntries(prev =>
         prev.find(e => e.key === data.room) ? prev : [
           ...prev,
-          { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, unread: 0, lastActivity: Date.now() },
+          {
+            type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password,
+            needsPassword: data.has_password && data.owner !== currentUser.username,
+            unread: 0, lastActivity: Date.now(),
+          },
         ]
       );
     };
@@ -133,17 +139,17 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       const pw = pendingCreatePwRef.current;
       setShowCreate(false); setNewRoomName(''); setNewRoomPw(''); setCreateError('');
       if (data.code) Alert.alert(t('create-room'), `${t('room-code')}: ${data.code}`);
-      const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, unread: 0, lastActivity: Date.now() };
+      const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, needsPassword: false, unread: 0, lastActivity: Date.now() };
       navigateTo(entry, pw || undefined);
     };
 
     const onFindRoomResult = (data: any) => {
       if (!data.success) { setFindError(data.msg || t('err-find-failed')); return; }
       setShowFind(false); setFindCode(''); setFindError('');
-      const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, unread: 0, lastActivity: 0 };
+      const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, needsPassword: data.needs_password, unread: 0, lastActivity: 0 };
       // Add to list if not present
       setEntries(prev => prev.find(e => e.key === data.room) ? prev : [...prev, entry]);
-      if (data.has_password) {
+      if (data.needs_password) {
         setPendingEntry(entry);
         setRoomPwInput('');
         setRoomPwError('');
@@ -198,6 +204,10 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const onJoinResult = (data: any) => {
       const room = data.room ?? selectedRoomRef.current;
       if (room) loadingHistoryRef.current.delete(room);
+      // Now a member — the password is never asked again
+      if (data.success && data.room) {
+        setEntries(prev => prev.map(e => e.key === data.room ? { ...e, needsPassword: false } : e));
+      }
     };
     const onJoinDmResult = (data: any) => {
       if (data.dm_room) loadingHistoryRef.current.delete(data.dm_room);
@@ -326,17 +336,28 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
 
   function handlePress(entry: Entry) {
     setEntries(prev => prev.map(e => e.key === entry.key ? { ...e, unread: 0 } : e));
-    if (entry.type === 'room' && entry.hasPassword) {
-      const saved = getSavedRoomPassword(entry.key);
-      if (saved) { navigateTo(entry, saved); return; }
+    if (entry.type === 'room' && entry.needsPassword) {
       setPendingEntry(entry);
       setRoomPwInput('');
       setRoomPwError('');
-      setRememberPw(false);
       setShowPwModal(true);
       return;
     }
     navigateTo(entry);
+  }
+
+  function closeDm(entry: Entry) {
+    setEntries(prev => prev.filter(e => e.key !== entry.key));
+    setHoveredKey(null);
+    getSocket().emit('close_dm', { username: currentUser?.username, dm_room: entry.key });
+    onDmClose?.(entry.key);
+  }
+
+  function confirmCloseDm(entry: Entry) {
+    Alert.alert(t('close-dm'), entry.displayName, [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('close'), style: 'destructive', onPress: () => closeDm(entry) },
+    ]);
   }
 
   function openDropdown(pos?: { top: number; right: number }) {
@@ -367,14 +388,13 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const code = findCode.trim();
     if (!code) return;
     setFindError('');
-    getSocket().emit('find_room', { code });
+    getSocket().emit('find_room', { code, username: currentUser?.username });
   }
 
   function doJoinWithPw() {
     if (!roomPwInput.trim()) { setRoomPwError(t('err-fill-required')); return; }
     if (!pendingEntry) return;
     const pw = roomPwInput.trim();
-    if (rememberPw) saveRoomPassword(pendingEntry.key, pw);
     setShowPwModal(false);
     navigateTo(pendingEntry, pw);
   }
@@ -437,12 +457,15 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       <ScrollView contentContainerStyle={s.scrollContent}>
         {sorted.map(entry => {
           const isActive = entry.key === selectedRoom;
+          const showClose = entry.type === 'dm' && hoveredKey === entry.key;
           return (
-            <TouchableOpacity
+            <Pressable
               key={entry.key}
-              style={[s.roomItem, isActive && { backgroundColor: c.accentBg }]}
+              style={({ pressed }) => [s.roomItem, isActive && { backgroundColor: c.accentBg }, pressed && { opacity: 0.7 }]}
               onPress={() => handlePress(entry)}
-              activeOpacity={0.7}
+              onHoverIn={() => setHoveredKey(entry.key)}
+              onHoverOut={() => setHoveredKey(k => (k === entry.key ? null : k))}
+              onLongPress={entry.type === 'dm' && Platform.OS !== 'web' ? () => confirmCloseDm(entry) : undefined}
             >
               {entry.type === 'room' ? (
                 <View style={s.roomIcon}>
@@ -464,12 +487,21 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
                 {entry.displayName}
               </Text>
               {entry.type === 'room' && entry.hasPassword && <IconLock size={12} color={c.textMuted} />}
-              {entry.unread > 0 && (
+              {showClose ? (
+                <Pressable
+                  style={({ hovered }: any) => [s.closeBtn, hovered && { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}
+                  onPress={() => closeDm(entry)}
+                  hitSlop={6}
+                  accessibilityLabel={t('close-dm')}
+                >
+                  <IconClose size={12} color={c.textMuted} />
+                </Pressable>
+              ) : entry.unread > 0 && (
                 <View style={[s.badge, { backgroundColor: c.unread }]}>
                   <Text style={s.badgeText}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
                 </View>
               )}
-            </TouchableOpacity>
+            </Pressable>
           );
         })}
       </ScrollView>
@@ -556,12 +588,6 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
               autoFocus
               onSubmitEditing={doJoinWithPw}
             />
-            <TouchableOpacity style={s.rememberRow} onPress={() => setRememberPw(v => !v)} activeOpacity={0.7}>
-              <View style={[s.checkbox, { borderColor: c.border, backgroundColor: rememberPw ? c.accent : 'transparent' }]}>
-                {rememberPw && <Text style={s.checkmark}>✓</Text>}
-              </View>
-              <Text style={[s.rememberText, { color: c.textMuted }]}>{t('remember-password')}</Text>
-            </TouchableOpacity>
             <View style={s.modalBtns}>
               <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowPwModal(false)}>
                 <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
@@ -625,6 +651,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
   },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: String(Fonts.bold) as any },
+  closeBtn: { width: 20, height: 20, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xxl },
   modalBox: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, width: '100%', maxWidth: 400 },
@@ -637,8 +664,4 @@ const s = StyleSheet.create({
   confirmBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.md },
   confirmText: { color: '#fff', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
 
-  rememberRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  checkbox: { width: 18, height: 18, borderRadius: 4, borderWidth: 1.5, alignItems: 'center', justifyContent: 'center' },
-  checkmark: { color: '#fff', fontSize: 12, lineHeight: 14 },
-  rememberText: { fontSize: 14 },
 });

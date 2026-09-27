@@ -7,48 +7,58 @@ from extensions import socketio
 from db import get_db
 from state import check_msg_rate, get_level, online_users, rooms_text_muted, push_tokens
 from handlers.push import send_push
+from auth_session import authenticated, in_room
 
 log = logging.getLogger(__name__)
 
 
+MAX_MESSAGE_LEN = 4000
+
+
 @socketio.on('message')
-def handle_message(data):
+@authenticated
+def handle_message(username, data):
     room = data.get('room', '')
-    if not data.get('system'):
-        username = data.get('username', '')
-        if not check_msg_rate(username):
-            emit('message_rate_limited', {})
-            return
-        room_muted = rooms_text_muted.get(room, {})
-        if username in room_muted:
-            expiry = room_muted[username]
-            if expiry is None or expiry > time.time():
-                emit('text_muted_notify', {})
-                return
-            del room_muted[username]
-        try:
-            with get_db() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    'INSERT INTO messages (room, username, screenname, text, time)'
-                    ' VALUES (%s, %s, %s, %s, %s) RETURNING id',
-                    (room, data['username'], data['screenname'], data['text'],
-                     datetime.now().strftime('%H:%M'))
-                )
-                data['id'] = cur.fetchone()['id']
-                conn.commit()
-            data['time'] = datetime.now(timezone.utc).isoformat()
-        except Exception as e:
-            log.error('message save error: %s', e)
-
-    emit('message', data, to=room)
-
-    if data.get('system'):
+    text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
+    # Only sockets that passed the join checks (member / DM participant) are in the room.
+    if not text or not in_room(room):
         return
+    if not check_msg_rate(username):
+        emit('message_rate_limited', {})
+        return
+    room_muted = rooms_text_muted.get(room, {})
+    if username in room_muted:
+        expiry = room_muted[username]
+        if expiry is None or expiry > time.time():
+            emit('text_muted_notify', {})
+            return
+        del room_muted[username]
 
-    sender = data.get('username', '')
-    sender_screen = data.get('screenname', sender)
-    text = data.get('text', '')[:100]
+    # Built server-side: clients can't spoof the sender, display name or `system` flag.
+    msg = {'username': username, 'screenname': username, 'room': room, 'text': text}
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
+            row = cur.fetchone()
+            if row:
+                msg['screenname'] = row['screenname']
+            cur.execute(
+                'INSERT INTO messages (room, username, screenname, text, time)'
+                ' VALUES (%s, %s, %s, %s, %s) RETURNING id',
+                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M'))
+            )
+            msg['id'] = cur.fetchone()['id']
+            conn.commit()
+        msg['time'] = datetime.now(timezone.utc).isoformat()
+    except Exception as e:
+        log.error('message save error: %s', e)
+
+    emit('message', msg, to=room)
+
+    sender = username
+    sender_screen = msg['screenname']
+    text = text[:100]
 
     if room.startswith('dm:'):
         parts = room.split(':')
@@ -82,17 +92,17 @@ def handle_message(data):
 
 
 @socketio.on('recall_message')
-def handle_recall_message(data):
+@authenticated
+def handle_recall_message(username, data):
     msg_id = data.get('id')
-    username = data.get('username')
-    room = data.get('room')
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username, recalled FROM messages WHERE id = %s', (msg_id,))
+            cur.execute('SELECT username, room, recalled FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
             if not msg or msg['recalled']:
                 return
+            room = msg['room']
             if msg['username'] != username:
                 cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
                 room_data = cur.fetchone()
@@ -106,20 +116,20 @@ def handle_recall_message(data):
 
 
 @socketio.on('edit_message')
-def handle_edit_message(data):
+@authenticated
+def handle_edit_message(username, data):
     msg_id = data.get('id')
-    username = data.get('username')
-    new_text = (data.get('text') or '').strip()
-    room = data.get('room')
+    new_text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
     if not new_text:
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username, recalled FROM messages WHERE id = %s', (msg_id,))
+            cur.execute('SELECT username, room, recalled FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
             if not msg or msg['recalled'] or msg['username'] != username:
                 return
+            room = msg['room']
             cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s',
                         (new_text, msg_id))
             conn.commit()
@@ -129,20 +139,21 @@ def handle_edit_message(data):
 
 
 @socketio.on('add_reaction')
-def handle_add_reaction(data):
+@authenticated
+def handle_add_reaction(username, data):
     msg_id = data.get('id')
-    username = data.get('username')
     emoji = data.get('emoji', '').strip()
-    room = data.get('room')
-    if not all([msg_id, username, emoji, room]):
+    if not msg_id or not emoji or len(emoji) > 16:
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT reactions, recalled FROM messages WHERE id = %s', (msg_id,))
+            cur.execute('SELECT room, reactions, recalled FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
-            if not msg or msg['recalled']:
+            # Must be able to see the message to react to it
+            if not msg or msg['recalled'] or not in_room(msg['room']):
                 return
+            room = msg['room']
             reactions = dict(msg.get('reactions') or {})
             users = list(reactions.get(emoji, []))
             if username in users:

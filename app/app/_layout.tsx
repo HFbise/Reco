@@ -7,7 +7,6 @@ import { useLangStore } from '../src/store/langStore';
 import { useSoundStore } from '../src/store/soundStore';
 import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
-import { loadRoomPasswords } from '../src/lib/roomPasswordCache';
 import { loadMessageCache } from '../src/lib/messageCache';
 
 export default function RootLayout() {
@@ -47,7 +46,6 @@ export default function RootLayout() {
       loadTheme(),
       loadLang(),
       loadSound(),
-      loadRoomPasswords(),
       loadMessageCache(),
     ]).then(() => setReady(true));
   }, []);
