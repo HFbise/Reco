@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  View, Text, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, Modal, Alert, Animated,
+  View, Text, FlatList, TextInput, TouchableOpacity, ActivityIndicator,
+  StyleSheet, KeyboardAvoidingView, Platform, Modal, Animated,
 } from 'react-native';
+import { showAlert } from '../lib/alert';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { getSocket } from '../lib/socket';
 import { MessageBubble, type Message, formatMsgTime } from './MessageBubble';
-import { getCached, getLastTs, cacheMsg, patchCached } from '../lib/messageCache';
+import { GuestBanner } from './GuestBanner';
+import { getCached, getLastTs, cacheMsg, patchCached, resetRoom } from '../lib/messageCache';
 import { EmojiPicker } from './EmojiPicker';
 import { loadRecentEmojis, recordRecentEmoji, buildReactionQuickList } from '../lib/recentEmojis';
 import { AvatarView } from './AvatarView';
@@ -97,6 +99,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
   const t = useT();
   const isDesktop = useIsDesktop();
   const [messages, setMessages] = useState<Message[]>(() => getCached(name));
+  const [hasOlder, setHasOlder] = useState(true);
+  const [loadingOlder, setLoadingOlder] = useState(false);
   const [input, setInput] = useState('');
   const flatRef = useRef<FlatList>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
@@ -146,7 +150,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
 
   const inVoiceHere = inVoice && (!activeVoiceRoom || activeVoiceRoom === name);
   const inVoiceElsewhere = inVoice && !!activeVoiceRoom && activeVoiceRoom !== name;
-  const showVoiceBar = !hideVoiceBar && !isDm && (inVoiceHere || roomVoiceMembers.length > 0);
+  const isGuest = !!currentUser?.guest;
+  const showVoiceBar = !hideVoiceBar && !isDm && !isGuest && (inVoiceHere || roomVoiceMembers.length > 0);
   const [showMembersModal, setShowMembersModal] = useState(false);
 
   useEffect(() => {
@@ -176,7 +181,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           if (data.is_owner) setIsOwner(true);
           setMyLevel(data.my_level ?? 0);
         } else if (data.wrong_password) {
-          Alert.alert(t('wrong-password'), t.server(data, 'wrong-password'));
+          showAlert(t('wrong-password'), t.server(data, 'wrong-password'));
           onClose?.();
         }
       });
@@ -240,19 +245,16 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     const onKicked = (data: any) => {
       if (data.room !== name) return;
       if (inVoiceHere) voice.leaveVoice();
-      Alert.alert(t('kicked-title'), t('kicked-msg'));
+      showAlert(t('kicked-title'), t('kicked-msg'));
       handleBack();
     };
     const onMessage = (data: any) => {
       // The socket sits in many rooms at once (all DMs, rooms visited this session)
       if (data.room !== name) return;
       const msg: Message = { ...data, isOwn: data.username === currentUser.username };
-      if (!data.system) {
-        cacheMsg(name, msg);
-        setMessages(getCached(name).slice());
-      } else {
-        setMessages(prev => [...prev, msg]);
-      }
+      if (!data.system) cacheMsg(name, msg);
+      // Append rather than reload from the cache: older pages loaded by scrolling up live only in state
+      setMessages(prev => (prev.some(m => m.id === msg.id && msg.id != null) ? prev : [...prev, msg]));
     };
     const onMessageRecalled = (data: { id: number; room: string }) => {
       if (data.room !== name) return;
@@ -263,6 +265,25 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       if (data.room !== name) return;
       patchCached(name, data.id, { text: data.text, edited: true });
       setMessages(prev => prev.map(m => m.id === data.id ? { ...m, text: data.text, edited: true } : m));
+    };
+    // More than a page arrived while away: the server sends the latest page instead
+    const onHistoryReset = (data: { room: string }) => {
+      if (data.room !== name) return;
+      resetRoom(name);
+      setMessages([]);
+      setHasOlder(true);
+    };
+    const onOlderMessages = (data: { room: string; messages: Message[]; has_more: boolean }) => {
+      if (data.room !== name) return;
+      setLoadingOlder(false);
+      setHasOlder(data.has_more);
+      setMessages(prev => {
+        const known = new Set(prev.map(m => m.id));
+        const older = data.messages
+          .filter(m => !known.has(m.id))
+          .map(m => ({ ...m, isOwn: m.username === currentUser.username }));
+        return [...older, ...prev];
+      });
     };
     const onReactionUpdated = (data: { id: number; reactions: Record<string, string[]>; room: string }) => {
       if (data.room !== name) return;
@@ -278,6 +299,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     socket.on('set_room_password_result', onSetRoomPasswordResult);
     socket.on('kicked_from_room', onKicked);
     socket.on('message', onMessage);
+    socket.on('history_reset', onHistoryReset);
+    socket.on('older_messages', onOlderMessages);
     socket.on('message_recalled', onMessageRecalled);
     socket.on('message_edited', onMessageEdited);
     socket.on('reaction_updated', onReactionUpdated);
@@ -292,6 +315,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       socket.off('set_room_password_result', onSetRoomPasswordResult);
       socket.off('kicked_from_room', onKicked);
       socket.off('message', onMessage);
+      socket.off('history_reset', onHistoryReset);
+      socket.off('older_messages', onOlderMessages);
       socket.off('message_recalled', onMessageRecalled);
       socket.off('message_edited', onMessageEdited);
       socket.off('reaction_updated', onReactionUpdated);
@@ -312,6 +337,13 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       setContainerOffset({ x: pageX, y: pageY });
       setContainerW(w);
     });
+  }
+
+  function loadOlder() {
+    const oldest = messages.find(m => typeof m.id === 'number');
+    if (!hasOlder || loadingOlder || !oldest) return;
+    setLoadingOlder(true);
+    getSocket().emit('load_older', { room: name, before_id: oldest.id });
   }
 
   function sendMessage() {
@@ -482,7 +514,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           currentUsername={currentUser?.username}
           onJoin={() => {
             if (inVoiceElsewhere && onLeaveAndSwitch) {
-              Alert.alert(
+              showAlert(
                 t('switch-voice-title'),
                 t('switch-voice-msg', { from: t.room(activeVoiceRoom!), to: t.room(name) }),
                 [
@@ -508,6 +540,16 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           ref={flatRef}
           data={[...feed].reverse()}
           inverted
+          // inverted list: its "end" is the top of the chat
+          onEndReached={loadOlder}
+          onEndReachedThreshold={0.2}
+          ListFooterComponent={hasOlder && messages.length > 0 ? (
+            <TouchableOpacity style={s.loadOlderBtn} onPress={loadOlder} disabled={loadingOlder} activeOpacity={0.7}>
+              {loadingOlder
+                ? <ActivityIndicator size="small" color={c.textMuted} />
+                : <Text style={[s.loadOlderText, { color: c.accent }]}>{t('load-older')}</Text>}
+            </TouchableOpacity>
+          ) : null}
           initialNumToRender={feed.length || 20}
           keyExtractor={item => (item as any)._id ?? String((item as Message).id)}
           renderItem={({ item }) => {
@@ -551,10 +593,10 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
               <MessageBubble
                 msg={msg}
                 currentUsername={currentUser?.username}
-                onLongPress={isDesktop ? undefined : () => handleLongPress(msg)}
+                onLongPress={isDesktop || isGuest ? undefined : () => handleLongPress(msg)}
                 onReactionPress={(emoji) => handleReactionPress(msg.id, emoji)}
                 isDesktop={isDesktop}
-                onReactionBtnPress={isDesktop ? (pageX, pageY, btnH) => {
+                onReactionBtnPress={isDesktop && !isGuest ? (pageX, pageY, btnH) => {
                   // Toggle: clicking 😊 again on same message closes the bar
                   setReactionBar(prev =>
                     prev?.msgId === msg.id ? null : { msgId: msg.id, pageX, pageY, btnH }
@@ -597,6 +639,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
               </TouchableOpacity>
             </View>
           </View>
+        ) : isGuest ? (
+          <GuestBanner />
         ) : isTextMuted ? (
           <View style={[s.mutedArea, { backgroundColor: c.bg, borderTopColor: c.border }]}>
             <Text style={[s.mutedText, { color: c.danger }]}>🔇 {t('you-are-muted')}</Text>
@@ -838,13 +882,13 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
         <RightDrawer onClose={() => setShowMembersModal(false)} c={c}>
           <MembersPanel
             room={name}
-            voice={voice}
+            voice={isGuest ? undefined : voice}
             roomVoiceMembers={roomVoiceMembers}
             currentUsername={currentUser?.username}
             isVoiceHere={inVoiceHere}
             onJoinVoice={() => {
               if (inVoiceElsewhere && onLeaveAndSwitch) {
-                Alert.alert(t('switch-voice-title'), t('switch-voice-msg', { from: t.room(activeVoiceRoom!), to: t.room(name) }), [
+                showAlert(t('switch-voice-title'), t('switch-voice-msg', { from: t.room(activeVoiceRoom!), to: t.room(name) }), [
                   { text: t('cancel'), style: 'cancel' },
                   { text: t('switch'), onPress: () => onLeaveAndSwitch(name) },
                 ]);
@@ -1000,6 +1044,8 @@ const s = StyleSheet.create({
 
   timeSep: { flexDirection: 'row', alignItems: 'center', marginVertical: 8, paddingHorizontal: Spacing.lg },
   sysMsg: { textAlign: 'center', fontSize: 12, paddingVertical: 4, paddingHorizontal: Spacing.lg, opacity: 0.55 },
+  loadOlderBtn: { alignItems: 'center', paddingVertical: 12 },
+  loadOlderText: { fontSize: 13, fontWeight: '600' as any },
   inviteCard: { margin: 12, borderRadius: 12, borderWidth: 1, padding: 12, gap: 8 },
   inviteTitle: { fontSize: 13 },
   inviteBtn: { borderRadius: 8, paddingVertical: 8, alignItems: 'center' },

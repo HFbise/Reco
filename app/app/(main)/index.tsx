@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
+import { useAuthStore } from '../../src/store/authStore';
 import { useMobileVoice } from '../../src/context/VoiceContext';
 import { RoomsPanel, type RoomsPanelHandle, type DmEntry } from '../../src/components/RoomsPanel';
 import { ChatPanel, type DmMeta } from '../../src/components/ChatPanel';
@@ -20,6 +21,7 @@ export default function RoomsScreen() {
   const { width: SW } = useWindowDimensions();
   const c = useColors();
   const t = useT();
+  const { currentUser } = useAuthStore();
   const { voice, setRoom, voiceRoom, leaveAndSwitchRoom } = useMobileVoice();
   const { inVoice, voiceMembers } = voice;
   const roomsPanelRef = useRef<RoomsPanelHandle>(null);
@@ -162,9 +164,11 @@ export default function RoomsScreen() {
       <Image source={require('../../assets/reco-logo.png')} style={s.logo} tintColor={c.isDark ? '#fff' : undefined} resizeMode="contain" />
       <View style={{ flex: 1 }} />
       {voicePill}
-      <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={handlePlusPress} activeOpacity={0.7}>
-        <IconPlus size={20} color={c.accent} />
-      </TouchableOpacity>
+      {!currentUser?.guest && (
+        <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={handlePlusPress} activeOpacity={0.7}>
+          <IconPlus size={20} color={c.accent} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 

@@ -13,6 +13,7 @@ password (or deleting the account) invalidates every previously issued token.
 import functools
 import hashlib
 import logging
+import secrets
 
 import sentry_sdk
 from flask import request
@@ -26,6 +27,11 @@ from state import online_users
 log = logging.getLogger(__name__)
 
 TOKEN_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+GUEST_TOKEN_MAX_AGE = 60 * 60 * 24  # 1 day
+
+# Demo visitors get ids like 'guest:3f9a...'. Real usernames can't contain ':',
+# so a guest id can never collide with an account.
+GUEST_PREFIX = 'guest:'
 
 _serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='socket-auth')
 
@@ -40,6 +46,16 @@ def make_token(username: str, password_hash: str) -> str:
     return _serializer.dumps({'u': username, 'p': _pw_fingerprint(password_hash)})
 
 
+def is_guest(username) -> bool:
+    return isinstance(username, str) and username.startswith(GUEST_PREFIX)
+
+
+def new_guest() -> tuple[str, str]:
+    """A fresh read-only demo identity and its token."""
+    guest = GUEST_PREFIX + secrets.token_hex(6)
+    return guest, _serializer.dumps({'u': guest, 'g': True})
+
+
 def verify_token(token: str):
     """Returns the username if the token is valid and still matches the stored password."""
     if not token:
@@ -49,6 +65,13 @@ def verify_token(token: str):
     except (BadSignature, SignatureExpired):
         return None
     username = payload.get('u')
+    if payload.get('g'):
+        # Guest tokens carry no account; they just keep the same demo id across reconnects
+        try:
+            _serializer.loads(token, max_age=GUEST_TOKEN_MAX_AGE)
+        except SignatureExpired:
+            return None
+        return username if is_guest(username) else None
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('SELECT password FROM users WHERE username = %s', (username,))
@@ -59,9 +82,11 @@ def verify_token(token: str):
 
 
 def bind(username: str):
-    """Attach `username` to the current socket and mark it online."""
+    """Attach `username` to the current socket and mark it online (guests stay invisible)."""
     sid = request.sid
     sid_users[sid] = username
+    if is_guest(username):
+        return
     was_online = username in online_users
     online_users.setdefault(username, set()).add(sid)
     if not was_online:
@@ -83,15 +108,15 @@ def current_user():
     return sid_users.get(request.sid)
 
 
-def authenticated(handler):
-    """Socket handler decorator: rejects unauthenticated sockets and passes the
-    server-side username as the first argument: handler(username, data)."""
-
+def _guarded(handler, allow_guest: bool):
     @functools.wraps(handler)
     def wrapper(data=None, *_args):
         username = current_user()
         if not username:
             emit('auth_required', {})
+            return
+        if is_guest(username) and not allow_guest:
+            emit('guest_read_only', {})
             return
         # Errors reported from this event carry who triggered it and which event it was
         with sentry_sdk.isolation_scope() as scope:
@@ -100,6 +125,18 @@ def authenticated(handler):
             return handler(username, data if isinstance(data, dict) else {})
 
     return wrapper
+
+
+def authenticated(handler):
+    """Socket handler decorator: rejects unauthenticated sockets and demo guests,
+    and passes the server-side username first: handler(username, data)."""
+    return _guarded(handler, allow_guest=False)
+
+
+def readable(handler):
+    """Like `authenticated`, but demo guests may call it too. Only for handlers
+    that read data; each must itself limit what a guest can see (is_guest)."""
+    return _guarded(handler, allow_guest=True)
 
 
 def in_room(room) -> bool:

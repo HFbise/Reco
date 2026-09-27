@@ -9,6 +9,7 @@ export interface User {
   avatar_expression: string;
   avatar_color: string;
   token: string; // signed session token from login_result; sent in the socket handshake
+  guest?: boolean; // read-only demo visitor (see GuestBanner)
 }
 
 interface AuthState {

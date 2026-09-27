@@ -3,7 +3,7 @@ import logging
 from flask import request
 from flask_socketio import emit
 
-from auth_session import authenticated, bind, unbind, verify_token
+from auth_session import bind, new_guest, readable, unbind, verify_token
 from extensions import socketio
 from state import rooms_voice, sid_to_voice
 
@@ -29,15 +29,24 @@ def handle_connect(auth=None):
         emit('session_expired', {})
 
 
+@socketio.on('guest_login')
+def handle_guest_login(data=None):
+    """Start a read-only demo session (no account). See demo.py."""
+    unbind(request.sid)
+    guest, token = new_guest()
+    bind(guest)
+    emit('guest_login_result', {'success': True, 'username': guest, 'token': token})
+
+
 @socketio.on('user_online')
-@authenticated
+@readable
 def handle_user_online(username, data):
     # Kept for older clients; binding already marks the user online.
     pass
 
 
 @socketio.on('user_offline')
-@authenticated
+@readable
 def handle_user_offline(username, data):
     unbind(request.sid)
 

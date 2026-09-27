@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
+import { showAlert } from '../lib/alert';
 import { getSocket } from '../lib/socket';
 import { SERVER_URL } from '../lib/config';
 import { useAuthStore } from '../store/authStore';
@@ -279,7 +279,7 @@ export function useVoice(room: string) {
         inVoiceRef.current = false;
         setInVoice(false);
         setIsMuted(false);
-        Alert.alert(T('voice-banned-title'), T('voice-banned-msg'));
+        showAlert(T('voice-banned-title'), T('voice-banned-msg'));
       }
     };
 
@@ -375,7 +375,7 @@ export function useVoice(room: string) {
 
   async function joinVoice() {
     if (!isSupported) {
-      Alert.alert(T('voice-not-supported'), T('voice-not-supported-msg'));
+      showAlert(T('voice-not-supported'), T('voice-not-supported-msg'));
       return;
     }
     try {
@@ -438,7 +438,7 @@ export function useVoice(room: string) {
         getSocket().emit('ping_check', { t: Date.now() });
       }, 3000);
     } catch (e: any) {
-      Alert.alert(T('voice-join-failed'), e?.message || T('voice-mic-error'));
+      showAlert(T('voice-join-failed'), e?.message || T('voice-mic-error'));
     }
   }
 
@@ -498,7 +498,7 @@ export function useVoice(room: string) {
     const audioTracks = (stream as any).getAudioTracks();
     if (!audioTracks.length) {
       (stream as any).getTracks().forEach((t: any) => t.stop());
-      Alert.alert(T('voice-join-failed'), T('share-audio-missing'));
+      showAlert(T('voice-join-failed'), T('share-audio-missing'));
       return;
     }
     (stream as any).getVideoTracks().forEach((t: any) => t.stop());

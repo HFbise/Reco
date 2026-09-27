@@ -4,9 +4,11 @@ from datetime import UTC, datetime
 
 from flask_socketio import emit
 
+import history
 import moderation
-from auth_session import authenticated, dm_participants, in_room
+from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
+from demo import DEMO_ROOM
 from extensions import socketio
 from handlers.push import send_push, tokens_for
 from state import check_msg_rate, get_level, online_users
@@ -23,7 +25,7 @@ def handle_message(username, data):
     room = data.get('room', '')
     text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
     # Only sockets that passed the join checks (member / DM participant) are in the room.
-    if not text or not in_room(room):
+    if not text or not in_room(room) or room == DEMO_ROOM:
         return
     if not check_msg_rate(username):
         emit('message_rate_limited', {})
@@ -94,6 +96,22 @@ def handle_message(username, data):
         log.exception('push notify error: %s', e)
 
 
+@socketio.on('load_older')
+@readable
+def handle_load_older(username, data):
+    """A page of history before `before_id`, for rooms/DMs this socket has joined."""
+    room = data.get('room', '')
+    before_id = data.get('before_id')
+    if not in_room(room) or not isinstance(before_id, int):
+        return
+    try:
+        with get_db() as conn:
+            messages, has_more = history.older(conn.cursor(), room, before_id)
+        emit('older_messages', {'room': room, 'messages': messages, 'has_more': has_more})
+    except Exception as e:
+        log.exception('load_older error: %s', e)
+
+
 @socketio.on('recall_message')
 @authenticated
 def handle_recall_message(username, data):
@@ -151,7 +169,7 @@ def handle_add_reaction(username, data):
             cur.execute('SELECT room, reactions, recalled FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
             # Must be able to see the message to react to it
-            if not msg or msg['recalled'] or not in_room(msg['room']):
+            if not msg or msg['recalled'] or not in_room(msg['room']) or msg['room'] == DEMO_ROOM:
                 return
             room = msg['room']
             reactions = dict(msg.get('reactions') or {})

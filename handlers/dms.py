@@ -2,7 +2,8 @@ import logging
 
 from flask_socketio import emit, join_room
 
-from auth_session import authenticated, dm_participants
+import history
+from auth_session import authenticated, dm_participants, readable
 from db import get_db
 from extensions import socketio
 
@@ -10,7 +11,7 @@ log = logging.getLogger(__name__)
 
 
 @socketio.on('get_dms')
-@authenticated
+@readable
 def handle_get_dms(username, data):
     try:
         with get_db() as conn:
@@ -83,32 +84,11 @@ def handle_join_dm(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            since = data.get('since')
-            if since:
-                cur.execute(
-                    'SELECT * FROM messages WHERE room = %s AND created_at > %s ORDER BY created_at ASC LIMIT 50',
-                    (dm_room, since),
-                )
-                history = cur.fetchall()
-            else:
-                cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (dm_room,))
-                history = list(reversed(cur.fetchall()))
-        for msg in history:
-            emit(
-                'message',
-                {
-                    'id': msg['id'],
-                    'username': msg['username'],
-                    'screenname': msg['screenname'],
-                    'text': msg['text'],
-                    'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                    'room': dm_room,
-                    'recalled': bool(msg.get('recalled')),
-                    'edited': bool(msg.get('edited')),
-                    'reactions': dict(msg.get('reactions') or {}),
-                    'meta': dict(msg['meta']) if msg.get('meta') else None,
-                },
-            )
+            messages, reset = history.recent(cur, dm_room, data.get('since'))
+        if reset:
+            emit('history_reset', {'room': dm_room})
+        for msg in messages:
+            emit('message', msg)
     except Exception as e:
         log.exception('join_dm history error: %s', e)
     emit('join_dm_result', {'success': True, 'dm_room': dm_room})

@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal,
-  StyleSheet, KeyboardAvoidingView, Platform, Alert, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
-import { router } from 'expo-router';
+import { showAlert } from '../../src/lib/alert';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { getSocket, connectSocket } from '../../src/lib/socket';
 import { useColors } from '../../src/hooks/useColors';
@@ -18,7 +19,8 @@ const SECURITY_QUESTIONS = ['birth_city', 'primary_school', 'pet_name', 'mother_
 export default function AuthScreen() {
   const c = useColors();
   const t = useT();
-  const [tab, setTab] = useState<Tab>('login');
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const [tab, setTab] = useState<Tab>(mode === 'register' ? 'register' : 'login');
   const [username, setUsername] = useState('');
   const [screenname, setScreenname] = useState('');
   const [password, setPassword] = useState('');
@@ -62,6 +64,25 @@ export default function AuthScreen() {
     });
   }
 
+  function viewDemo() {
+    connectSocket();
+    const socket = getSocket();
+    socket.emit('guest_login', {});
+    socket.once('guest_login_result', async (data: any) => {
+      if (!data.success) return;
+      await setUser({
+        username: data.username,
+        screenname: t('guest-name'),
+        bio: '',
+        avatar_expression: 'Smile',
+        avatar_color: '#9C84EC',
+        token: data.token,
+        guest: true,
+      });
+      router.replace('/(main)');
+    });
+  }
+
   function doRegister() {
     if (!username || !screenname || !password || !secAnswer.trim()) { setError(t('err-fill-required')); return; }
     setError('');
@@ -70,7 +91,7 @@ export default function AuthScreen() {
     socket.emit('register', { username, screenname, password, bio: '', security_question: secQuestion, security_answer: secAnswer.trim() });
     socket.once('register_result', (data: any) => {
       if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
-      Alert.alert(t('register-success'), t('please-login'));
+      showAlert(t('register-success'), t('please-login'));
       setTab('login');
     });
   }
@@ -114,7 +135,7 @@ export default function AuthScreen() {
       setForgotLoading(false);
       if (!data.success) { setForgotError(t.server(data, 'err-reset-failed')); return; }
       setShowForgot(false);
-      Alert.alert(t('password-changed'), t('please-login'));
+      showAlert(t('password-changed'), t('please-login'));
     });
   }
 
@@ -192,6 +213,9 @@ export default function AuthScreen() {
                 <Text style={[s.forgotLink, { color: c.textMuted }]}>{t('forgot-password')}</Text>
               </TouchableOpacity>
             )}
+            <TouchableOpacity style={[s.demoBtn, { borderColor: c.border }]} onPress={viewDemo} activeOpacity={0.8}>
+              <Text style={[s.demoBtnText, { color: c.accent }]}>{t('demo-view')} →</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
@@ -308,6 +332,8 @@ const s = StyleSheet.create({
   btn: { borderRadius: Radius.md, padding: 13, alignItems: 'center', marginTop: Spacing.xs },
   btnText: { color: '#fff', fontWeight: String(Fonts.bold) as any, fontSize: 15 },
   forgotLink: { textAlign: 'center', fontSize: 13 },
+  demoBtn: { borderRadius: Radius.md, borderWidth: 1, padding: 11, alignItems: 'center', marginTop: Spacing.lg },
+  demoBtnText: { fontWeight: String(Fonts.semibold) as any, fontSize: 14 },
   qPicker: { justifyContent: 'center', minHeight: 48 },
   qPickerText: { fontSize: 15 },
   qOption: { paddingVertical: 13, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth },

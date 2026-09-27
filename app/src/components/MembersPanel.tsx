@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet, Alert, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet, TextInput } from 'react-native';
+import { showAlert } from '../lib/alert';
 import Slider from '@react-native-community/slider';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../store/authStore';
@@ -80,9 +81,10 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
 
   const myMember = members.find(m => m.username === currentUsername);
   const myLevel = myMember ? getLevel(myMember) : 0;
+  const isGuest = !!useAuthStore(s2 => s2.currentUser?.guest);
 
   function doKick(target: Member) {
-    Alert.alert(t('confirm-kick-title'), t('confirm-kick'), [
+    showAlert(t('confirm-kick-title'), t('confirm-kick'), [
       { text: t('cancel'), style: 'cancel' },
       {
         text: t('ok'), style: 'destructive', onPress: () => {
@@ -127,7 +129,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
     setShowReportInput(false);
     setReportReason('');
     setSelectedMember(null);
-    Alert.alert(t('report-sent'));
+    showAlert(t('report-sent'));
   }
 
   const BAN_DURATIONS = [
@@ -155,7 +157,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
     <View style={[s.container, { backgroundColor: c.surface, borderLeftColor: c.border }]}>
 
       {/* 语音区 */}
-      {voice && (
+      {voice && !isGuest && (
         <View style={[s.voiceSection, { borderBottomColor: c.border }]}>
           {/* 标题行 + ping */}
           <View style={s.voiceTitleRow}>
@@ -267,7 +269,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
 
       <ScrollView contentContainerStyle={s.list}>
         {flatList.map(m => (
-          <MemberRow key={m.username} member={m} c={c} offline={!m.is_online} onPress={() => setSelectedMember(m)} />
+          <MemberRow key={m.username} member={m} c={c} offline={!m.is_online} onPress={() => { if (!isGuest) setSelectedMember(m); }} />
         ))}
       </ScrollView>
 

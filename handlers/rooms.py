@@ -6,9 +6,11 @@ from datetime import UTC, datetime
 
 from flask_socketio import close_room, emit, join_room
 
+import history
 import moderation
-from auth_session import authenticated, dm_participants, in_room
+from auth_session import authenticated, dm_participants, in_room, is_guest, readable
 from db import get_db
+from demo import DEMO_ROOM
 from extensions import socketio
 from replies import fail
 from state import (
@@ -127,9 +129,12 @@ def handle_create_room(username, data):
 
 
 @socketio.on('join')
-@authenticated
+@readable
 def handle_join(username, data):
     room = (data.get('room') or '').strip()
+    if is_guest(username) and room != DEMO_ROOM:
+        fail('join_result', 'guest_read_only')
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -160,7 +165,7 @@ def handle_join(username, data):
 
             join_room(room)
             members = list(room_data['members'] or [])
-            is_first_join = username not in members
+            is_first_join = username not in members and room != DEMO_ROOM
             if is_first_join:
                 members.append(username)
                 cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
@@ -172,35 +177,12 @@ def handle_join(username, data):
             members_data = _build_members_data(cur, room_data)
             room_code = room_data.get('code') or ''
 
-            # History
-            since = data.get('since')
             if not data.get('skip_history'):
-                if since:
-                    cur.execute(
-                        'SELECT * FROM messages WHERE room = %s AND created_at > %s ORDER BY created_at ASC LIMIT 50',
-                        (room, since),
-                    )
-                    history = cur.fetchall()
-                else:
-                    cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
-                    history = list(reversed(cur.fetchall()))
-                for msg in history:
-                    emit(
-                        'message',
-                        {
-                            'id': msg['id'],
-                            'username': msg['username'],
-                            'screenname': msg['screenname'],
-                            'text': msg['text'],
-                            'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                            'room': room,
-                            'recalled': bool(msg.get('recalled')),
-                            'edited': bool(msg.get('edited')),
-                            'reactions': dict(msg.get('reactions') or {}),
-                            'system': bool(msg.get('system')),
-                            'meta': dict(msg['meta']) if msg.get('meta') else None,
-                        },
-                    )
+                messages, reset = history.recent(cur, room, data.get('since'))
+                if reset:
+                    emit('history_reset', {'room': room})
+                for msg in messages:
+                    emit('message', msg)
 
             # Get joiner screenname for system message
             joiner_screen = username
@@ -285,15 +267,20 @@ def handle_leave_room(username, data):
 
 
 @socketio.on('get_rooms')
-@authenticated
+@readable
 def handle_get_rooms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                'SELECT name, password, code, owner, admins, members FROM rooms WHERE name = %s OR %s = ANY(members)',
-                (LOBBY, username),
-            )
+            if is_guest(username):
+                cur.execute(
+                    'SELECT name, password, code, owner, admins, members FROM rooms WHERE name = %s', (DEMO_ROOM,)
+                )
+            else:
+                cur.execute(
+                    'SELECT name, password, code, owner, admins, members FROM rooms WHERE name = %s OR %s = ANY(members)',
+                    (LOBBY, username),
+                )
             rooms = [
                 {
                     'name': r['name'],
@@ -314,7 +301,7 @@ def handle_get_rooms(username, data):
 
 
 @socketio.on('get_members')
-@authenticated
+@readable
 def handle_get_members(_username, data):
     if not in_room(data.get('room')):
         emit('members_list', {'members': []})
@@ -659,7 +646,7 @@ def handle_unblock_user(blocker, data):
 
 
 @socketio.on('get_blocked_users')
-@authenticated
+@readable
 def handle_get_blocked_users(username, data):
     try:
         with get_db() as conn:

@@ -3,7 +3,7 @@ import logging
 from flask import request
 from flask_socketio import emit
 
-from auth_session import authenticated, bind, make_token, unbind
+from auth_session import authenticated, bind, make_token, readable, unbind
 from db import get_db
 from extensions import socketio
 from moderation import RESERVED_USERNAMES, USERNAME_RE, delete_account
@@ -112,7 +112,7 @@ def handle_login(data):
 
 
 @socketio.on('get_profile')
-@authenticated
+@readable
 def handle_get_profile(_username, data):
     try:
         with get_db() as conn:

@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, Alert,
-} from 'react-native';
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, Modal, TextInput, } from 'react-native';
+import { showAlert } from '../../src/lib/alert';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabBar } from '../../src/components/BottomTabBar';
+import { GuestBanner } from '../../src/components/GuestBanner';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { unregisterPushToken } from '../../src/hooks/usePushNotifications';
@@ -69,7 +70,7 @@ export default function MeScreen() {
       if (data.success) {
         setShowFeedback(false);
         setFeedbackText('');
-        Alert.alert(t('feedback-sent'));
+        showAlert(t('feedback-sent'));
       }
     });
   }
@@ -100,7 +101,7 @@ export default function MeScreen() {
       // Old tokens are invalidated by the password change; keep this device signed in
       if (data.token) await setUser({ ...useAuthStore.getState().currentUser!, token: data.token });
       setShowChangePw(false);
-      Alert.alert(t('password-changed'));
+      showAlert(t('password-changed'));
     });
   }
 
@@ -132,6 +133,16 @@ export default function MeScreen() {
       });
       setEditing(false);
     });
+  }
+
+  if (currentUser?.guest) {
+    return (
+      <SafeAreaView style={[s.container, { backgroundColor: c.bg }]} edges={['top', 'left', 'right']}>
+        <View style={{ flex: 1 }} />
+        <GuestBanner />
+        <BottomTabBar />
+      </SafeAreaView>
+    );
   }
 
   return (

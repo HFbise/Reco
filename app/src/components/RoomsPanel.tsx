@@ -1,8 +1,9 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   View, Text, TouchableOpacity, Pressable, StyleSheet,
-  TextInput, Modal, ScrollView, Alert, Dimensions, ActivityIndicator, Platform,
+  TextInput, Modal, ScrollView, Dimensions, ActivityIndicator, Platform,
 } from 'react-native';
+import { showAlert } from '../lib/alert';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { getSocket } from '../lib/socket';
@@ -138,7 +139,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       if (!data.success) { setCreateError(t.server(data, 'err-create-failed')); return; }
       const pw = pendingCreatePwRef.current;
       setShowCreate(false); setNewRoomName(''); setNewRoomPw(''); setCreateError('');
-      if (data.code) Alert.alert(t('create-room'), `${t('room-code')}: ${data.code}`);
+      if (data.code) showAlert(t('create-room'), `${t('room-code')}: ${data.code}`);
       const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, needsPassword: false, unread: 0, lastActivity: Date.now() };
       navigateTo(entry, pw || undefined);
     };
@@ -246,7 +247,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
 
     const onRoomInvite = (data: { from: string; room: string }) => {
-      Alert.alert(
+      showAlert(
         t('room-invite-title'),
         `${data.from} ${t('room-invite-msg')} 「${t.room(data.room)}」`,
         [
@@ -359,7 +360,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   }
 
   function confirmCloseDm(entry: Entry) {
-    Alert.alert(t('close-dm'), entry.displayName, [
+    showAlert(t('close-dm'), entry.displayName, [
       { text: t('cancel'), style: 'cancel' },
       { text: t('close'), style: 'destructive', onPress: () => closeDm(entry) },
     ]);
@@ -440,9 +441,11 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         <>
           <View style={[s.sidebarHeader, { borderBottomColor: c.border }]}>
             <Text style={[s.sidebarTitle, { color: c.text }]}>{t('rooms')}</Text>
-            <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={() => openDropdown()} activeOpacity={0.7}>
-              <IconPlus size={18} color={c.accent} />
-            </TouchableOpacity>
+            {!currentUser?.guest && (
+              <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={() => openDropdown()} activeOpacity={0.7}>
+                <IconPlus size={18} color={c.accent} />
+              </TouchableOpacity>
+            )}
             {plusDropdown}
           </View>
           <View style={[s.searchOnlyBar, { borderBottomColor: c.border }]}>

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Modal, TextInput, SafeAreaView, Image, Switch, Alert, Platform,
+  Modal, TextInput, SafeAreaView, Image, Switch, Platform,
 } from 'react-native';
+import { showAlert } from '../lib/alert';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { unregisterPushToken } from '../hooks/usePushNotifications';
+import { leaveDemoToSignUp } from './GuestBanner';
 import { useThemeStore } from '../store/themeStore';
 import { useLangStore } from '../store/langStore';
 import { useColors } from '../hooks/useColors';
@@ -122,7 +124,7 @@ export function DesktopShell() {
       if (data.success) {
         setShowFeedback(false);
         setFeedbackText('');
-        Alert.alert(t('feedback-sent'));
+        showAlert(t('feedback-sent'));
       }
     });
   }
@@ -154,7 +156,7 @@ export function DesktopShell() {
       // Old tokens are invalidated by the password change; keep this device signed in
       if (data.token) await setUser({ ...useAuthStore.getState().currentUser!, token: data.token });
       setShowChangePw(false);
-      Alert.alert(t('password-changed'));
+      showAlert(t('password-changed'));
     });
   }
 
@@ -235,6 +237,11 @@ export function DesktopShell() {
           resizeMode="contain"
         />
         <View style={{ flex: 1 }} />
+        {currentUser?.guest ? (
+          <TouchableOpacity style={[s.signUpBtn, { backgroundColor: c.accent }]} onPress={leaveDemoToSignUp} activeOpacity={0.85}>
+            <Text style={s.signUpText}>{t('register')}</Text>
+          </TouchableOpacity>
+        ) : (
         <TouchableOpacity style={s.topbarUser} onPress={openMe} activeOpacity={0.8}>
           <AvatarView
             expression={currentUser?.avatar_expression}
@@ -245,6 +252,7 @@ export function DesktopShell() {
           />
           <Text style={[s.topbarName, { color: c.text }]}>{currentUser?.screenname}</Text>
         </TouchableOpacity>
+        )}
         <TouchableOpacity style={s.iconBtn} onPress={toggleTheme} activeOpacity={0.7}>
           {isDark ? <IconSun size={17} color={c.text} /> : <IconMoon size={17} color={c.text} />}
         </TouchableOpacity>
@@ -676,6 +684,8 @@ const s = StyleSheet.create({
   iconBtn: { padding: 5, borderRadius: 6, alignItems: 'center', justifyContent: 'center', opacity: 0.7 },
   topbarUser: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   topbarName: { fontSize: 14, fontWeight: String(Fonts.semibold) as any },
+  signUpBtn: { borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 7 },
+  signUpText: { color: '#fff', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
 
   shell: { flex: 1, flexDirection: 'row' },
 

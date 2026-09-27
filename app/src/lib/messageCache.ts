@@ -57,6 +57,12 @@ export function getLastTs(room: string): string | null {
   return msgs[msgs.length - 1].time ?? null;
 }
 
+/** Drop a room's cached messages (the server sent a fresh latest page instead). */
+export function resetRoom(room: string) {
+  cache.delete(room);
+  scheduleSave();
+}
+
 export function cacheMsg(room: string, msg: Message) {
   const msgs = cache.get(room) ?? [];
   if (msgs.some(m => m.id === msg.id)) return;

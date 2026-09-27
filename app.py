@@ -19,6 +19,7 @@ log = logging.getLogger('app')
 
 from flask import jsonify, request, send_from_directory
 
+import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
 from admin import admin_bp
 from auth_session import verify_token
@@ -245,6 +246,8 @@ def _migrate():
                 )
                 if cur.rowcount:
                     log.info('converted %d legacy "%s" system messages', cur.rowcount, code)
+
+            demo.seed(cur)
 
             # The lobby belongs to nobody: it is moderated only from the admin panel
             cur.execute(
