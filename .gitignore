@@ -8,4 +8,6 @@ index.html.bak
 Thumbs.db
 .claude/
 extract_group.py
-package.json
+/package.json
+.venv/
+.pytest_cache/

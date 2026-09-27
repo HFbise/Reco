@@ -1,0 +1,61 @@
+"""Room passwords and closing DMs."""
+from conftest import create_user, create_room, events, connect_as, query
+
+
+def join(client, room, password=''):
+    client.emit('join', {'room': room, 'password': password, 'skip_history': True})
+    return events(client, 'join_result')[0]
+
+
+def test_outsider_needs_the_room_password():
+    create_user('owner')
+    create_user('guest')
+    create_room('vault', owner='owner', password='pw')
+    guest = connect_as('guest')
+    assert join(guest, 'vault')['success'] is False
+    assert join(guest, 'vault', password='pw')['success']
+
+
+def test_owner_admin_and_members_skip_the_password():
+    for u in ('owner', 'mod', 'member'):
+        create_user(u)
+    create_room('vault', owner='owner', admins=['mod'], members=['mod', 'member'], password='pw')
+    for u in ('owner', 'mod', 'member'):
+        assert join(connect_as(u), 'vault')['success'], u
+
+
+def test_password_is_only_needed_once():
+    create_user('owner')
+    create_user('guest')
+    create_room('vault', owner='owner', password='pw')
+    assert join(connect_as('guest'), 'vault', password='pw')['success']
+    assert join(connect_as('guest'), 'vault')['success']  # new session, no password
+
+
+def test_room_list_reports_needs_password_per_user():
+    create_user('owner')
+    create_user('guest')
+    create_room('vault', owner='owner', members=['guest'], password='pw')
+    owner = connect_as('owner')
+    owner.emit('find_room', {'code': query("SELECT code FROM rooms WHERE name = 'vault'")[0]['code']})
+    found = events(owner, 'find_room_result')[0]
+    assert found['has_password'] and not found['needs_password']
+
+
+def test_closed_dm_is_hidden_until_a_new_message_arrives():
+    create_user('alice')
+    create_user('bob')
+    alice, bob = connect_as('alice'), connect_as('bob')
+    for c in (alice, bob):
+        c.emit('join_dm', {'dm_room': 'dm:alice:bob'})
+    alice.emit('message', {'room': 'dm:alice:bob', 'text': 'hey'})
+
+    alice.emit('close_dm', {'dm_room': 'dm:alice:bob'})
+    alice.get_received()
+    alice.emit('get_dms', {})
+    assert events(alice, 'dms_list')[0]['dms'] == []
+
+    bob.emit('message', {'room': 'dm:alice:bob', 'text': 'you there?'})
+    alice.get_received()
+    alice.emit('get_dms', {})
+    assert [d['dm_room'] for d in events(alice, 'dms_list')[0]['dms']] == ['dm:alice:bob']

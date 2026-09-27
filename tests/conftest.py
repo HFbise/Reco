@@ -1,0 +1,107 @@
+"""Integration-test harness: real Postgres, real Socket.IO handlers.
+
+Uses TEST_DATABASE_URL when set (CI uses a Postgres service container);
+otherwise starts a throwaway embedded Postgres via `pgserver`.
+"""
+import os
+import sys
+import tempfile
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, ROOT)
+
+_pg = None
+if not os.environ.get('TEST_DATABASE_URL'):
+    import pgserver
+    _pg = pgserver.get_server(tempfile.mkdtemp(prefix='reco-test-pg-'), cleanup_mode='delete')
+    os.environ['TEST_DATABASE_URL'] = _pg.get_uri()
+
+# db.py opens its pool at import time, so configure the environment first
+os.environ['DATABASE_URL'] = os.environ['TEST_DATABASE_URL']
+os.environ.setdefault('SECRET_KEY', 'test-secret')
+
+import app as app_module  # noqa: E402  (registers every socket handler)
+from extensions import app, socketio  # noqa: E402
+from db import get_db  # noqa: E402
+from utils import hash_password  # noqa: E402
+import state  # noqa: E402
+import auth_session  # noqa: E402
+
+app_module._migrate()
+
+TABLES = ['messages', 'rooms', 'users', 'blocks', 'reports', 'feedback', 'dm_closed']
+
+
+@pytest.fixture(autouse=True)
+def clean_state():
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(f"TRUNCATE {', '.join(TABLES)} RESTART IDENTITY")
+        cur.execute("INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', 'admin')")
+        conn.commit()
+    for d in (state.online_users, state.login_attempts, state.message_rate,
+              state.rooms_voice, state.rooms_text_muted, auth_session.sid_users):
+        d.clear()
+    yield
+
+
+def create_user(username, password='secret123', screenname=None, answer='blue'):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO users (username, screenname, password, bio, security_question, security_answer)'
+            ' VALUES (%s, %s, %s, %s, %s, %s)',
+            (username, screenname or username.title(), hash_password(password), '', 'Q?', hash_password(answer)),
+        )
+        conn.commit()
+
+
+def create_room(name, owner, members=(), admins=(), password=None):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO rooms (name, owner, members, admins, password, code) VALUES (%s, %s, %s, %s, %s, %s)',
+            (name, owner, list(members), list(admins), password, str(abs(hash(name)) % 1000000).zfill(6)),
+        )
+        conn.commit()
+
+
+def query(sql, *params):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(sql, params)
+        return cur.fetchall()
+
+
+def events(client, name):
+    """Drain the client's inbox and return the payloads of `name` events."""
+    def payload(args):
+        # The test client delivers the special 'message' event unwrapped
+        if isinstance(args, list):
+            return args[0] if args else None
+        return args
+    return [payload(e['args']) for e in client.get_received() if e['name'] == name]
+
+
+def anon_client():
+    return socketio.test_client(app)
+
+
+def login(username, password='secret123'):
+    """Log in over a fresh socket; returns (client, token)."""
+    client = anon_client()
+    client.emit('login', {'username': username, 'password': password})
+    result = events(client, 'login_result')[0]
+    assert result['success'], result
+    return client, result['token']
+
+
+def connect_as(username, password='secret123'):
+    """Simulates a returning user: new socket that authenticates with a stored token."""
+    first, token = login(username, password)
+    first.disconnect()
+    client = socketio.test_client(app, auth={'token': token})
+    client.get_received()
+    return client
