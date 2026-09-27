@@ -217,6 +217,7 @@ def _migrate():
         log.error('migration failed: %s', e)
 
 
+# Local development only (Werkzeug). Production runs gunicorn via wsgi.py.
 if __name__ == '__main__':
     _migrate()
     port = int(os.environ.get('PORT', 5000))
