@@ -93,3 +93,26 @@ def test_system_messages_carry_a_code_for_translation():
     stored = query("SELECT text, meta FROM messages WHERE system")[0]
     assert stored['text'] == 'Alice 加入了房间'   # readable fallback for the admin panel
     assert stored['meta']['system']['code'] == 'user_joined'
+
+
+def test_legacy_system_messages_are_converted_to_codes():
+    import app as app_module
+    with get_db() as conn:
+        cur = conn.cursor()
+        for text in ('Alice 加入了房间', 'Bob Smith 离开了房间', 'Carol 被踢出了房间',
+                     'Dan 成为了管理员', 'Eve 被取消了管理员', '某种未知的旧格式'):
+            cur.execute("INSERT INTO messages (room, username, screenname, text, system)"
+                        " VALUES ('大厅', 'system', '系统', %s, TRUE)", (text,))
+        cur.execute("INSERT INTO messages (room, username, screenname, text)"
+                    " VALUES ('大厅', 'alice', 'Alice', '我刚加入了房间')")  # ordinary chat: untouched
+        conn.commit()
+    app_module._migrate()
+    app_module._migrate()  # idempotent
+    rows = {r['text']: r['meta'] for r in query("SELECT text, meta FROM messages")}
+    assert rows['Alice 加入了房间'] == {'system': {'code': 'user_joined', 'params': {'name': 'Alice'}}}
+    assert rows['Bob Smith 离开了房间']['system']['params'] == {'name': 'Bob Smith'}
+    assert rows['Carol 被踢出了房间']['system']['code'] == 'user_kicked'
+    assert rows['Dan 成为了管理员']['system']['code'] == 'admin_added'
+    assert rows['Eve 被取消了管理员']['system']['code'] == 'admin_removed'
+    assert rows['某种未知的旧格式'] is None
+    assert rows['我刚加入了房间'] is None

@@ -155,6 +155,14 @@ def get_ice_servers():
 
 
 # ── Startup migrations ────────────────────────────────────────
+LEGACY_SYSTEM_SUFFIXES = {
+    'user_joined': ' 加入了房间',
+    'user_left': ' 离开了房间',
+    'user_kicked': ' 被踢出了房间',
+    'admin_added': ' 成为了管理员',
+    'admin_removed': ' 被取消了管理员',
+}
+
 def _migrate():
     log = logging.getLogger('migrate')
     try:
@@ -220,6 +228,18 @@ def _migrate():
                     if not cur.fetchone():
                         break
                 cur.execute("UPDATE rooms SET code = %s WHERE name = %s", (code, row['name']))
+
+            # System messages from before they carried a code: recover code + name from the
+            # Chinese sentence so clients can show them in any language (idempotent).
+            for code, suffix in LEGACY_SYSTEM_SUFFIXES.items():
+                cur.execute(
+                    "UPDATE messages SET system = TRUE, meta = jsonb_build_object('system', jsonb_build_object("
+                    " 'code', %s, 'params', jsonb_build_object('name', left(text, length(text) - length(%s)))))"
+                    " WHERE (system OR username = 'system') AND meta IS NULL AND right(text, length(%s)) = %s",
+                    (code, suffix, suffix, suffix),
+                )
+                if cur.rowcount:
+                    log.info('converted %d legacy "%s" system messages', cur.rowcount, code)
 
             # The lobby belongs to nobody: it is moderated only from the admin panel
             cur.execute(
