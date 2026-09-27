@@ -3,7 +3,9 @@ import functools
 import logging
 from flask import Blueprint, request, redirect, url_for, session, make_response
 from db import get_db
+from urllib.parse import quote
 from utils import hash_password
+from handlers.auth import delete_account
 
 log = logging.getLogger(__name__)
 
@@ -301,9 +303,10 @@ def users():
             f'<td>{_esc(r["screenname"] or "")}</td>'
             f'<td style="color:#888">{_esc(r["bio"] or "")}</td>'
             f'<td>'
-            f'<button class="btn btn-ghost" onclick="openReset(\'{uname}\')">重置密码</button> '
-            f'<form class="inline" method="post" action="/admin/users/{uname}/delete"'
-            f' onsubmit="return confirm(\'永久删除用户 {uname}？\')"><button class="btn btn-danger">删除</button></form>'
+            f'<button class="btn btn-ghost" data-u="{uname}" onclick="openReset(this.dataset.u)">重置密码</button> '
+            f'<form class="inline" method="post" action="/admin/users/{_url(r["username"])}/delete"'
+            f' data-u="{uname}" onsubmit="return confirm(\'永久删除用户 \' + this.dataset.u + \'？\')">'
+            f'<button class="btn btn-danger">删除</button></form>'
             f'</td></tr>'
         )
 
@@ -339,7 +342,7 @@ def users():
     </div>
     <script>
     function openReset(u) {{
-      document.getElementById('reset-form').action = '/admin/users/' + u + '/reset-password';
+      document.getElementById('reset-form').action = '/admin/users/' + encodeURIComponent(u) + '/reset-password';
       document.getElementById('new_pw').value = '';
       document.getElementById('reset-modal').classList.add('open');
       setTimeout(() => document.getElementById('new_pw').focus(), 50);
@@ -371,10 +374,7 @@ def reset_user_password(username):
 def delete_user(username):
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('UPDATE rooms SET members = array_remove(members, %s),'
-                    ' admins = array_remove(admins, %s)', (username, username))
-        cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s', (username, username))
-        cur.execute('DELETE FROM users WHERE username = %s', (username,))
+        delete_account(cur, username)
         conn.commit()
     return redirect(url_for('admin.users'))
 
@@ -397,8 +397,8 @@ def rooms():
         pw = '🔒' if r.get('password') else ''
         rname = _esc(r['name'])
         close_btn = '' if r['name'] == '大厅' else (
-            f'<form class="inline" method="post" action="/admin/rooms/{rname}/close"'
-            f" onsubmit=\"return confirm('关闭房间 {rname}？将删除所有消息。')\">"
+            f'<form class="inline" method="post" action="/admin/rooms/{_url(r["name"])}/close"'
+            f' data-name="{rname}" onsubmit="return confirm(\'关闭房间 \' + this.dataset.name + \'？将删除所有消息。\')">'
             '<button class="btn btn-danger">关闭</button></form>'
         )
         rows_html += (
@@ -406,7 +406,7 @@ def rooms():
             f'<td class="mono">{r["code"] or ""}</td>'
             f'<td class="mono">{r["owner"] or ""}</td>'
             f'<td>{mc}</td>'
-            f'<td><a href="/admin/rooms/{rname}/detail" class="btn btn-ghost">详情</a> {close_btn}</td></tr>'
+            f'<td><a href="/admin/rooms/{_url(r["name"])}/detail" class="btn btn-ghost">详情</a> {close_btn}</td></tr>'
         )
 
     body = f'''
@@ -529,7 +529,13 @@ def close_room(room_name):
 # ── Util ──────────────────────────────────────────────────────
 
 def _esc(s):
-    return str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;').replace('"', '&quot;')
+    return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            .replace('"', '&quot;').replace("'", '&#39;'))
+
+
+def _url(s):
+    """Percent-encode a user-controlled value for use as one URL path segment."""
+    return quote(str(s), safe='')
 
 
 def _pages(total, page, per_page, base_url):

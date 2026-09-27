@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { loadMessageCache, resetMessageCache } from '../lib/messageCache';
 
 export interface User {
   username: string;
@@ -18,16 +19,18 @@ interface AuthState {
   loadUser: () => Promise<User | null>;
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   currentUser: null,
 
   setUser: async (user) => {
     await AsyncStorage.setItem('currentUser', JSON.stringify(user));
+    if (get().currentUser?.username !== user.username) await loadMessageCache(user.username);
     set({ currentUser: user });
   },
 
   clearUser: async () => {
     await AsyncStorage.removeItem('currentUser');
+    resetMessageCache();
     set({ currentUser: null });
   },
 
@@ -41,6 +44,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           await AsyncStorage.removeItem('currentUser');
           return null;
         }
+        await loadMessageCache(user.username);
         set({ currentUser: user });
         return user;
       }

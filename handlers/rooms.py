@@ -95,7 +95,10 @@ def handle_create_room(username, data):
             'success': True, 'room': room,
             'has_password': bool(password), 'code': code,
         })
-        socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username})
+        # Only the creator's own sessions (other devices) need this, not every user
+        for sid in list(online_users.get(username, [])):
+            socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username},
+                          to=sid)
     except Exception as e:
         log.error('create_room error: %s', e)
         emit('create_room_result', {'success': False, 'msg': str(e)})
@@ -392,7 +395,7 @@ def handle_set_room_password(requester, data):
             cur.execute('UPDATE rooms SET password = %s WHERE name = %s', (password, room))
             conn.commit()
         emit('set_room_password_result', {'success': True})
-        socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)})
+        socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
     except Exception as e:
         log.error('set_room_password error: %s', e)
         emit('set_room_password_result', {'success': False, 'msg': str(e)})
@@ -411,8 +414,8 @@ def handle_close_room(requester, data):
             if not room_data or get_level(requester, room_data) < 2:
                 emit('close_room_result', {'success': False, 'msg': '无权限'})
                 return
-            emit('message', {'screenname': '系统', 'text': '房间已被管理员关闭', 'system': True},
-                 to=data['room'])
+            emit('message', {'screenname': '系统', 'text': '房间已被管理员关闭', 'system': True,
+                             'room': data['room']}, to=data['room'])
             emit('room_closed', {}, to=data['room'])
             cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
             cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))

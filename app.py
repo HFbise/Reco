@@ -166,6 +166,8 @@ def _migrate():
             cur.execute('''CREATE TABLE IF NOT EXISTS feedback (
                 id SERIAL PRIMARY KEY, username TEXT NOT NULL, text TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW())''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS deleted_usernames (
+                username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute('''CREATE TABLE IF NOT EXISTS dm_closed (
                 username TEXT NOT NULL, dm_room TEXT NOT NULL,
                 closed_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (username, dm_room))''')

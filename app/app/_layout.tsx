@@ -7,7 +7,6 @@ import { useLangStore } from '../src/store/langStore';
 import { useSoundStore } from '../src/store/soundStore';
 import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
-import { loadMessageCache } from '../src/lib/messageCache';
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -46,7 +45,6 @@ export default function RootLayout() {
       loadTheme(),
       loadLang(),
       loadSound(),
-      loadMessageCache(),
     ]).then(() => setReady(true));
   }, []);
 

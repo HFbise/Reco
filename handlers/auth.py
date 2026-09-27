@@ -1,4 +1,5 @@
 import logging
+import re
 from flask import request
 from flask_socketio import emit
 from extensions import socketio
@@ -8,6 +9,23 @@ from utils import hash_password, verify_password, SECURITY_QUESTIONS, DEFAULT_PA
 from auth_session import make_token, bind, unbind, authenticated
 
 log = logging.getLogger(__name__)
+
+# Usernames end up inside DM room ids ('dm:alice:bob') and admin-panel URLs
+USERNAME_RE = re.compile(r'^[a-z0-9_]{3,20}$')
+RESERVED_USERNAMES = {'system', 'admin'}  # 'system' authors system messages; 'admin' owns the lobby
+MAX_SCREENNAME_LEN = 32
+MAX_BIO_LEN = 200
+
+
+def delete_account(cur, username: str):
+    """Remove a user. The name is retired so nobody can re-register it and
+    inherit its DM history (DM rooms are keyed by username) or room ownership."""
+    cur.execute('UPDATE rooms SET members = array_remove(members, %s),'
+                ' admins = array_remove(admins, %s)', (username, username))
+    cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s', (username, username))
+    cur.execute('DELETE FROM dm_closed WHERE username = %s', (username,))
+    cur.execute('DELETE FROM users WHERE username = %s', (username,))
+    cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
 
 @socketio.on('register')
@@ -19,8 +37,14 @@ def handle_register(data):
     security_q = data['security_question']
     security_a = data['security_answer'].strip().lower()
 
-    if len(username) < 3:
-        emit('register_result', {'success': False, 'msg': '用户名至少3位'})
+    if not USERNAME_RE.match(username):
+        emit('register_result', {'success': False, 'msg': '用户名需为 3-20 位小写字母、数字或下划线'})
+        return
+    if username in RESERVED_USERNAMES:
+        emit('register_result', {'success': False, 'msg': '用户名已存在'})
+        return
+    if not screenname or len(screenname) > MAX_SCREENNAME_LEN:
+        emit('register_result', {'success': False, 'msg': f'显示名需为 1-{MAX_SCREENNAME_LEN} 个字符'})
         return
     if len(password) < 6:
         emit('register_result', {'success': False, 'msg': '密码至少6位'})
@@ -28,7 +52,8 @@ def handle_register(data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username FROM users WHERE username = %s', (username,))
+            cur.execute('SELECT 1 FROM users WHERE username = %s'
+                        ' UNION SELECT 1 FROM deleted_usernames WHERE username = %s', (username, username))
             if cur.fetchone():
                 emit('register_result', {'success': False, 'msg': '用户名已存在'})
                 return
@@ -120,8 +145,12 @@ def handle_get_profile(_username, data):
 @authenticated
 def handle_update_profile(username, data):
     try:
-        screenname = data['screenname'].strip()
-        bio = data['bio'].strip()
+        screenname = (data.get('screenname') or '').strip()
+        bio = (data.get('bio') or '').strip()
+        if not screenname or len(screenname) > MAX_SCREENNAME_LEN or len(bio) > MAX_BIO_LEN:
+            emit('update_profile_result', {'success': False,
+                                           'msg': f'显示名 1-{MAX_SCREENNAME_LEN} 字，简介最多 {MAX_BIO_LEN} 字'})
+            return
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute('UPDATE users SET screenname = %s, bio = %s WHERE username = %s',
@@ -253,14 +282,7 @@ def handle_delete_account(username, data):
             if not ok:
                 emit('delete_account_result', {'success': False, 'msg': '密码错误'})
                 return
-            cur.execute(
-                'UPDATE rooms SET members = array_remove(members, %s),'
-                ' admins = array_remove(admins, %s)',
-                (username, username)
-            )
-            cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s',
-                        (username, username))
-            cur.execute('DELETE FROM users WHERE username = %s', (username,))
+            delete_account(cur, username)
             conn.commit()
         unbind(request.sid)
         emit('delete_account_result', {'success': True})

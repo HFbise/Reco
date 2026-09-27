@@ -21,6 +21,7 @@ if not os.environ.get('TEST_DATABASE_URL'):
 # db.py opens its pool at import time, so configure the environment first
 os.environ['DATABASE_URL'] = os.environ['TEST_DATABASE_URL']
 os.environ.setdefault('SECRET_KEY', 'test-secret')
+os.environ.setdefault('ADMIN_PASSWORD', 'test-admin')
 
 import app as app_module  # noqa: E402  (registers every socket handler)
 from extensions import app, socketio  # noqa: E402
@@ -31,7 +32,7 @@ import auth_session  # noqa: E402
 
 app_module._migrate()
 
-TABLES = ['messages', 'rooms', 'users', 'blocks', 'reports', 'feedback', 'dm_closed']
+TABLES = ['messages', 'rooms', 'users', 'blocks', 'reports', 'feedback', 'dm_closed', 'deleted_usernames']
 
 
 @pytest.fixture(autouse=True)

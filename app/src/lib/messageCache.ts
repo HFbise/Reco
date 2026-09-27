@@ -1,33 +1,50 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Message } from '../components/MessageBubble';
 
-const KEY = 'msgCache_v1';
+// Per-user key: a shared device must never show one account's messages to another
+const keyFor = (username: string) => `msgCache_v2:${username}`;
+// v1 was shared across accounts and could contain messages filed under the wrong room
+const LEGACY_KEY = 'msgCache_v1';
 const MAX = 100;
 
 // room → messages (in-memory, backed by AsyncStorage)
 const cache = new Map<string, Message[]>();
+let owner: string | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 function scheduleSave() {
+  if (!owner) return;
+  const key = keyFor(owner);
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
       const obj: Record<string, Message[]> = {};
       cache.forEach((msgs, room) => { obj[room] = msgs; });
-      await AsyncStorage.setItem(KEY, JSON.stringify(obj));
+      await AsyncStorage.setItem(key, JSON.stringify(obj));
     } catch {}
   }, 500);
 }
 
-export async function loadMessageCache() {
+/** Load `username`'s cache, replacing whatever is in memory. */
+export async function loadMessageCache(username: string) {
+  resetMessageCache();
+  owner = username;
   try {
-    const raw = await AsyncStorage.getItem(KEY);
+    AsyncStorage.removeItem(LEGACY_KEY).catch(() => {});
+    const raw = await AsyncStorage.getItem(keyFor(username));
     if (!raw) return;
     const obj: Record<string, Message[]> = JSON.parse(raw);
     for (const [room, msgs] of Object.entries(obj)) {
       cache.set(room, msgs);
     }
   } catch {}
+}
+
+/** Forget the in-memory cache (on logout). The owner's saved copy stays on disk. */
+export function resetMessageCache() {
+  if (saveTimer) { clearTimeout(saveTimer); saveTimer = null; }
+  cache.clear();
+  owner = null;
 }
 
 export function getCached(room: string): Message[] {

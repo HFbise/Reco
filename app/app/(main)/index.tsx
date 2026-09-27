@@ -188,6 +188,7 @@ export default function RoomsScreen() {
             <View style={[s.slidePanel, { width: SW, backgroundColor: c.bg }]}>
               {activeRoom && (
                 <ChatPanel
+                  key={activeRoom}
                   name={activeRoom}
                   password={activeRoomPw}
                   dmMeta={activeDmMeta}

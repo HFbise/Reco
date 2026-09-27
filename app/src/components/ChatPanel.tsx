@@ -238,6 +238,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       handleBack();
     };
     const onMessage = (data: any) => {
+      // The socket sits in many rooms at once (all DMs, rooms visited this session)
+      if (data.room !== name) return;
       const msg: Message = { ...data, isOwn: data.username === currentUser.username };
       if (!data.system) {
         cacheMsg(name, msg);
@@ -246,15 +248,18 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
         setMessages(prev => [...prev, msg]);
       }
     };
-    const onMessageRecalled = (data: { id: number }) => {
+    const onMessageRecalled = (data: { id: number; room: string }) => {
+      if (data.room !== name) return;
       patchCached(name, data.id, { recalled: true });
       setMessages(prev => prev.map(m => m.id === data.id ? { ...m, recalled: true } : m));
     };
-    const onMessageEdited = (data: { id: number; text: string }) => {
+    const onMessageEdited = (data: { id: number; text: string; room: string }) => {
+      if (data.room !== name) return;
       patchCached(name, data.id, { text: data.text, edited: true });
       setMessages(prev => prev.map(m => m.id === data.id ? { ...m, text: data.text, edited: true } : m));
     };
-    const onReactionUpdated = (data: { id: number; reactions: Record<string, string[]> }) => {
+    const onReactionUpdated = (data: { id: number; reactions: Record<string, string[]>; room: string }) => {
+      if (data.room !== name) return;
       patchCached(name, data.id, { reactions: data.reactions });
       setMessages(prev => prev.map(m => m.id === data.id ? { ...m, reactions: data.reactions } : m));
     };
