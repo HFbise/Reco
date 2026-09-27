@@ -1,6 +1,6 @@
 """Session tokens: issuing, resuming, rejecting and invalidating."""
 from conftest import (
-    socketio, app, create_user, events, anon_client, login, connect_as, query,
+    socketio, app, create_user, events, anon_client, login, connect_as, query, get_db,
 )
 from auth_session import verify_token
 
@@ -80,14 +80,14 @@ def test_reset_password_is_rate_limited():
     # Correct answer is now refused until the lockout expires
     client.emit('reset_password', {'username': 'alice', 'answer': 'blue', 'new_password': 'whatever1'})
     result = events(client, 'reset_password_result')[0]
-    assert result['success'] is False and '尝试过多' in result['msg']
+    assert result['success'] is False and result['code'] == 'too_many_attempts'
 
 
 def test_security_answer_is_stored_hashed():
     client = anon_client()
     client.emit('register', {
         'username': 'carol', 'screenname': 'Carol', 'password': 'secret123',
-        'security_question': 'Q?', 'security_answer': 'Paris',
+        'security_question': 'birth_city', 'security_answer': 'Paris',
     })
     assert events(client, 'register_result')[0]['success']
     stored = query('SELECT security_answer FROM users WHERE username = %s', 'carol')[0]['security_answer']
@@ -128,7 +128,32 @@ def test_server_errors_are_not_leaked_to_the_client(monkeypatch, caplog):
     monkeypatch.setattr(handlers.auth, 'get_db', broken_db)
     alice.emit('update_profile', {'screenname': 'Alice', 'bio': ''})
     result = events(alice, 'update_profile_result')[0]
-    assert result == {'success': False, 'msg': '服务器错误，请稍后再试'}
+    assert result == {'success': False, 'code': 'server_error', 'params': {}}
     # ...but the details, with a traceback, are logged (and forwarded to Sentry in production)
     record = next(r for r in caplog.records if 'update_profile error' in r.getMessage())
     assert record.exc_info and 'db-host.internal' in record.getMessage()
+
+
+def test_errors_are_codes_not_display_text():
+    create_user('alice')
+    client = anon_client()
+    client.emit('login', {'username': 'alice', 'password': 'nope'})
+    assert events(client, 'login_result') == [{'success': False, 'code': 'wrong_password', 'params': {}}]
+
+
+def test_legacy_chinese_security_question_is_served_as_an_id():
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (username, screenname, password, security_question, security_answer)"
+                    " VALUES ('old', 'Old', 'x', '你的出生城市是？', 'a')")
+        conn.commit()
+    client = anon_client()
+    client.emit('get_security_question', {'username': 'old'})
+    assert events(client, 'security_question_result')[0]['question'] == 'birth_city'
+
+
+def test_unknown_security_question_rejected_at_registration():
+    client = anon_client()
+    client.emit('register', {'username': 'newbie', 'screenname': 'N', 'password': 'secret123',
+                             'security_question': 'anything I like', 'security_answer': 'a'})
+    assert events(client, 'register_result')[0]['code'] == 'missing_fields'

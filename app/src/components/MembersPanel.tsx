@@ -132,13 +132,13 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
 
   const BAN_DURATIONS = [
     { label: t('unban-voice'), seconds: null },
-    { label: '1 分钟', seconds: 60 },
-    { label: '5 分钟', seconds: 300 },
-    { label: '10 分钟', seconds: 600 },
-    { label: '30 分钟', seconds: 1800 },
-    { label: '1 小时', seconds: 3600 },
-    { label: '1 天', seconds: 86400 },
-    { label: '永久', seconds: 0 },
+    { label: t('duration-1m'), seconds: 60 },
+    { label: t('duration-5m'), seconds: 300 },
+    { label: t('duration-10m'), seconds: 600 },
+    { label: t('duration-30m'), seconds: 1800 },
+    { label: t('duration-1h'), seconds: 3600 },
+    { label: t('duration-1d'), seconds: 86400 },
+    { label: t('duration-forever'), seconds: 0 },
   ];
 
   function doTextMute(target: Member, seconds: number | null) {

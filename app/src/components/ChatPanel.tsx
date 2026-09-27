@@ -29,11 +29,11 @@ type FeedItem =
   | (Message & { _type?: 'msg' })
   | { _type: 'sep'; _id: string; time: string };
 
-function buildFeed(messages: Message[]): FeedItem[] {
+function buildFeed(messages: Message[], monthDay: (d: Date) => string): FeedItem[] {
   const items: FeedItem[] = [];
   let lastTime = '';
   for (const msg of messages) {
-    const t = formatMsgTime(msg.time);
+    const t = formatMsgTime(msg.time, monthDay);
     if (t && t !== lastTime) {
       items.push({ _type: 'sep', _id: `sep_${t}_${msg.id}`, time: t });
       lastTime = t;
@@ -100,7 +100,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
   const [input, setInput] = useState('');
   const flatRef = useRef<FlatList>(null);
   const toastOpacity = useRef(new Animated.Value(0)).current;
-  const [toastMsg, setToastMsg] = useState('已复制');
+  const [toastMsg, setToastMsg] = useState('');
   function showToast(msg: string) {
     setToastMsg(msg);
     Animated.sequence([
@@ -109,7 +109,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       Animated.timing(toastOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start();
   }
-  function showCopiedToast() { showToast('已复制'); }
+  function showCopiedToast() { showToast(t('copied')); }
   const containerRef = useRef<View>(null);
 
   const [selectedMsg, setSelectedMsg] = useState<Message | null>(null);
@@ -176,7 +176,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           if (data.is_owner) setIsOwner(true);
           setMyLevel(data.my_level ?? 0);
         } else if (data.wrong_password) {
-          Alert.alert(t('wrong-password'), data.msg);
+          Alert.alert(t('wrong-password'), t.server(data, 'wrong-password'));
           onClose?.();
         }
       });
@@ -232,7 +232,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       if (data.room === name) setRoomHasPassword(data.has_password);
     };
     const onSetRoomPasswordResult = (data: any) => {
-      if (!data.success) { setSetPwError(data.msg || t('err-save-failed')); return; }
+      if (!data.success) { setSetPwError(t.server(data, 'err-save-failed')); return; }
       setShowSetPwArea(false);
       setNewRoomPw('');
       setSetPwError('');
@@ -389,7 +389,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
   const blockedSet = new Set(useBlockStore(s => s.blocked));
   const canEdit = selectedMsg?.isOwn;
   const canRecall = selectedMsg?.isOwn || myLevel >= 1;
-  const feed = buildFeed(messages.filter(m => m.system || !blockedSet.has(m.username)));
+  const feed = buildFeed(messages.filter(m => m.system || !blockedSet.has(m.username)), t.monthDay);
   const reactionQuickList = buildReactionQuickList(recentEmojis);
 
   // Reaction bar absolute position (relative to container)
@@ -430,7 +430,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
         ) : (
           <View style={s.titleBtn} pointerEvents="box-none">
             <IconGroup size={18} color={c.text} />
-            <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{name}</Text>
+            <Text style={[s.title, { color: c.text }]} numberOfLines={1}>{t.room(name)}</Text>
             <TouchableOpacity onPress={() => setShowRoomInfo(true)} activeOpacity={0.6} style={s.infoBtn}>
               <IconInfo size={14} color={c.textMuted} />
             </TouchableOpacity>
@@ -483,11 +483,11 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           onJoin={() => {
             if (inVoiceElsewhere && onLeaveAndSwitch) {
               Alert.alert(
-                '切换语音',
-                `你当前在「${activeVoiceRoom}」语音中，切换到「${name}」？`,
+                t('switch-voice-title'),
+                t('switch-voice-msg', { from: t.room(activeVoiceRoom!), to: t.room(name) }),
                 [
-                  { text: '取消', style: 'cancel' },
-                  { text: '切换', onPress: () => onLeaveAndSwitch(name) },
+                  { text: t('cancel'), style: 'cancel' },
+                  { text: t('switch'), onPress: () => onLeaveAndSwitch(name) },
                 ]
               );
             } else {
@@ -524,14 +524,14 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
             const msg = item as Message;
             if (msg.system) {
               return (
-                <Text style={[s.sysMsg, { color: c.textMuted }]}>{msg.text}</Text>
+                <Text style={[s.sysMsg, { color: c.textMuted }]}>{t.system(msg)}</Text>
               );
             }
             if (msg.meta?.invite) {
               const inv = msg.meta.invite;
               return (
                 <View style={[s.inviteCard, { backgroundColor: c.surface, borderColor: c.border }]}>
-                  <Text style={[s.inviteTitle, { color: c.text }]}>{msg.text}</Text>
+                  <Text style={[s.inviteTitle, { color: c.text }]}>{t('invite-text', { name: msg.screenname, room: t.room(inv.room) })}</Text>
                   <TouchableOpacity
                     style={[s.inviteBtn, { backgroundColor: c.accent }]}
                     onPress={() => {
@@ -540,7 +540,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
                     }}
                     activeOpacity={0.85}
                   >
-                    <Text style={s.inviteBtnText}>{inv.room}</Text>
+                    <Text style={s.inviteBtnText}>{t.room(inv.room)}</Text>
                   </TouchableOpacity>
                 </View>
               );
@@ -760,7 +760,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
       <Modal visible={showRoomInfo} transparent animationType="fade" onRequestClose={() => setShowRoomInfo(false)}>
         <TouchableOpacity style={s.pickerOverlay} onPress={() => setShowRoomInfo(false)} activeOpacity={1}>
           <TouchableOpacity style={[s.roomInfoBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.roomInfoTitle, { color: c.text }]}># {name}</Text>
+            <Text style={[s.roomInfoTitle, { color: c.text }]}># {t.room(name)}</Text>
             {!!roomCode && (
               <View style={s.roomInfoRow}>
                 <Text style={[s.roomInfoLabel, { color: c.textMuted }]}>{t('room-code')}</Text>
@@ -776,7 +776,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
                     style={[s.copyBtn, { backgroundColor: c.accentBg }]}
                     activeOpacity={0.7}
                   >
-                    <Text style={[s.copyBtnText, { color: c.accent }]}>复制</Text>
+                    <Text style={[s.copyBtnText, { color: c.accent }]}>{t('copy')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -844,9 +844,9 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
             isVoiceHere={inVoiceHere}
             onJoinVoice={() => {
               if (inVoiceElsewhere && onLeaveAndSwitch) {
-                Alert.alert('切换语音', `你当前在「${activeVoiceRoom}」语音中，切换到「${name}」？`, [
-                  { text: '取消', style: 'cancel' },
-                  { text: '切换', onPress: () => onLeaveAndSwitch(name) },
+                Alert.alert(t('switch-voice-title'), t('switch-voice-msg', { from: t.room(activeVoiceRoom!), to: t.room(name) }), [
+                  { text: t('cancel'), style: 'cancel' },
+                  { text: t('switch'), onPress: () => onLeaveAndSwitch(name) },
                 ]);
               } else {
                 voice.joinVoice();
@@ -946,7 +946,7 @@ export function VoiceBar({ inVoice, inVoiceElsewhere, activeVoiceRoom, voiceMemb
       {!inVoice ? (
         <TouchableOpacity style={[vs.joinBtn, { backgroundColor: inVoiceElsewhere ? c.isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.1)' : c.accent }]} onPress={onJoin} activeOpacity={0.85}>
           <Text style={[vs.joinText, inVoiceElsewhere && { color: c.text }]}>
-            {inVoiceElsewhere ? `切换` : t('join-voice')}
+            {inVoiceElsewhere ? t('switch') : t('join-voice')}
           </Text>
         </TouchableOpacity>
       ) : (

@@ -81,7 +81,7 @@ export default function MeScreen() {
     socket.emit('delete_account', { username: currentUser?.username, password: deletePw });
     socket.once('delete_account_result', async (data: any) => {
       setDeleting(false);
-      if (!data.success) { setDeleteError(data.msg || t('err-change-failed')); return; }
+      if (!data.success) { setDeleteError(t.server(data, 'err-change-failed')); return; }
       disconnectSocket();
       await clearUser();
       router.replace('/(auth)');
@@ -96,7 +96,7 @@ export default function MeScreen() {
     socket.emit('change_password', { username: currentUser?.username, old_password: oldPw, new_password: newPw });
     socket.once('change_password_result', async (data: any) => {
       setPwSaving(false);
-      if (!data.success) { setPwError(data.msg || t('err-change-failed')); return; }
+      if (!data.success) { setPwError(t.server(data, 'err-change-failed')); return; }
       // Old tokens are invalidated by the password change; keep this device signed in
       if (data.token) await setUser({ ...useAuthStore.getState().currentUser!, token: data.token });
       setShowChangePw(false);
@@ -122,7 +122,7 @@ export default function MeScreen() {
     });
     socket.once('update_profile_result', async (data: any) => {
       setSaving(false);
-      if (!data.success) { setError(data.msg || t('err-save-failed')); return; }
+      if (!data.success) { setError(t.server(data, 'err-save-failed')); return; }
       await setUser({
         ...currentUser!,
         screenname: screenname.trim(),

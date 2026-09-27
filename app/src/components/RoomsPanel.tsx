@@ -135,7 +135,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
 
     const onCreateRoomResult = (data: any) => {
-      if (!data.success) { setCreateError(data.msg || t('err-create-failed')); return; }
+      if (!data.success) { setCreateError(t.server(data, 'err-create-failed')); return; }
       const pw = pendingCreatePwRef.current;
       setShowCreate(false); setNewRoomName(''); setNewRoomPw(''); setCreateError('');
       if (data.code) Alert.alert(t('create-room'), `${t('room-code')}: ${data.code}`);
@@ -144,7 +144,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
 
     const onFindRoomResult = (data: any) => {
-      if (!data.success) { setFindError(data.msg || t('err-find-failed')); return; }
+      if (!data.success) { setFindError(t.server(data, 'err-find-failed')); return; }
       setShowFind(false); setFindCode(''); setFindError('');
       const entry: Entry = { type: 'room', key: data.room, displayName: data.room, hasPassword: data.has_password, needsPassword: data.needs_password, unread: 0, lastActivity: 0 };
       // Add to list if not present
@@ -248,7 +248,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const onRoomInvite = (data: { from: string; room: string }) => {
       Alert.alert(
         t('room-invite-title'),
-        `${data.from} ${t('room-invite-msg')} 「${data.room}」`,
+        `${data.from} ${t('room-invite-msg')} 「${t.room(data.room)}」`,
         [
           { text: t('cancel'), style: 'cancel' },
           { text: t('join'), onPress: () => {
@@ -489,7 +489,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
                 style={[s.roomName, { color: isActive ? c.text : c.textSub }, isActive && s.roomNameActive]}
                 numberOfLines={1}
               >
-                {entry.displayName}
+                {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
               </Text>
               {entry.type === 'room' && entry.hasPassword && <IconLock size={12} color={c.textMuted} />}
               {showClose ? (

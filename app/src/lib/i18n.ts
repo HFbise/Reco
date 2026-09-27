@@ -179,18 +179,78 @@ const zh = {
   'room-invite-title': '房间邀请',
   'room-invite-msg': '邀请你加入',
   'join': '加入',
+
+  // Server messages, system messages, security questions, misc
+  'srv-invalid_username': '用户名需为 3-20 位小写字母、数字或下划线',
+  'srv-username_taken': '用户名已存在',
+  'srv-invalid_screenname': '显示名需为 1-{max} 个字符',
+  'srv-password_too_short': '密码至少 {min} 位',
+  'srv-too_many_attempts': '尝试过多，请 {secs} 秒后重试',
+  'srv-user_not_found': '用户不存在',
+  'srv-wrong_password': '密码错误',
+  'srv-wrong_old_password': '当前密码错误',
+  'srv-wrong_answer': '答案错误',
+  'srv-missing_fields': '请填写必填项',
+  'srv-invalid_profile': '显示名 1-{max_name} 字，简介最多 {max_bio} 字',
+  'srv-invalid_room_name': '房间名需为 1-{max} 个字符',
+  'srv-room_exists': '房间已存在',
+  'srv-room_not_found': '房间不存在',
+  'srv-kicked_from_room': '你已被踢出该房间',
+  'srv-cannot_leave_lobby': '无法退出大厅',
+  'srv-no_permission': '无权限',
+  'srv-user_not_in_room': '该用户不在房间内',
+  'srv-room_code_not_found': '找不到该房间号',
+  'srv-cannot_invite': '无法邀请该用户',
+  'srv-feedback_empty': '内容不能为空',
+  'srv-feedback_too_long': '反馈不能超过 {max} 字',
+  'srv-server_error': '服务器错误，请稍后再试',
+  'sys-user_joined': '{name} 加入了房间',
+  'sys-user_left': '{name} 离开了房间',
+  'sys-user_kicked': '{name} 被踢出了房间',
+  'sys-admin_added': '{name} 成为了管理员',
+  'sys-admin_removed': '{name} 被取消了管理员',
+  'sys-room_closed': '房间已被关闭',
+  'secq-birth_city': '你的出生城市是？',
+  'secq-primary_school': '你的小学名字是？',
+  'secq-pet_name': '你最喜欢的宠物名字是？',
+  'secq-mother_maiden_name': '你母亲的娘家姓是？',
+  'secq-first_car': '你的第一辆车的品牌是？',
+  'secq-favorite_teacher': '你最喜欢的老师叫什么？',
+  'lobby': '大厅',
+  'invite-text': '{name} 邀请你加入房间 {room}',
+  'copy': '复制',
+  'copied': '已复制',
+  'switch': '切换',
+  'switch-voice-title': '切换语音',
+  'switch-voice-msg': '你当前在「{from}」语音中，切换到「{to}」？',
+  'reconnected': '已重新连接',
+  'reconnecting': '连接已断开，正在重连…',
+  'stream-fullscreen': '全屏',
+  'stream-pop-out': '弹出',
+  'stream-pop-in': '归位',
+  'stream-live': '{name} 正在直播',
+  'stream-rewatch': '重新观看',
+  'share-audio-missing': '未检测到共享音频，请勾选「共享系统音频」',
+  'duration-1m': '1 分钟',
+  'duration-5m': '5 分钟',
+  'duration-10m': '10 分钟',
+  'duration-30m': '30 分钟',
+  'duration-1h': '1 小时',
+  'duration-1d': '1 天',
+  'duration-forever': '永久',
+  'date-month-day': '{month}月{day}日',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
   // Auth
-  'login': 'Login',
-  'register': 'Register',
+  'login': 'Log in',
+  'register': 'Sign up',
   'ph-username': 'Username',
   'ph-screenname': 'Display name',
   'ph-password': 'Password',
   'err-fill-user-pass': 'Please enter username and password',
   'err-fill-required': 'Please fill in all required fields',
-  'register-success': 'Registered successfully',
+  'register-success': 'Account created',
   'please-login': 'Please log in',
 
   // Rooms
@@ -199,15 +259,15 @@ const en: Record<keyof typeof zh, string> = {
   'ph-room-name': 'Room name',
   'ph-room-password': 'Password (optional)',
   'err-room-name-required': 'Please enter a room name',
-  'err-create-failed': 'Failed to create',
+  'err-create-failed': "Couldn't create the room",
 
   // Chat
   'ph-message': 'Type a message...',
   'edit-message': 'Edit Message',
-  'msg-recalled': 'This message was recalled',
+  'msg-recalled': 'This message was unsent',
   'msg-edited': '(edited)',
   'edit': 'Edit',
-  'recall': 'Recall',
+  'recall': 'Unsend',
   'invite-code': 'Invite Code',
   'members': 'Members',
   'people-unit': '',
@@ -246,7 +306,7 @@ const en: Record<keyof typeof zh, string> = {
   'ph-bio': 'Bio (optional)',
   'no-bio': 'No bio yet',
   'edit-profile': 'Edit Profile',
-  'logout': 'Logout',
+  'logout': 'Log out',
   'select-emoji': 'Select Emoji',
   'select-color': 'Select Color',
   'err-name-required': 'Display name is required',
@@ -260,7 +320,7 @@ const en: Record<keyof typeof zh, string> = {
   'settings-mic-label': 'Microphone',
   'settings-speaker-label': 'Speaker',
   'dark-mode': 'Dark Mode',
-  'audio-managed': 'Audio devices are managed by system',
+  'audio-managed': 'Audio devices are managed by the system',
 
   // Emoji picker
   'emoji-search': 'Search emoji…',
@@ -321,7 +381,7 @@ const en: Record<keyof typeof zh, string> = {
   'privacy-policy': 'Privacy Policy',
 
   // Kicked / muted
-  'kicked-title': 'Kicked from Room',
+  'kicked-title': 'Removed from room',
   'kicked-msg': 'An admin removed you from this room',
   'you-are-muted': 'You are muted',
   'dm-blocked': "Can't send: one of you has blocked the other",
@@ -360,14 +420,117 @@ const en: Record<keyof typeof zh, string> = {
   'room-invite-title': 'Room Invite',
   'room-invite-msg': 'invited you to join',
   'join': 'Join',
+
+  // Server messages, system messages, security questions, misc
+  'srv-invalid_username': 'Username must be 3-20 lowercase letters, digits or underscores',
+  'srv-username_taken': 'That username is taken',
+  'srv-invalid_screenname': 'Display name must be 1-{max} characters',
+  'srv-password_too_short': 'Password must be at least {min} characters',
+  'srv-too_many_attempts': 'Too many attempts. Try again in {secs}s',
+  'srv-user_not_found': 'User not found',
+  'srv-wrong_password': 'Wrong password',
+  'srv-wrong_old_password': 'Current password is incorrect',
+  'srv-wrong_answer': 'Incorrect answer',
+  'srv-missing_fields': 'Please fill in all required fields',
+  'srv-invalid_profile': 'Display name must be 1-{max_name} characters and bio at most {max_bio}',
+  'srv-invalid_room_name': 'Room name must be 1-{max} characters',
+  'srv-room_exists': 'A room with that name already exists',
+  'srv-room_not_found': 'Room not found',
+  'srv-kicked_from_room': 'You were removed from this room',
+  'srv-cannot_leave_lobby': "You can't leave the lobby",
+  'srv-no_permission': "You don't have permission to do that",
+  'srv-user_not_in_room': "That user isn't in this room",
+  'srv-room_code_not_found': 'No room with that code',
+  'srv-cannot_invite': "You can't invite this user",
+  'srv-feedback_empty': 'Feedback cannot be empty',
+  'srv-feedback_too_long': 'Feedback must be at most {max} characters',
+  'srv-server_error': 'Something went wrong. Please try again',
+  'sys-user_joined': '{name} joined the room',
+  'sys-user_left': '{name} left the room',
+  'sys-user_kicked': '{name} was removed from the room',
+  'sys-admin_added': '{name} is now an admin',
+  'sys-admin_removed': '{name} is no longer an admin',
+  'sys-room_closed': 'This room has been closed',
+  'secq-birth_city': 'What city were you born in?',
+  'secq-primary_school': 'What was the name of your primary school?',
+  'secq-pet_name': "What is your favorite pet's name?",
+  'secq-mother_maiden_name': "What is your mother's maiden name?",
+  'secq-first_car': 'What was the make of your first car?',
+  'secq-favorite_teacher': 'What was the name of your favorite teacher?',
+  'lobby': 'Lobby',
+  'invite-text': '{name} invited you to join {room}',
+  'copy': 'Copy',
+  'copied': 'Copied',
+  'switch': 'Switch',
+  'switch-voice-title': 'Switch voice channel',
+  'switch-voice-msg': "You're in voice in {from}. Switch to {to}?",
+  'reconnected': 'Reconnected',
+  'reconnecting': 'Connection lost. Reconnecting…',
+  'stream-fullscreen': 'Fullscreen',
+  'stream-pop-out': 'Pop out',
+  'stream-pop-in': 'Dock',
+  'stream-live': '{name} is live',
+  'stream-rewatch': 'Watch again',
+  'share-audio-missing': 'No audio was shared. Tick "Share system audio" and try again',
+  'duration-1m': '1 minute',
+  'duration-5m': '5 minutes',
+  'duration-10m': '10 minutes',
+  'duration-30m': '30 minutes',
+  'duration-1h': '1 hour',
+  'duration-1d': '1 day',
+  'duration-forever': 'Permanently',
+  'date-month-day': '{monthName} {day}',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };
 
 export type I18nKey = keyof typeof zh;
 
-export function t(lang: Lang, key: I18nKey): string {
-  return strings[lang]?.[key] ?? strings.zh[key] ?? key;
+const MONTHS_EN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+export type Params = Record<string, string | number>;
+
+/** Translate `key`, filling `{placeholders}` from `params`. */
+export function t(lang: Lang, key: I18nKey, params?: Params): string {
+  const template: string = strings[lang][key] ?? strings.zh[key] ?? key;
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (m, name) => (name in params ? String(params[name]) : m));
+}
+
+export function hasKey(key: string): key is I18nKey {
+  return key in zh;
+}
+
+/** Text for a failed server reply: its error `code` when known, else `fallback`. */
+export function serverError(lang: Lang, data: { code?: string; params?: Params; msg?: string } | null | undefined,
+                            fallback: I18nKey): string {
+  const key = data?.code ? `srv-${data.code}` : '';
+  if (hasKey(key)) return t(lang, key, data?.params);
+  return data?.msg || t(lang, fallback);
+}
+
+/** A system message rendered in the reader's language (older messages only have Chinese text). */
+export function systemMessage(lang: Lang, msg: { text: string; meta?: any }): string {
+  const sys = msg.meta?.system;
+  const key = sys?.code ? `sys-${sys.code}` : '';
+  return hasKey(key) ? t(lang, key, sys.params) : msg.text;
+}
+
+/** Security questions are stored as ids; accounts from before that store the question text. */
+export function securityQuestion(lang: Lang, idOrText: string): string {
+  const key = `secq-${idOrText}`;
+  return hasKey(key) ? t(lang, key) : idOrText;
+}
+
+export const LOBBY_ID = '大厅';
+
+/** Display name for a room: the lobby's id is Chinese, so show it translated. */
+export function roomLabel(lang: Lang, room: string): string {
+  return room === LOBBY_ID ? t(lang, 'lobby') : room;
+}
+
+export function monthDay(lang: Lang, d: Date): string {
+  return t(lang, 'date-month-day', { month: d.getMonth() + 1, monthName: MONTHS_EN[d.getMonth()], day: d.getDate() });
 }
 
 export const EMOJI_CDN: Record<Lang, string> = {

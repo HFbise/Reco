@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { getSocket } from '../lib/socket';
+import { useT } from '../hooks/useT';
 
 export function ConnectionBanner() {
+  const t = useT();
   const [status, setStatus] = useState<'ok' | 'down' | 'back'>('ok');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasDownRef = useRef(false);
@@ -36,7 +38,7 @@ export function ConnectionBanner() {
   return (
     <View style={[s.banner, { backgroundColor: status === 'back' ? '#3ba55c' : '#ed4245' }]}>
       <Text style={s.text}>
-        {status === 'back' ? '已重新连接' : '连接已断开，正在重连…'}
+        {status === 'back' ? t('reconnected') : t('reconnecting')}
       </Text>
     </View>
   );

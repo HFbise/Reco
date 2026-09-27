@@ -12,14 +12,8 @@ import { Fonts, Radius, Spacing } from '../../src/theme';
 
 type Tab = 'login' | 'register';
 
-const SECURITY_QUESTIONS = [
-  '你的出生城市是？',
-  '你的小学名字是？',
-  '你最喜欢的宠物名字是？',
-  '你母亲的娘家姓是？',
-  '你的第一辆车的品牌是？',
-  '你最喜欢的老师叫什么？',
-];
+// Ids understood by the server (utils.SECURITY_QUESTIONS); text comes from i18n
+const SECURITY_QUESTIONS = ['birth_city', 'primary_school', 'pet_name', 'mother_maiden_name', 'first_car', 'favorite_teacher'];
 
 export default function AuthScreen() {
   const c = useColors();
@@ -55,7 +49,7 @@ export default function AuthScreen() {
     const socket = getSocket();
     socket.emit('login', { username, password });
     socket.once('login_result', async (data: any) => {
-      if (!data.success) { setError(data.msg); return; }
+      if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
       await setUser({
         username: data.username,
         screenname: data.screenname,
@@ -75,7 +69,7 @@ export default function AuthScreen() {
     const socket = getSocket();
     socket.emit('register', { username, screenname, password, bio: '', security_question: secQuestion, security_answer: secAnswer.trim() });
     socket.once('register_result', (data: any) => {
-      if (!data.success) { setError(data.msg); return; }
+      if (!data.success) { setError(t.server(data, 'srv-server_error')); return; }
       Alert.alert(t('register-success'), t('please-login'));
       setTab('login');
     });
@@ -100,7 +94,7 @@ export default function AuthScreen() {
     socket.emit('get_security_question', { username: forgotUsername.trim() });
     socket.once('security_question_result', (data: any) => {
       setForgotLoading(false);
-      if (!data.success || !data.question) { setForgotError(data.msg || t('err-reset-failed')); return; }
+      if (!data.success || !data.question) { setForgotError(t.server(data, 'err-reset-failed')); return; }
       setForgotQuestion(data.question);
       setForgotStep('answer');
     });
@@ -118,7 +112,7 @@ export default function AuthScreen() {
     });
     socket.once('reset_password_result', (data: any) => {
       setForgotLoading(false);
-      if (!data.success) { setForgotError(data.msg || t('err-reset-failed')); return; }
+      if (!data.success) { setForgotError(t.server(data, 'err-reset-failed')); return; }
       setShowForgot(false);
       Alert.alert(t('password-changed'), t('please-login'));
     });
@@ -175,7 +169,7 @@ export default function AuthScreen() {
                   onPress={() => setShowQPicker(true)}
                   activeOpacity={0.8}
                 >
-                  <Text style={[s.qPickerText, { color: c.text }]} numberOfLines={2}>{secQuestion}</Text>
+                  <Text style={[s.qPickerText, { color: c.text }]} numberOfLines={2}>{t.question(secQuestion)}</Text>
                 </TouchableOpacity>
                 <TextInput
                   style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
@@ -214,7 +208,7 @@ export default function AuthScreen() {
                 onPress={() => { setSecQuestion(q); setShowQPicker(false); }}
                 activeOpacity={0.7}
               >
-                <Text style={[s.qOptionText, { color: secQuestion === q ? c.accent : c.text }]}>{q}</Text>
+                <Text style={[s.qOptionText, { color: secQuestion === q ? c.accent : c.text }]}>{t.question(q)}</Text>
               </TouchableOpacity>
             ))}
           </TouchableOpacity>
@@ -257,7 +251,7 @@ export default function AuthScreen() {
               </>
             ) : (
               <>
-                <Text style={[s.questionText, { color: c.text }]}>{forgotQuestion}</Text>
+                <Text style={[s.questionText, { color: c.text }]}>{t.question(forgotQuestion)}</Text>
                 <TextInput
                   style={[s.input, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
                   placeholder={t('ph-security-answer')}

@@ -82,3 +82,14 @@ def test_lobby_has_no_owner_or_room_admins_after_startup():
         conn.commit()
     app_module._migrate()
     assert query("SELECT owner, admins FROM rooms WHERE name = '大厅'") == [{'owner': None, 'admins': []}]
+
+
+def test_system_messages_carry_a_code_for_translation():
+    create_user('alice', screenname='Alice')
+    alice = connect_as('alice')
+    alice.emit('join', {'room': '大厅', 'skip_history': True})
+    system = [m for m in events(alice, 'message') if m.get('system')]
+    assert system[-1]['meta'] == {'system': {'code': 'user_joined', 'params': {'name': 'Alice'}}}
+    stored = query("SELECT text, meta FROM messages WHERE system")[0]
+    assert stored['text'] == 'Alice 加入了房间'   # readable fallback for the admin panel
+    assert stored['meta']['system']['code'] == 'user_joined'

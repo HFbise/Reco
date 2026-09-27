@@ -6,12 +6,13 @@ from datetime import datetime, timezone
 from flask_socketio import emit, join_room, close_room
 from extensions import socketio
 from db import get_db
+from replies import fail
 from state import (
     get_level,
     online_users, rooms_voice, rooms_stream,
     emit_system_msg, LOBBY,
 )
-from utils import hash_password, verify_password, SERVER_ERROR
+from utils import hash_password, verify_password
 from auth_session import authenticated, in_room, dm_participants
 import moderation
 
@@ -87,14 +88,14 @@ def handle_create_room(username, data):
     password = (data.get('password') or '').strip() or None
     # 'dm:' is reserved for direct-message rooms
     if not room or len(room) > MAX_ROOM_NAME_LEN or room.lower().startswith('dm:'):
-        emit('create_room_result', {'success': False, 'msg': '房间名无效'})
+        fail('create_room_result', 'invalid_room_name', {'max': MAX_ROOM_NAME_LEN})
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute('SELECT name FROM rooms WHERE name = %s', (room,))
             if cur.fetchone():
-                emit('create_room_result', {'success': False, 'msg': '房间已存在'})
+                fail('create_room_result', 'room_exists')
                 return
             code = _gen_unique_room_code(cur)
             cur.execute(
@@ -113,7 +114,7 @@ def handle_create_room(username, data):
                           to=sid)
     except Exception as e:
         log.exception('create_room error: %s', e)
-        emit('create_room_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('create_room_result', 'server_error')
 
 
 @socketio.on('join')
@@ -126,12 +127,12 @@ def handle_join(username, data):
             cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
             if not room_data:
-                emit('join_result', {'success': False, 'msg': '房间不存在'})
+                fail('join_result', 'room_not_found')
                 return
 
             kicked = list(room_data.get('kicked') or [])
             if username in kicked:
-                emit('join_result', {'success': False, 'msg': '你已被踢出该房间'})
+                fail('join_result', 'kicked_from_room')
                 return
 
             if _needs_password(username, room_data):
@@ -140,7 +141,7 @@ def handle_join(username, data):
                 else:
                     ok, needs_migrate = verify_password(room_data['password'], data.get('password') or '')
                     if not ok:
-                        emit('join_result', {'success': False, 'msg': '密码错误', 'wrong_password': True})
+                        fail('join_result', 'wrong_password', wrong_password=True)
                         return
                     if needs_migrate:  # legacy plaintext room password
                         cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
@@ -213,7 +214,7 @@ def handle_join(username, data):
         emit('members_list', {'room': room, 'members': members_data}, to=room)
 
         if is_first_join:
-            emit_system_msg(room, f'{joiner_screen} 加入了房间')
+            emit_system_msg(room, 'user_joined', name=joiner_screen)
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
             emit('voice_members_view', {
@@ -226,7 +227,7 @@ def handle_join(username, data):
 
     except Exception as e:
         log.exception('join error: %s', e)
-        emit('join_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('join_result', 'server_error')
 
 
 @socketio.on('leave_room')
@@ -234,7 +235,7 @@ def handle_join(username, data):
 def handle_leave_room(username, data):
     room = (data.get('room') or '').strip()
     if room == LOBBY:
-        emit('leave_room_result', {'success': False, 'msg': '无法退出大厅'})
+        fail('leave_room_result', 'cannot_leave_lobby')
         return
     try:
         with get_db() as conn:
@@ -242,7 +243,7 @@ def handle_leave_room(username, data):
             cur.execute('SELECT members, admins FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
             if not room_data:
-                emit('leave_room_result', {'success': False, 'msg': '房间不存在'})
+                fail('leave_room_result', 'room_not_found')
                 return
             members = list(room_data['members'] or [])
             admins = list(room_data['admins'] or [])
@@ -262,10 +263,10 @@ def handle_leave_room(username, data):
             leaver_screen = row['screenname'] if row else username
         moderation.evict(username, room)
         emit('leave_room_result', {'success': True, 'room': room})
-        emit_system_msg(room, f'{leaver_screen} 离开了房间')
+        emit_system_msg(room, 'user_left', name=leaver_screen)
     except Exception as e:
         log.exception('leave_room error: %s', e)
-        emit('leave_room_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('leave_room_result', 'server_error')
 
 
 @socketio.on('get_rooms')
@@ -321,13 +322,13 @@ def handle_kick_member(requester, data):
     try:
         levels = _levels(room, requester, target)
         if not levels or levels[0] < 1 or levels[0] <= levels[1]:
-            emit('kick_result', {'success': False, 'msg': '无权限'})
+            fail('kick_result', 'no_permission')
             return
         moderation.kick(room, target)
         emit('kick_result', {'success': True})
     except Exception as e:
         log.exception('kick_member error: %s', e)
-        emit('kick_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('kick_result', 'server_error')
 
 
 @socketio.on('set_admin')
@@ -339,16 +340,16 @@ def handle_set_admin(requester, data):
             cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
             room_data = cur.fetchone()
             if not room_data:
-                emit('set_admin_result', {'success': False, 'msg': '无权限'})
+                fail('set_admin_result', 'no_permission')
                 return
             req_level = get_level(requester, room_data)
             tgt_level = get_level(data['target'], room_data)
             remove = data.get('remove', False)
             if req_level < 2 or tgt_level >= 2:
-                emit('set_admin_result', {'success': False, 'msg': '无权限'})
+                fail('set_admin_result', 'no_permission')
                 return
             if data['target'] not in (room_data['members'] or []):
-                emit('set_admin_result', {'success': False, 'msg': '该用户不在房间内'})
+                fail('set_admin_result', 'user_not_in_room')
                 return
             admins = list(room_data['admins'] or [])
             if remove:
@@ -366,12 +367,11 @@ def handle_set_admin(requester, data):
             cur.execute('SELECT screenname FROM users WHERE username = %s', (data['target'],))
             row = cur.fetchone()
             target_screen = row['screenname'] if row else data['target']
-        action = f"{target_screen} 被取消了管理员" if remove else f"{target_screen} 成为了管理员"
         emit('set_admin_result', {'success': True, 'target': data['target'], 'remove': remove})
-        emit_system_msg(data['room'], action)
+        emit_system_msg(data['room'], 'admin_removed' if remove else 'admin_added', name=target_screen)
     except Exception as e:
         log.exception('set_admin error: %s', e)
-        emit('set_admin_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('set_admin_result', 'server_error')
 
 
 @socketio.on('set_room_password')
@@ -385,7 +385,7 @@ def handle_set_room_password(requester, data):
             cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
             row = cur.fetchone()
             if not row or get_level(requester, row) < 2:
-                emit('set_room_password_result', {'success': False, 'msg': '无权限'})
+                fail('set_room_password_result', 'no_permission')
                 return
             cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
                         (hash_password(password) if password else None, room))
@@ -394,7 +394,7 @@ def handle_set_room_password(requester, data):
         socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
     except Exception as e:
         log.exception('set_room_password error: %s', e)
-        emit('set_room_password_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('set_room_password_result', 'server_error')
 
 
 @socketio.on('close_room')
@@ -408,10 +408,10 @@ def handle_close_room(requester, data):
             cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
             room_data = cur.fetchone()
             if not room_data or get_level(requester, room_data) < 2:
-                emit('close_room_result', {'success': False, 'msg': '无权限'})
+                fail('close_room_result', 'no_permission')
                 return
-            emit('message', {'screenname': '系统', 'text': '房间已被管理员关闭', 'system': True,
-                             'room': data['room']}, to=data['room'])
+            emit('message', {'screenname': '系统', 'text': '房间已被关闭', 'system': True, 'room': data['room'],
+                             'meta': {'system': {'code': 'room_closed', 'params': {}}}}, to=data['room'])
             emit('room_closed', {}, to=data['room'])
             cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
             cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))
@@ -434,7 +434,7 @@ def handle_find_room(username, data):
             room = cur.fetchone()
             invited = bool(room) and _is_invited(cur, room['name'], username)
         if not room:
-            emit('find_room_result', {'success': False, 'msg': '找不到该房间号'})
+            fail('find_room_result', 'room_code_not_found')
             return
         emit('find_room_result', {
             'success': True, 'room': room['name'],
@@ -443,7 +443,7 @@ def handle_find_room(username, data):
         })
     except Exception as e:
         log.exception('find_room error: %s', e)
-        emit('find_room_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('find_room_result', 'server_error')
 
 
 @socketio.on('room_subscribe')
@@ -490,7 +490,7 @@ def handle_invite_to_room(inviter, data):
     target = data.get('target', '')
     room = data.get('room', '')
     if not target or target == inviter or not in_room(room):
-        emit('invite_sent', {'success': False, 'msg': '无权限'})
+        fail('invite_sent', 'no_permission')
         return
     try:
         with get_db() as conn:
@@ -499,10 +499,10 @@ def handle_invite_to_room(inviter, data):
                         ([inviter, target],))
             users = {u['username']: u['screenname'] for u in cur.fetchall()}
             if target not in users:
-                emit('invite_sent', {'success': False, 'msg': '用户不存在'})
+                fail('invite_sent', 'user_not_found')
                 return
             if moderation.blocked_either_way(cur, inviter, target):
-                emit('invite_sent', {'success': False, 'msg': '无法邀请该用户'})
+                fail('invite_sent', 'cannot_invite')
                 return
             inviter_screen = users.get(inviter, inviter)
             cur.execute(
@@ -536,7 +536,7 @@ def handle_invite_to_room(inviter, data):
         emit('invite_sent', {'success': True})
     except Exception as e:
         log.exception('invite_to_room error: %s', e)
-        emit('invite_sent', {'success': False, 'msg': SERVER_ERROR})
+        fail('invite_sent', 'server_error')
 
 
 # ── Text mute ─────────────────────────────────────────────────

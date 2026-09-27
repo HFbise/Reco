@@ -36,7 +36,7 @@ interface Props {
 }
 
 
-export function formatMsgTime(time: string): string {
+export function formatMsgTime(time: string, monthDay: (d: Date) => string): string {
   if (!time) return '';
   try {
     const d = new Date(time);
@@ -45,7 +45,7 @@ export function formatMsgTime(time: string): string {
     const isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
     const hhmm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     if (isToday) return hhmm;
-    return `${d.getMonth() + 1}月${d.getDate()}日 ${hhmm}`;
+    return `${monthDay(d)} ${hhmm}`;
   } catch { return time; }
 }
 

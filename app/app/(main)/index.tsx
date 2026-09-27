@@ -3,6 +3,7 @@ import { View, Image, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, 
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
+import { useT } from '../../src/hooks/useT';
 import { useMobileVoice } from '../../src/context/VoiceContext';
 import { RoomsPanel, type RoomsPanelHandle, type DmEntry } from '../../src/components/RoomsPanel';
 import { ChatPanel, type DmMeta } from '../../src/components/ChatPanel';
@@ -18,6 +19,7 @@ const EASE = Easing.bezier(0.25, 0.1, 0.25, 1.0);
 export default function RoomsScreen() {
   const { width: SW } = useWindowDimensions();
   const c = useColors();
+  const t = useT();
   const { voice, setRoom, voiceRoom, leaveAndSwitchRoom } = useMobileVoice();
   const { inVoice, voiceMembers } = voice;
   const roomsPanelRef = useRef<RoomsPanelHandle>(null);
@@ -144,7 +146,7 @@ export default function RoomsScreen() {
       ) : (
         <TouchableOpacity style={s.chatTitle} onPress={() => setInfoKey(k => k + 1)} activeOpacity={0.7}>
           <IconGroup size={16} color={c.text} />
-          <Text style={[s.chatTitleText, { color: c.text }]} numberOfLines={1}>{activeRoom}</Text>
+          <Text style={[s.chatTitleText, { color: c.text }]} numberOfLines={1}>{t.room(activeRoom)}</Text>
           <IconInfo size={13} color={c.textMuted} />
         </TouchableOpacity>
       )}

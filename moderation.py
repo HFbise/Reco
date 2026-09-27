@@ -53,7 +53,7 @@ def kick(room: str, target: str) -> bool:
     for sid in list(online_users.get(target, [])):
         socketio.emit('kicked_from_room', {'room': room}, to=sid)
     evict(target, room)
-    emit_system_msg(room, f'{target_screen} 被踢出了房间')
+    emit_system_msg(room, 'user_kicked', name=target_screen)
     return True
 
 

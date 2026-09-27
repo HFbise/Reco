@@ -10,7 +10,7 @@ def register(username, screenname='Someone'):
     client = anon_client()
     client.emit('register', {
         'username': username, 'screenname': screenname, 'password': 'secret123',
-        'security_question': 'Q?', 'security_answer': 'a',
+        'security_question': 'birth_city', 'security_answer': 'a',
     })
     return events(client, 'register_result')[0]
 

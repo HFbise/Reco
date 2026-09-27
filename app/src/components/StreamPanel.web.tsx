@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../hooks/useT';
 
 interface VideoStream { stream: MediaStream; screenname: string; }
 interface Props {
@@ -87,6 +88,7 @@ const btnStyle: React.CSSProperties = {
 function VideoCard({ screenname, stream, onPopOut, onHide }: {
   screenname: string; stream: MediaStream; onPopOut: () => void; onHide: () => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   useVideoStream(videoRef, stream);
   return (
@@ -97,9 +99,9 @@ function VideoCard({ screenname, stream, onPopOut, onHide }: {
         {screenname}
       </div>
       <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
-        <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title="全屏">⤢</button>
-        <button style={btnStyle} onClick={onPopOut} title="弹出">⧉</button>
-        <button style={btnStyle} onClick={onHide} title="关闭">✕</button>
+        <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title={t('stream-fullscreen')}>⤢</button>
+        <button style={btnStyle} onClick={onPopOut} title={t('stream-pop-out')}>⧉</button>
+        <button style={btnStyle} onClick={onHide} title={t('close')}>✕</button>
       </div>
     </div>
   );
@@ -108,13 +110,14 @@ function VideoCard({ screenname, stream, onPopOut, onHide }: {
 // ── RewatchCard (shown after close) ──────────────────────────
 
 function RewatchCard({ screenname, onRewatch }: { screenname: string; onRewatch: () => void }) {
+  const t = useT();
   return (
     <div style={{ flex: 1, minWidth: 200, minHeight: 80, background: '#1a1a1a', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-      <span style={{ color: '#bbb', fontSize: 13 }}>🔴 {screenname} 正在直播</span>
+      <span style={{ color: '#bbb', fontSize: 13 }}>🔴 {t('stream-live', { name: screenname })}</span>
       <button
         onClick={onRewatch}
         style={{ background: '#4f8ef7', border: 'none', color: 'white', borderRadius: 5, padding: '5px 16px', cursor: 'pointer', fontSize: 13 }}
-      >重新观看</button>
+      >{t('stream-rewatch')}</button>
     </div>
   );
 }
@@ -124,6 +127,7 @@ function RewatchCard({ screenname, onRewatch }: { screenname: string; onRewatch:
 function FloaterCard({ screenname, stream, onPopIn }: {
   screenname: string; stream: MediaStream; onPopIn: () => void;
 }) {
+  const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   useVideoStream(videoRef, stream);
 
@@ -176,8 +180,8 @@ function FloaterCard({ screenname, stream, onPopIn }: {
       >
         <span style={{ color: '#ccc', fontSize: 12 }}>{screenname}</span>
         <div style={{ display: 'flex', gap: 4 }}>
-          <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title="全屏">⤢</button>
-          <button style={btnStyle} onClick={onPopIn} title="归位">⊡</button>
+          <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title={t('stream-fullscreen')}>⤢</button>
+          <button style={btnStyle} onClick={onPopIn} title={t('stream-pop-in')}>⊡</button>
         </div>
       </div>
       <video ref={videoRef} autoPlay playsInline style={{ flex: 1, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />

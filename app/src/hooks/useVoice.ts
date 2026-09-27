@@ -498,7 +498,7 @@ export function useVoice(room: string) {
     const audioTracks = (stream as any).getAudioTracks();
     if (!audioTracks.length) {
       (stream as any).getTracks().forEach((t: any) => t.stop());
-      Alert.alert(T('voice-join-failed'), '未检测到共享音频，请勾选"共享系统音频"');
+      Alert.alert(T('voice-join-failed'), T('share-audio-missing'));
       return;
     }
     (stream as any).getVideoTracks().forEach((t: any) => t.stop());

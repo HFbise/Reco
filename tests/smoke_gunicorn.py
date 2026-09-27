@@ -52,7 +52,7 @@ def main():
         anon.connect(URL, transports=['websocket'])
         assert call(anon, 'register', {
             'username': 'smoke_user', 'screenname': 'Smoke', 'password': 'secret123',
-            'security_question': 'Q?', 'security_answer': 'a',
+            'security_question': 'birth_city', 'security_answer': 'a',
         }, 'register_result')['success']
         login = call(anon, 'login', {'username': 'smoke_user', 'password': 'secret123'}, 'login_result')
         assert login['success'] and login['token']

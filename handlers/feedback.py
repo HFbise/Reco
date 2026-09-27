@@ -2,7 +2,7 @@ import logging
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
-from utils import SERVER_ERROR
+from replies import fail
 from auth_session import authenticated
 
 log = logging.getLogger(__name__)
@@ -13,10 +13,10 @@ log = logging.getLogger(__name__)
 def handle_submit_feedback(username, data):
     text = data.get('text', '').strip()
     if not text:
-        emit('feedback_result', {'success': False, 'msg': '内容不能为空'})
+        fail('feedback_result', 'feedback_empty')
         return
     if len(text) > 2000:
-        emit('feedback_result', {'success': False, 'msg': '反馈不能超过2000字'})
+        fail('feedback_result', 'feedback_too_long', {'max': 2000})
         return
     try:
         with get_db() as conn:
@@ -29,4 +29,4 @@ def handle_submit_feedback(username, data):
         emit('feedback_result', {'success': True})
     except Exception as e:
         log.exception('submit_feedback error: %s', e)
-        emit('feedback_result', {'success': False, 'msg': SERVER_ERROR})
+        fail('feedback_result', 'server_error')

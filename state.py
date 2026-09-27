@@ -66,16 +66,31 @@ def reset_login_attempts(username: str):
 
 # ── System messages ───────────────────────────────────────────
 
-def emit_system_msg(room: str, text: str):
+# Clients render system messages from `code` + `params` in their own language.
+# The Chinese `text` is stored alongside for the admin panel and older clients.
+SYSTEM_TEXT_ZH = {
+    'user_joined': '{name} 加入了房间',
+    'user_left': '{name} 离开了房间',
+    'user_kicked': '{name} 被踢出了房间',
+    'admin_added': '{name} 成为了管理员',
+    'admin_removed': '{name} 被取消了管理员',
+    'room_closed': '房间已被关闭',
+}
+
+
+def emit_system_msg(room: str, code: str, **params):
     # Import here to avoid circular import (socketio lives in extensions)
+    import json
     from extensions import socketio
+    text = SYSTEM_TEXT_ZH[code].format(**params)
+    meta = {'system': {'code': code, 'params': params}}
     try:
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                'INSERT INTO messages (room, username, screenname, text, time, system)'
-                ' VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
-                (room, 'system', '系统', text, datetime.now().strftime('%H:%M'), True)
+                'INSERT INTO messages (room, username, screenname, text, time, system, meta)'
+                ' VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) RETURNING id',
+                (room, 'system', '系统', text, datetime.now().strftime('%H:%M'), True, json.dumps(meta))
             )
             msg_id = cur.fetchone()['id']
             conn.commit()
@@ -87,6 +102,7 @@ def emit_system_msg(room: str, text: str):
             'time': datetime.now(timezone.utc).isoformat(),
             'room': room,
             'system': True,
+            'meta': meta,
         }, to=room)
     except Exception as e:
         log.exception('emit_system_msg failed: %s', e)

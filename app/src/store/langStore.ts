@@ -8,8 +8,18 @@ interface LangState {
   load: () => Promise<void>;
 }
 
+/** First visit: follow the device language (Chinese devices get Chinese, everyone else English). */
+function deviceLang(): Lang {
+  try {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale || '';
+    return locale.toLowerCase().startsWith('zh') ? 'zh' : 'en';
+  } catch {
+    return 'en';
+  }
+}
+
 export const useLangStore = create<LangState>((set) => ({
-  lang: 'zh',
+  lang: deviceLang(),
   setLang: (lang) => {
     set({ lang });
     AsyncStorage.setItem('lang', lang).catch(() => {});
