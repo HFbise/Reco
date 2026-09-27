@@ -51,6 +51,13 @@
           "sounds": []
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "0f65f7ea-463c-4380-883a-b81d5801878f"
+      }
+    },
+    "owner": "hfbise"
   }
 }
