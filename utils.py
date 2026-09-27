@@ -9,9 +9,6 @@ SECURITY_QUESTIONS = [
     "你最喜欢的老师叫什么？",
 ]
 
-DEFAULT_PASSWORD = "reco1234"
-
-
 def hash_password(pw: str) -> str:
     return generate_password_hash(pw)
 

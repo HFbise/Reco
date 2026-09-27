@@ -1,4 +1,5 @@
 import os
+import html
 import logging
 import base64
 import hmac
@@ -16,7 +17,7 @@ logging.basicConfig(
 from flask import send_from_directory, request, jsonify
 from extensions import app, socketio
 from db import get_db
-from state import rooms_voice, online_users
+from state import rooms_voice, online_users, LOBBY
 from auth_session import verify_token
 from admin import admin_bp
 
@@ -59,6 +60,13 @@ def service_worker():
 
 
 # ── Privacy policy ────────────────────────────────────────────
+def _privacy_contact():
+    email = html.escape(os.environ.get('PRIVACY_CONTACT_EMAIL', ''))
+    if email:
+        return f'<p>如有隐私相关问题，请联系：<a href="mailto:{email}">{email}</a></p>'
+    return '<p>如有隐私相关问题，请通过 App 内「我的资料 → 意见反馈」联系我们。</p>'
+
+
 @app.route('/privacy')
 def privacy_policy():
     return '''<!DOCTYPE html>
@@ -82,8 +90,8 @@ def privacy_policy():
 <h2>账号删除</h2>
 <p>你可以随时在 App 内「我的资料 → 删除账号」永久删除账号及相关数据。</p>
 <h2>联系我们</h2>
-<p>如有隐私相关问题，请联系：<a href="mailto:a1522a@gmail.com">a1522a@gmail.com</a></p>
-</body></html>''', 200, {'Content-Type': 'text/html; charset=utf-8'}
+__CONTACT__
+</body></html>'''.replace('__CONTACT__', _privacy_contact()), 200, {'Content-Type': 'text/html; charset=utf-8'}
 
 
 # ── Voice leave beacon (page close) ──────────────────────────
@@ -104,7 +112,7 @@ def api_voice_leave():
 
 
 # ── TURN credentials ──────────────────────────────────────────
-TURN_HOST   = os.environ.get('TURN_HOST', '129.153.163.143')
+TURN_HOST   = os.environ.get('TURN_HOST', '')
 TURN_PORT   = int(os.environ.get('TURN_PORT', '3478'))
 TURN_SECRET = os.environ.get('TURN_SECRET', '')
 
@@ -115,7 +123,7 @@ def get_ice_servers():
     # Token goes in a header, not the URL, so it stays out of access logs.
     auth = request.headers.get('Authorization', '')
     username = verify_token(auth[7:] if auth.startswith('Bearer ') else '')
-    if not username or not TURN_SECRET:
+    if not username or not TURN_HOST or not TURN_SECRET:
         return jsonify([])
     expiry    = int(time.time()) + 86400
     turn_user = f'{expiry}:{username}'
@@ -200,8 +208,9 @@ def _migrate():
 
             # The lobby belongs to nobody: it is moderated only from the admin panel
             cur.execute(
-                "INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', NULL)"
-                " ON CONFLICT (name) DO UPDATE SET owner = NULL, admins = '{}'"
+                "INSERT INTO rooms (name, admins, members, owner) VALUES (%s, '{}', '{}', NULL)"
+                " ON CONFLICT (name) DO UPDATE SET owner = NULL, admins = '{}'",
+                (LOBBY,)
             )
             conn.commit()
     except Exception as e:

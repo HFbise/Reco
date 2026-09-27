@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import Constants from 'expo-constants';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../store/authStore';
 
@@ -65,7 +66,13 @@ export function usePushNotifications(onNotificationTap?: (roomName: string) => v
     }
 
     try {
-      const tokenData = await Notifications.getExpoPushTokenAsync();
+      // Set by `eas init` (app.json → extra.eas.projectId); Expo can't issue tokens without it
+      const projectId = Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+      if (!projectId) {
+        console.warn('Push disabled: no EAS projectId (run `eas init` in app/)');
+        return;
+      }
+      const tokenData = await Notifications.getExpoPushTokenAsync({ projectId });
       deviceToken = tokenData.data;
       // Identity comes from the authenticated socket, not from this payload
       if (deviceToken) getSocket().emit('register_push_token', { token: deviceToken, platform: Platform.OS });

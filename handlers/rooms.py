@@ -9,7 +9,7 @@ from db import get_db
 from state import (
     get_level,
     online_users, rooms_voice, rooms_stream,
-    emit_system_msg,
+    emit_system_msg, LOBBY,
 )
 from utils import hash_password, verify_password
 from auth_session import authenticated, in_room, dm_participants
@@ -233,7 +233,7 @@ def handle_join(username, data):
 @authenticated
 def handle_leave_room(username, data):
     room = (data.get('room') or '').strip()
-    if room == '大厅':
+    if room == LOBBY:
         emit('leave_room_result', {'success': False, 'msg': '无法退出大厅'})
         return
     try:
@@ -276,13 +276,13 @@ def handle_get_rooms(username, data):
             cur = conn.cursor()
             cur.execute(
                 "SELECT name, password, code, owner, admins, members FROM rooms"
-                " WHERE name = '大厅' OR %s = ANY(members)",
-                (username,)
+                " WHERE name = %s OR %s = ANY(members)",
+                (LOBBY, username)
             )
             rooms = [{'name': r['name'], 'has_password': bool(r['password']),
                       'needs_password': _needs_password(username, r),
                       'code': r.get('code') or ''} for r in cur.fetchall()]
-        lobby = next((r for r in rooms if r['name'] == '大厅'), None)
+        lobby = next((r for r in rooms if r['name'] == LOBBY), None)
         if lobby:
             rooms.remove(lobby)
             rooms.insert(0, lobby)
@@ -400,7 +400,7 @@ def handle_set_room_password(requester, data):
 @socketio.on('close_room')
 @authenticated
 def handle_close_room(requester, data):
-    if data.get('room') == '大厅':
+    if data.get('room') == LOBBY:
         return
     try:
         with get_db() as conn:

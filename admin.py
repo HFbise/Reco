@@ -6,7 +6,7 @@ from flask import Blueprint, request, redirect, url_for, session, make_response
 from db import get_db
 from urllib.parse import quote
 from utils import hash_password
-from state import check_login_rate, record_login_fail, reset_login_attempts, online_users
+from state import check_login_rate, record_login_fail, reset_login_attempts, online_users, LOBBY
 import moderation
 from moderation import delete_account
 
@@ -448,7 +448,7 @@ def rooms():
         mc = r['mc'] or 0
         pw = '🔒' if r.get('password') else ''
         rname = _esc(r['name'])
-        close_btn = '' if r['name'] == '大厅' else (
+        close_btn = '' if r['name'] == LOBBY else (
             f'<form class="inline" method="post" action="/admin/rooms/{_url(r["name"])}/close"'
             f' data-name="{rname}" onsubmit="return confirm(\'关闭房间 \' + this.dataset.name + \'？将删除所有消息。\')">'
             '<button class="btn btn-danger">关闭</button></form>'
@@ -658,7 +658,7 @@ def recall_message(msg_id):
 @admin_bp.route('/rooms/<path:room_name>/close', methods=['POST'])
 @login_required
 def close_room(room_name):
-    if room_name == '大厅':
+    if room_name == LOBBY:
         return redirect(url_for('admin.rooms'))
     from extensions import socketio
     with get_db() as conn:

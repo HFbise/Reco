@@ -7,6 +7,10 @@ from db import get_db
 log = logging.getLogger(__name__)
 
 # ── In-memory state ───────────────────────────────────────────
+# The lobby: every user can see and join it; it has no owner (moderated from /admin).
+# Its name doubles as its room id in the database.
+LOBBY = '大厅'
+
 # Only live, per-process state lives here. Anything that must survive a restart
 # (mutes, voice bans, invites, push tokens) is in the database.
 rooms_voice: dict = {}       # { room: { voice_members } }

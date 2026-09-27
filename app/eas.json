@@ -11,6 +11,9 @@
       "distribution": "internal",
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://chat-5wg8.onrender.com"
       }
     },
     "production": {
@@ -20,16 +23,13 @@
       },
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SERVER_URL": "https://chat-5wg8.onrender.com"
       }
     }
   },
   "submit": {
-    "production": {
-      "ios": {
-        "appleId": "a1522a@gmail.com",
-        "ascAppId": "",
-        "appleTeamId": ""
-      }
-    }
+    "production": {}
   }
 }

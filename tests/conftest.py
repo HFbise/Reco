@@ -23,6 +23,7 @@ os.environ['DATABASE_URL'] = os.environ['TEST_DATABASE_URL']
 os.environ.setdefault('SECRET_KEY', 'test-secret')
 os.environ.setdefault('ADMIN_PASSWORD', 'test-admin')
 os.environ.setdefault('TURN_SECRET', 'test-turn')
+os.environ.setdefault('TURN_HOST', 'turn.test')
 
 import app as app_module  # noqa: E402  (registers every socket handler)
 from extensions import app, socketio  # noqa: E402

@@ -17,7 +17,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.reco.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "Reco 需要访问麦克风以使用语音聊天功能"
+        "NSMicrophoneUsageDescription": "Reco uses the microphone for voice chat."
       },
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
@@ -35,7 +35,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.reco.app",
-      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS", "CAMERA"]
+      "permissions": ["RECORD_AUDIO", "MODIFY_AUDIO_SETTINGS"]
     },
     "web": {
       "bundler": "metro",

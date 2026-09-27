@@ -4,7 +4,7 @@ from flask_socketio import emit
 from extensions import socketio
 from db import get_db
 from state import check_login_rate, record_login_fail, reset_login_attempts
-from utils import hash_password, verify_password, SECURITY_QUESTIONS, DEFAULT_PASSWORD
+from utils import hash_password, verify_password, SECURITY_QUESTIONS
 from auth_session import make_token, bind, unbind, authenticated
 from moderation import USERNAME_RE, RESERVED_USERNAMES, delete_account
 
