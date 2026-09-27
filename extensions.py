@@ -3,6 +3,10 @@ import logging
 from flask import Flask
 from flask_socketio import SocketIO
 
+import monitoring
+
+monitoring.init()  # before the app exists, so the Flask integration hooks in
+
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 if not app.config['SECRET_KEY']:
@@ -18,3 +22,9 @@ socketio = SocketIO(
     async_mode='threading',
     cors_allowed_origins=_cors if _cors == '*' else _cors.split(','),
 )
+
+
+@socketio.on_error_default
+def _on_socket_error(e):
+    monitoring.report_socket_error(e)
+

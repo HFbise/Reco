@@ -56,7 +56,7 @@ def handle_message(username, data):
             conn.commit()
         msg['time'] = datetime.now(timezone.utc).isoformat()
     except Exception as e:
-        log.error('message save error: %s', e)
+        log.exception('message save error: %s', e)
 
     emit('message', msg, to=room)
 
@@ -85,7 +85,7 @@ def handle_message(username, data):
             offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users]
         send_push(tokens_for(offline), f"{msg['screenname']} in {room}", preview, {'room': room})
     except Exception as e:
-        log.error('push notify error: %s', e)
+        log.exception('push notify error: %s', e)
 
 
 @socketio.on('recall_message')
@@ -107,7 +107,7 @@ def handle_recall_message(username, data):
                     return
         moderation.recall(msg_id)
     except Exception as e:
-        log.error('recall_message error: %s', e)
+        log.exception('recall_message error: %s', e)
 
 
 @socketio.on('edit_message')
@@ -130,7 +130,7 @@ def handle_edit_message(username, data):
             conn.commit()
         emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room}, to=room)
     except Exception as e:
-        log.error('edit_message error: %s', e)
+        log.exception('edit_message error: %s', e)
 
 
 @socketio.on('add_reaction')
@@ -164,4 +164,4 @@ def handle_add_reaction(username, data):
             conn.commit()
         emit('reaction_updated', {'id': msg_id, 'reactions': reactions, 'room': room}, to=room)
     except Exception as e:
-        log.error('add_reaction error: %s', e)
+        log.exception('add_reaction error: %s', e)

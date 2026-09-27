@@ -46,7 +46,7 @@ def handle_get_dms(username, data):
                 join_room(dm_room)
         emit('dms_list', {'dms': dms})
     except Exception as e:
-        log.error('get_dms error: %s', e)
+        log.exception('get_dms error: %s', e)
         emit('dms_list', {'dms': []})
 
 
@@ -66,7 +66,7 @@ def handle_close_dm(username, data):
             )
             conn.commit()
     except Exception as e:
-        log.error('close_dm error: %s', e)
+        log.exception('close_dm error: %s', e)
 
 
 @socketio.on('join_dm')
@@ -108,5 +108,5 @@ def handle_join_dm(username, data):
                 'meta': dict(msg['meta']) if msg.get('meta') else None,
             })
     except Exception as e:
-        log.error('join_dm history error: %s', e)
+        log.exception('join_dm history error: %s', e)
     emit('join_dm_result', {'success': True, 'dm_room': dm_room})

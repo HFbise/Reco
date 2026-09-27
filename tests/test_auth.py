@@ -116,3 +116,19 @@ def test_health_check_reports_database_status(monkeypatch):
     monkeypatch.setattr(app_module, 'get_db', db_down)
     down = web.get('/health')
     assert down.status_code == 503 and down.get_json()['database'] == 'unreachable'
+
+
+def test_server_errors_are_not_leaked_to_the_client(monkeypatch, caplog):
+    import handlers.auth
+    create_user('alice')
+    alice = connect_as('alice')
+
+    def broken_db(*_a, **_k):
+        raise RuntimeError('relation "users" does not exist at db-host.internal:5432')
+    monkeypatch.setattr(handlers.auth, 'get_db', broken_db)
+    alice.emit('update_profile', {'screenname': 'Alice', 'bio': ''})
+    result = events(alice, 'update_profile_result')[0]
+    assert result == {'success': False, 'msg': '服务器错误，请稍后再试'}
+    # ...but the details, with a traceback, are logged (and forwarded to Sentry in production)
+    record = next(r for r in caplog.records if 'update_profile error' in r.getMessage())
+    assert record.exc_info and 'db-host.internal' in record.getMessage()

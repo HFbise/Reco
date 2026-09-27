@@ -69,6 +69,6 @@ def send_push(tokens: list, title: str, body: str, data: dict = None):
             )
             _req.urlopen(req, timeout=5)
         except Exception as e:
-            log.error('push error: %s', e)
+            log.exception('push error: %s', e)
 
     threading.Thread(target=_worker, daemon=True).start()

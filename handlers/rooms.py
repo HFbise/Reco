@@ -11,7 +11,7 @@ from state import (
     online_users, rooms_voice, rooms_stream,
     emit_system_msg, LOBBY,
 )
-from utils import hash_password, verify_password
+from utils import hash_password, verify_password, SERVER_ERROR
 from auth_session import authenticated, in_room, dm_participants
 import moderation
 
@@ -112,8 +112,8 @@ def handle_create_room(username, data):
             socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username},
                           to=sid)
     except Exception as e:
-        log.error('create_room error: %s', e)
-        emit('create_room_result', {'success': False, 'msg': str(e)})
+        log.exception('create_room error: %s', e)
+        emit('create_room_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('join')
@@ -225,8 +225,8 @@ def handle_join(username, data):
             emit('stream_start', {'username': uname, 'screenname': sname, 'room': room})
 
     except Exception as e:
-        log.error('join error: %s', e)
-        emit('join_result', {'success': False, 'msg': str(e)})
+        log.exception('join error: %s', e)
+        emit('join_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('leave_room')
@@ -264,8 +264,8 @@ def handle_leave_room(username, data):
         emit('leave_room_result', {'success': True, 'room': room})
         emit_system_msg(room, f'{leaver_screen} 离开了房间')
     except Exception as e:
-        log.error('leave_room error: %s', e)
-        emit('leave_room_result', {'success': False, 'msg': str(e)})
+        log.exception('leave_room error: %s', e)
+        emit('leave_room_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('get_rooms')
@@ -288,7 +288,7 @@ def handle_get_rooms(username, data):
             rooms.insert(0, lobby)
         emit('rooms_list', {'rooms': rooms})
     except Exception as e:
-        log.error('get_rooms error: %s', e)
+        log.exception('get_rooms error: %s', e)
         emit('rooms_list', {'rooms': []})
 
 
@@ -309,7 +309,7 @@ def handle_get_members(_username, data):
             members = _build_members_data(cur, room_data)
         emit('members_list', {'members': members})
     except Exception as e:
-        log.error('get_members error: %s', e)
+        log.exception('get_members error: %s', e)
         emit('members_list', {'members': []})
 
 
@@ -326,8 +326,8 @@ def handle_kick_member(requester, data):
         moderation.kick(room, target)
         emit('kick_result', {'success': True})
     except Exception as e:
-        log.error('kick_member error: %s', e)
-        emit('kick_result', {'success': False, 'msg': str(e)})
+        log.exception('kick_member error: %s', e)
+        emit('kick_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('set_admin')
@@ -370,8 +370,8 @@ def handle_set_admin(requester, data):
         emit('set_admin_result', {'success': True, 'target': data['target'], 'remove': remove})
         emit_system_msg(data['room'], action)
     except Exception as e:
-        log.error('set_admin error: %s', e)
-        emit('set_admin_result', {'success': False, 'msg': str(e)})
+        log.exception('set_admin error: %s', e)
+        emit('set_admin_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('set_room_password')
@@ -393,8 +393,8 @@ def handle_set_room_password(requester, data):
         emit('set_room_password_result', {'success': True})
         socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
     except Exception as e:
-        log.error('set_room_password error: %s', e)
-        emit('set_room_password_result', {'success': False, 'msg': str(e)})
+        log.exception('set_room_password error: %s', e)
+        emit('set_room_password_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('close_room')
@@ -420,7 +420,7 @@ def handle_close_room(requester, data):
             conn.commit()
         close_room(data['room'])
     except Exception as e:
-        log.error('close_room error: %s', e)
+        log.exception('close_room error: %s', e)
 
 
 @socketio.on('find_room')
@@ -442,8 +442,8 @@ def handle_find_room(username, data):
             'needs_password': _needs_password(username, room, invited), 'code': room['code'],
         })
     except Exception as e:
-        log.error('find_room error: %s', e)
-        emit('find_room_result', {'success': False, 'msg': str(e)})
+        log.exception('find_room error: %s', e)
+        emit('find_room_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('room_subscribe')
@@ -463,7 +463,7 @@ def handle_room_subscribe(username, data):
         if row and username in (row['members'] or []) and username not in (row['kicked'] or []):
             join_room(room)
     except Exception as e:
-        log.error('room_subscribe error: %s', e)
+        log.exception('room_subscribe error: %s', e)
 
 
 @socketio.on('get_my_admin_rooms')
@@ -479,7 +479,7 @@ def handle_get_my_admin_rooms(username, data):
             rooms = [{'name': r['name'], 'code': r.get('code') or ''} for r in cur.fetchall()]
         emit('my_admin_rooms', {'rooms': rooms})
     except Exception as e:
-        log.error('get_my_admin_rooms error: %s', e)
+        log.exception('get_my_admin_rooms error: %s', e)
         emit('my_admin_rooms', {'rooms': []})
 
 
@@ -535,8 +535,8 @@ def handle_invite_to_room(inviter, data):
                 socketio.emit('message', msg_data, to=sid)
         emit('invite_sent', {'success': True})
     except Exception as e:
-        log.error('invite_to_room error: %s', e)
-        emit('invite_sent', {'success': False, 'msg': str(e)})
+        log.exception('invite_to_room error: %s', e)
+        emit('invite_sent', {'success': False, 'msg': SERVER_ERROR})
 
 
 # ── Text mute ─────────────────────────────────────────────────
@@ -584,7 +584,7 @@ def handle_report_user(reporter, data):
             conn.commit()
         emit('report_result', {'success': True})
     except Exception as e:
-        log.error('report_user error: %s', e)
+        log.exception('report_user error: %s', e)
         emit('report_result', {'success': False})
 
 
@@ -604,7 +604,7 @@ def handle_block_user(blocker, data):
             conn.commit()
         emit('block_result', {'success': True, 'blocked': blocked})
     except Exception as e:
-        log.error('block_user error: %s', e)
+        log.exception('block_user error: %s', e)
         emit('block_result', {'success': False})
 
 
@@ -622,7 +622,7 @@ def handle_unblock_user(blocker, data):
             conn.commit()
         emit('unblock_result', {'success': True, 'unblocked': blocked})
     except Exception as e:
-        log.error('unblock_user error: %s', e)
+        log.exception('unblock_user error: %s', e)
         emit('unblock_result', {'success': False})
 
 
@@ -636,5 +636,5 @@ def handle_get_blocked_users(username, data):
             rows = cur.fetchall()
         emit('blocked_users_list', {'users': [r['blocked'] for r in rows]})
     except Exception as e:
-        log.error('get_blocked_users error: %s', e)
+        log.exception('get_blocked_users error: %s', e)
         emit('blocked_users_list', {'users': []})

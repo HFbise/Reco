@@ -4,7 +4,7 @@ from flask_socketio import emit
 from extensions import socketio
 from db import get_db
 from state import check_login_rate, record_login_fail, reset_login_attempts
-from utils import hash_password, verify_password, SECURITY_QUESTIONS
+from utils import hash_password, verify_password, SECURITY_QUESTIONS, SERVER_ERROR
 from auth_session import make_token, bind, unbind, authenticated
 from moderation import USERNAME_RE, RESERVED_USERNAMES, delete_account
 
@@ -51,8 +51,8 @@ def handle_register(data):
             conn.commit()
         emit('register_result', {'success': True})
     except Exception as e:
-        log.error('register error: %s', e)
-        emit('register_result', {'success': False, 'msg': str(e)})
+        log.exception('register error: %s', e)
+        emit('register_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('login')
@@ -97,8 +97,8 @@ def handle_login(data):
             'avatar_color': user.get('avatar_color') or '#5865F2',
         })
     except Exception as e:
-        log.error('login error: %s', e)
-        emit('login_result', {'success': False, 'msg': str(e)})
+        log.exception('login error: %s', e)
+        emit('login_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('get_profile')
@@ -123,7 +123,7 @@ def handle_get_profile(_username, data):
             'avatar_color': user.get('avatar_color') or '#5865F2',
         })
     except Exception as e:
-        log.error('get_profile error: %s', e)
+        log.exception('get_profile error: %s', e)
         emit('profile_result', {'success': False})
 
 
@@ -144,8 +144,8 @@ def handle_update_profile(username, data):
             conn.commit()
         emit('update_profile_result', {'success': True, 'screenname': screenname, 'bio': bio})
     except Exception as e:
-        log.error('update_profile error: %s', e)
-        emit('update_profile_result', {'success': False, 'msg': str(e)})
+        log.exception('update_profile error: %s', e)
+        emit('update_profile_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('change_password')
@@ -168,8 +168,8 @@ def handle_change_password(username, data):
             conn.commit()
         emit('change_password_result', {'success': True, 'token': make_token(username, new_hash)})
     except Exception as e:
-        log.error('change_password error: %s', e)
-        emit('change_password_result', {'success': False, 'msg': str(e)})
+        log.exception('change_password error: %s', e)
+        emit('change_password_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('get_security_question')
@@ -185,8 +185,8 @@ def handle_get_security_question(data):
             return
         emit('security_question_result', {'success': True, 'question': user['security_question']})
     except Exception as e:
-        log.error('get_security_question error: %s', e)
-        emit('security_question_result', {'success': False, 'msg': str(e)})
+        log.exception('get_security_question error: %s', e)
+        emit('security_question_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('reset_password')
@@ -221,8 +221,8 @@ def handle_reset_password(data):
             conn.commit()
         emit('reset_password_result', {'success': True})
     except Exception as e:
-        log.error('reset_password error: %s', e)
-        emit('reset_password_result', {'success': False, 'msg': str(e)})
+        log.exception('reset_password error: %s', e)
+        emit('reset_password_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('get_questions_list')
@@ -245,8 +245,8 @@ def handle_save_avatar(username, data):
             conn.commit()
         emit('save_avatar_result', {'success': True, 'expression': expression, 'color': color})
     except Exception as e:
-        log.error('save_avatar error: %s', e)
-        emit('save_avatar_result', {'success': False, 'msg': str(e)})
+        log.exception('save_avatar error: %s', e)
+        emit('save_avatar_result', {'success': False, 'msg': SERVER_ERROR})
 
 
 @socketio.on('delete_account')
@@ -273,5 +273,5 @@ def handle_delete_account(username, data):
         unbind(request.sid)
         emit('delete_account_result', {'success': True})
     except Exception as e:
-        log.error('delete_account error: %s', e)
-        emit('delete_account_result', {'success': False, 'msg': str(e)})
+        log.exception('delete_account error: %s', e)
+        emit('delete_account_result', {'success': False, 'msg': SERVER_ERROR})

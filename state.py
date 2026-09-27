@@ -89,4 +89,4 @@ def emit_system_msg(room: str, text: str):
             'system': True,
         }, to=room)
     except Exception as e:
-        log.error('emit_system_msg failed: %s', e)
+        log.exception('emit_system_msg failed: %s', e)

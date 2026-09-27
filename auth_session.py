@@ -16,6 +16,7 @@ import logging
 from flask import request
 from flask_socketio import emit, rooms
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
+import sentry_sdk
 
 from extensions import app, socketio
 from db import get_db
@@ -90,7 +91,11 @@ def authenticated(handler):
         if not username:
             emit('auth_required', {})
             return
-        return handler(username, data if isinstance(data, dict) else {})
+        # Errors reported from this event carry who triggered it and which event it was
+        with sentry_sdk.isolation_scope() as scope:
+            scope.set_tag('socket_event', handler.__name__)
+            scope.set_user({'username': username})
+            return handler(username, data if isinstance(data, dict) else {})
     return wrapper
 
 

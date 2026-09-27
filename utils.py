@@ -1,5 +1,8 @@
 from werkzeug.security import generate_password_hash, check_password_hash
 
+# Shown to users when something fails server-side; details go to logs / Sentry only
+SERVER_ERROR = '服务器错误，请稍后再试'
+
 SECURITY_QUESTIONS = [
     "你的出生城市是？",
     "你的小学名字是？",

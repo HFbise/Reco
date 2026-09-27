@@ -48,7 +48,7 @@ def handle_voice_join(username, data):
             avatar_expression = row.get('avatar_expression') or avatar_expression
             avatar_color = row.get('avatar_color') or avatar_color
     except Exception as e:
-        log.error('voice_join profile error: %s', e)
+        log.exception('voice_join profile error: %s', e)
 
     if moderation.is_restricted(room, username, moderation.VOICE):
         emit('voice_banned', {'target': username, 'room': room})
@@ -160,7 +160,7 @@ def handle_stream_start(username, data):
         if row:
             screenname = row['screenname']
     except Exception as e:
-        log.error('stream_start profile error: %s', e)
+        log.exception('stream_start profile error: %s', e)
     rooms_stream.setdefault(room, {})[username] = screenname
     data['screenname'] = screenname
     _relay('stream_start', username, data, 'username', include_self=False)

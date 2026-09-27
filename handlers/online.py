@@ -18,7 +18,7 @@ def handle_connect(auth=None):
     try:
         username = verify_token(token)
     except Exception as e:
-        log.error('verify_token error: %s', e)
+        log.exception('verify_token error: %s', e)
         return
     if username:
         bind(username)

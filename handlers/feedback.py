@@ -2,6 +2,7 @@ import logging
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
+from utils import SERVER_ERROR
 from auth_session import authenticated
 
 log = logging.getLogger(__name__)
@@ -27,5 +28,5 @@ def handle_submit_feedback(username, data):
             conn.commit()
         emit('feedback_result', {'success': True})
     except Exception as e:
-        log.error('submit_feedback error: %s', e)
-        emit('feedback_result', {'success': False, 'msg': str(e)})
+        log.exception('submit_feedback error: %s', e)
+        emit('feedback_result', {'success': False, 'msg': SERVER_ERROR})

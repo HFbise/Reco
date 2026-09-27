@@ -69,7 +69,7 @@ def health():
         with get_db(timeout=5) as conn:
             conn.cursor().execute('SELECT 1')
     except Exception as e:
-        log.error('health check failed: %s', e)
+        log.exception('health check failed: %s', e)
         return jsonify(status='error', database='unreachable'), 503
     return jsonify(status='ok', database='ok', online_users=len(online_users))
 
@@ -229,7 +229,7 @@ def _migrate():
             )
             conn.commit()
     except Exception as e:
-        log.error('migration failed: %s', e)
+        log.exception('migration failed: %s', e)
 
 
 # Local development only (Werkzeug). Production runs gunicorn via wsgi.py.
