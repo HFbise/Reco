@@ -16,38 +16,37 @@ def handle_get_dms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            # A closed DM stays hidden until a newer message arrives
+            # Exact match on the two name parts ('_' in LIKE is a wildcard, so a
+            # prefix pattern would also match other people's DMs). A closed DM
+            # stays hidden until a newer message arrives.
             cur.execute(
-                'SELECT m.room FROM messages m'
-                " WHERE m.room LIKE 'dm:%%:%%' AND (m.room LIKE %s OR m.room LIKE %s)"
-                ' GROUP BY m.room'
-                ' HAVING MAX(m.created_at) > COALESCE('
-                '   (SELECT c.closed_at FROM dm_closed c WHERE c.username = %s AND c.dm_room = m.room),'
-                "   '-infinity'::timestamptz)",
-                (f'dm:{username}:%', f'dm:%:{username}', username),
+                'SELECT d.room, u.username, u.screenname, u.avatar_expression, u.avatar_color FROM ('
+                '   SELECT m.room, MAX(m.created_at) AS last_at FROM messages m'
+                "   WHERE m.room LIKE 'dm:%%' AND %s IN (split_part(m.room, ':', 2), split_part(m.room, ':', 3))"
+                '   GROUP BY m.room'
+                ' ) d'
+                " JOIN users u ON u.username = CASE WHEN split_part(d.room, ':', 2) = %s"
+                "   THEN split_part(d.room, ':', 3) ELSE split_part(d.room, ':', 2) END"
+                ' LEFT JOIN dm_closed c ON c.username = %s AND c.dm_room = d.room'
+                " WHERE d.last_at > COALESCE(c.closed_at, '-infinity'::timestamptz)"
+                ' ORDER BY d.last_at DESC',
+                (username, username, username),
             )
-            dm_rooms = [r['room'] for r in cur.fetchall()]
-            dms = []
-            for dm_room in dm_rooms:
-                parts = dm_room.split(':')
-                if len(parts) != 3:
-                    continue
-                other = parts[2] if parts[1] == username else parts[1]
-                cur.execute(
-                    'SELECT screenname, avatar_expression, avatar_color FROM users WHERE username = %s', (other,)
-                )
-                other_user = cur.fetchone()
-                if other_user:
-                    dms.append(
-                        {
-                            'dm_room': dm_room,
-                            'other_username': other,
-                            'other_screenname': other_user['screenname'],
-                            'avatar_expression': other_user.get('avatar_expression') or 'Smile',
-                            'avatar_color': other_user.get('avatar_color') or '#5865F2',
-                        }
-                    )
-                join_room(dm_room)
+            rows = cur.fetchall()
+        dms = []
+        for r in rows:
+            if username not in (dm_participants(r['room']) or ()):
+                continue
+            join_room(r['room'])
+            dms.append(
+                {
+                    'dm_room': r['room'],
+                    'other_username': r['username'],
+                    'other_screenname': r['screenname'],
+                    'avatar_expression': r.get('avatar_expression') or 'Smile',
+                    'avatar_color': r.get('avatar_color') or '#5865F2',
+                }
+            )
         emit('dms_list', {'dms': dms})
     except Exception as e:
         log.exception('get_dms error: %s', e)

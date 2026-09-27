@@ -12,26 +12,28 @@ from demo import DEMO_ROOM
 from extensions import socketio
 from handlers.push import send_push, tokens_for
 from state import check_msg_rate, get_level, online_users
+from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
 
 
 MAX_MESSAGE_LEN = 4000
+MAX_REACTION_KINDS = 20  # distinct emoji per message
 
 
 @socketio.on('message')
 @authenticated
 def handle_message(username, data):
-    room = data.get('room', '')
-    text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
+    room = str_field(data, 'room')
+    text = str_field(data, 'text').strip()[:MAX_MESSAGE_LEN]
     # Only sockets that passed the join checks (member / DM participant) are in the room.
     if not text or not in_room(room) or room == DEMO_ROOM:
         return
     if not check_msg_rate(username):
-        emit('message_rate_limited', {})
+        emit('message_rate_limited', {'room': room})
         return
     if moderation.is_muted(room, username):
-        emit('text_muted_notify', {})
+        emit('text_muted_notify', {'room': room})
         return
     participants = dm_participants(room)
     recipient = None
@@ -64,7 +66,10 @@ def handle_message(username, data):
             conn.commit()
         msg['time'] = datetime.now(UTC).isoformat()
     except Exception as e:
+        # Never show a message that wasn't stored: it would vanish on reload
         log.exception('message save error: %s', e)
+        emit('message_failed', {'room': room})
+        return
 
     emit('message', msg, to=room)
 
@@ -119,7 +124,7 @@ def handle_load_older(username, data):
 @socketio.on('recall_message')
 @authenticated
 def handle_recall_message(username, data):
-    msg_id = data.get('id')
+    msg_id = int_field(data, 'id')
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -141,8 +146,8 @@ def handle_recall_message(username, data):
 @socketio.on('edit_message')
 @authenticated
 def handle_edit_message(username, data):
-    msg_id = data.get('id')
-    new_text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
+    msg_id = int_field(data, 'id')
+    new_text = str_field(data, 'text').strip()[:MAX_MESSAGE_LEN]
     if not new_text:
         return
     try:
@@ -163,14 +168,15 @@ def handle_edit_message(username, data):
 @socketio.on('add_reaction')
 @authenticated
 def handle_add_reaction(username, data):
-    msg_id = data.get('id')
-    emoji = data.get('emoji', '').strip()
+    msg_id = int_field(data, 'id')
+    emoji = str_field(data, 'emoji').strip()
     if not msg_id or not emoji or len(emoji) > 16:
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT room, reactions, recalled FROM messages WHERE id = %s', (msg_id,))
+            # Row lock: two reactions arriving together must not overwrite each other
+            cur.execute('SELECT room, reactions, recalled FROM messages WHERE id = %s FOR UPDATE', (msg_id,))
             msg = cur.fetchone()
             # Must be able to see the message to react to it
             if not msg or msg['recalled'] or not in_room(msg['room']) or msg['room'] == DEMO_ROOM:
@@ -180,7 +186,7 @@ def handle_add_reaction(username, data):
             users = list(reactions.get(emoji, []))
             if username in users:
                 users.remove(username)
-            else:
+            elif emoji in reactions or len(reactions) < MAX_REACTION_KINDS:
                 users.append(username)
             if users:
                 reactions[emoji] = users

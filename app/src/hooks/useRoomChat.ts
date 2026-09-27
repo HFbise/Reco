@@ -19,10 +19,13 @@ interface Options {
   name: string;
   /** Password typed by the user when opening a protected room */
   password?: string;
-  onKicked: () => void;
+  /** Removed from the room: kicked by an admin, or the owner closed it */
+  onRemoved: (reason: 'kicked' | 'closed') => void;
   onJoinFailed: (reply: any) => void;
-  onToast: (kind: 'muted' | 'dm-blocked') => void;
+  onToast: (kind: ChatToast) => void;
 }
+
+export type ChatToast = 'muted' | 'dm-blocked' | 'rate-limited' | 'send-failed';
 
 const oldestId = (messages: Message[]) => messages.find((m) => typeof m.id === 'number')?.id;
 
@@ -32,7 +35,7 @@ const oldestId = (messages: Message[]) => messages.find((m) => typeof m.id === '
  * voice. The socket subscription only resets when the room or user changes;
  * callbacks are read through a ref so the latest ones are always used.
  */
-export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }: Options) {
+export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }: Options) {
   const username = useAuthStore((s) => s.currentUser?.username);
   const isDm = name.startsWith('dm:');
 
@@ -43,8 +46,8 @@ export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }:
   const [isTextMuted, setIsTextMuted] = useState(false);
   const [voiceMembers, setVoiceMembers] = useState<VoiceMember[]>([]);
 
-  const callbacks = useRef({ onKicked, onJoinFailed, onToast });
-  callbacks.current = { onKicked, onJoinFailed, onToast };
+  const callbacks = useRef({ onRemoved, onJoinFailed, onToast });
+  callbacks.current = { onRemoved, onJoinFailed, onToast };
   const passwordRef = useRef(password);
   passwordRef.current = password;
 
@@ -131,9 +134,16 @@ export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }:
       room_password_changed: (data) => {
         if (mine(data)) setRoom((r) => ({ ...r, hasPassword: data.has_password }));
       },
-      text_muted_notify: () => {
+      text_muted_notify: (data) => {
+        if (!mine(data)) return;
         setIsTextMuted(true);
         callbacks.current.onToast('muted');
+      },
+      message_rate_limited: (data) => {
+        if (mine(data)) callbacks.current.onToast('rate-limited');
+      },
+      message_failed: (data) => {
+        if (mine(data)) callbacks.current.onToast('send-failed');
       },
       text_muted: (data) => {
         if (mine(data) && data.target === username) setIsTextMuted(true);
@@ -145,7 +155,10 @@ export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }:
         if (mine(data)) callbacks.current.onToast('dm-blocked');
       },
       kicked_from_room: (data) => {
-        if (mine(data)) callbacks.current.onKicked();
+        if (mine(data)) callbacks.current.onRemoved('kicked');
+      },
+      room_closed: (data) => {
+        if (mine(data)) callbacks.current.onRemoved('closed');
       },
       // Who is in voice in THIS room (the app-wide voice session may be elsewhere)
       voice_members_view: (data) => {
@@ -193,6 +206,8 @@ export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }:
   }, []);
   const react = useCallback((id: number, emoji: string) => getSocket().emit('add_reaction', { id, emoji }), []);
   const leave = useCallback(() => getSocket().emit('leave_room', { room: name }), [name]);
+  /** Owner only: delete the room for everyone */
+  const close = useCallback(() => getSocket().emit('close_room', { room: name }), [name]);
 
   /** Set (or clear, with null) the room password; resolves with the server's error text key, if any. */
   const setRoomPassword = useCallback((pw: string | null) => new Promise<any>((resolve) => {
@@ -204,6 +219,6 @@ export function useRoomChat({ name, password, onKicked, onJoinFailed, onToast }:
   return {
     messages, hasOlder, loadingOlder, loadOlder,
     room, isTextMuted, voiceMembers,
-    send, recall, edit, react, leave, setRoomPassword,
+    send, recall, edit, react, leave, close, setRoomPassword,
   };
 }

@@ -3,9 +3,9 @@ import logging
 from flask import request
 from flask_socketio import emit
 
+import voice_state
 from auth_session import bind, new_guest, readable, unbind, verify_token
 from extensions import socketio
-from state import rooms_voice, sid_to_voice
 
 log = logging.getLogger(__name__)
 
@@ -58,10 +58,4 @@ def handle_disconnect(*_args):
     sid = request.sid
     username = unbind(sid)
     match.on_disconnect(username, sid)
-    if sid in sid_to_voice:
-        username, room = sid_to_voice.pop(sid)
-        if room in rooms_voice:
-            rooms_voice[room]['voice_members'] = [
-                m for m in rooms_voice[room]['voice_members'] if m['username'] != username
-            ]
-        socketio.emit('voice_user_left', {'username': username, 'room': room}, to=room)
+    voice_state.leave_sid(sid)

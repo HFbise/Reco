@@ -66,7 +66,15 @@ def clean_state():
         cur.execute(f'TRUNCATE {", ".join(TABLES)} RESTART IDENTITY')
         cur.execute("INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', NULL)")
         conn.commit()
-    for d in (state.online_users, state.login_attempts, state.message_rate, state.rooms_voice, auth_session.sid_users):
+    for d in (
+        state.online_users,
+        state.login_attempts,
+        state.message_rate,
+        state.rooms_voice,
+        state.rooms_stream,
+        state.sid_to_voice,
+        auth_session.sid_users,
+    ):
         d.clear()
     # Matching keeps live state in memory (queue, active matches)
     match_handlers._live.clear()

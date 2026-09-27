@@ -21,12 +21,13 @@ from flask import jsonify, request, send_from_directory
 
 import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
+import voice_state
 from admin import admin_bp
 from auth_session import verify_token
 from db import get_db
 from extensions import app, socketio
 from handlers import match as match_handlers
-from state import LOBBY, online_users, rooms_voice
+from state import LOBBY, online_users
 
 app.register_blueprint(admin_bp)
 
@@ -124,13 +125,13 @@ def api_voice_leave():
         data = json.loads(request.get_data(as_text=True))
     except Exception:
         data = {}
-    username = verify_token(data.get('token', ''))
-    room = data.get('room', '')
-    if username and room and room in rooms_voice:
-        rooms_voice[room]['voice_members'] = [
-            m for m in rooms_voice[room]['voice_members'] if m['username'] != username
-        ]
-        socketio.emit('voice_user_left', {'username': username, 'room': room}, to=room)
+    if not isinstance(data, dict):
+        data = {}
+    # The socket may take a while to time out after the tab closes; this frees the seat now
+    username = verify_token(str(data.get('token') or ''))
+    room = data.get('room')
+    if username and isinstance(room, str):
+        voice_state.remove_user(username, room)
     return '', 204
 
 

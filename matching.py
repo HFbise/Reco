@@ -87,9 +87,10 @@ class MatchQueue:
             self._waiting[ticket.mode].append(ticket)
             return None
 
-    def leave(self, username: str) -> Ticket | None:
+    def leave(self, username: str, sid: str | None = None) -> Ticket | None:
+        """Take `username` out of the queue (only if their waiting socket is `sid`, when given)."""
         with self._lock:
-            return self._remove_locked(username)
+            return self._remove_locked(username, sid)
 
     def waiting(self, mode: str) -> list[Ticket]:
         with self._lock:
@@ -117,10 +118,10 @@ class MatchQueue:
 
     # ── internals (lock held) ──
 
-    def _remove_locked(self, username: str) -> Ticket | None:
+    def _remove_locked(self, username: str, sid: str | None = None) -> Ticket | None:
         for queue in self._waiting.values():
             for t in queue:
-                if t.username == username:
+                if t.username == username and (sid is None or t.sid == sid):
                     queue.remove(t)
                     return t
         return None

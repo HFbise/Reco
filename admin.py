@@ -734,14 +734,7 @@ def recall_message(msg_id):
 def close_room(room_name):
     if room_name == LOBBY:
         return redirect(url_for('admin.rooms'))
-    from extensions import socketio
-
-    with get_db() as conn:
-        cur = conn.cursor()
-        cur.execute('DELETE FROM messages WHERE room = %s', (room_name,))
-        cur.execute('DELETE FROM rooms WHERE name = %s', (room_name,))
-        conn.commit()
-    socketio.emit('room_closed', {}, to=room_name)
+    moderation.close_room(room_name)
     return redirect(url_for('admin.rooms'))
 
 

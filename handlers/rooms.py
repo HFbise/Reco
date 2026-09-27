@@ -4,24 +4,18 @@ import random
 import string
 from datetime import UTC, datetime
 
-from flask_socketio import close_room, emit, join_room
+from flask_socketio import emit, join_room
 
 import history
 import moderation
+import voice_state
 from auth_session import authenticated, dm_participants, in_room, is_guest, readable
 from db import get_db
 from demo import DEMO_ROOM
 from extensions import socketio
 from replies import fail
-from state import (
-    LOBBY,
-    emit_system_msg,
-    get_level,
-    online_users,
-    rooms_stream,
-    rooms_voice,
-)
-from utils import hash_password, verify_password
+from state import LOBBY, check_msg_rate, emit_system_msg, get_level, online_users
+from utils import hash_password, int_field, str_field, verify_password
 
 log = logging.getLogger(__name__)
 
@@ -64,17 +58,7 @@ def _build_members_data(cur, room_data: dict) -> list:
 
 
 MAX_ROOM_NAME_LEN = 32
-
-
-def _levels(room: str, requester: str, target: str):
-    """(requester_level, target_level) in `room`, or None if it doesn't exist."""
-    with get_db() as conn:
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
-        room_data = cur.fetchone()
-    if not room_data:
-        return None
-    return get_level(requester, room_data), get_level(target, room_data)
+MAX_REPORT_LEN = 500
 
 
 def _needs_password(username: str, room_data: dict, invited: bool = False) -> bool:
@@ -164,12 +148,19 @@ def handle_join(username, data):
                 conn.commit()
 
             join_room(room)
-            members = list(room_data['members'] or [])
-            is_first_join = username not in members and room != DEMO_ROOM
-            if is_first_join:
-                members.append(username)
-                cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
+            is_first_join = False
+            if room != DEMO_ROOM and username not in (room_data['members'] or []):
+                # Atomic append: two people joining at once must not overwrite each other
+                cur.execute(
+                    'UPDATE rooms SET members = array_append(members, %s)'
+                    ' WHERE name = %s AND NOT (%s = ANY(COALESCE(members, ARRAY[]::text[]))) RETURNING members',
+                    (username, room, username),
+                )
+                row = cur.fetchone()
                 conn.commit()
+                if row:
+                    is_first_join = True
+                    room_data['members'] = row['members']
 
             my_level = get_level(username, room_data)
             owner = room_data.get('owner') or ''
@@ -215,16 +206,16 @@ def handle_join(username, data):
         if is_first_join:
             emit_system_msg(room, 'user_joined', name=joiner_screen)
 
-        if room in rooms_voice and rooms_voice[room].get('voice_members'):
+        if voice_state.members(room):
             emit(
                 'voice_members_view',
                 {
-                    'members': rooms_voice[room]['voice_members'],
+                    'members': voice_state.members(room),
                     'banned': moderation.restricted_users(room, moderation.VOICE),
                     'room': room,
                 },
             )
-        for uname, sname in rooms_stream.get(room, {}).items():
+        for uname, sname in voice_state.streams(room).items():
             emit('stream_start', {'username': uname, 'screenname': sname, 'room': room})
 
     except Exception as e:
@@ -242,30 +233,25 @@ def handle_leave_room(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT members, admins FROM rooms WHERE name = %s', (room,))
+            cur.execute('SELECT members FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
             if not room_data:
                 fail('leave_room_result', 'room_not_found')
                 return
-            members = list(room_data['members'] or [])
-            admins = list(room_data['admins'] or [])
-            changed = False
-            if username in members:
-                members.remove(username)
-                cur.execute('UPDATE rooms SET members = %s WHERE name = %s', (members, room))
-                changed = True
-            if username in admins:
-                admins.remove(username)
-                cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, room))
-                changed = True
-            if changed:
-                conn.commit()
+            was_member = username in (room_data['members'] or [])
+            cur.execute(
+                'UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s) WHERE name = %s',
+                (username, username, room),
+            )
+            conn.commit()
             cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
             row = cur.fetchone()
             leaver_screen = row['screenname'] if row else username
+        voice_state.remove_user(username, room)
         moderation.evict(username, room)
         emit('leave_room_result', {'success': True, 'room': room})
-        emit_system_msg(room, 'user_left', name=leaver_screen)
+        if was_member:
+            emit_system_msg(room, 'user_left', name=leaver_screen)
     except Exception as e:
         log.exception('leave_room error: %s', e)
         fail('leave_room_result', 'server_error')
@@ -308,32 +294,29 @@ def handle_get_rooms(username, data):
 @socketio.on('get_members')
 @readable
 def handle_get_members(_username, data):
-    if not in_room(data.get('room')):
-        emit('members_list', {'members': []})
+    room = data.get('room')
+    if not in_room(room):
+        emit('members_list', {'room': room, 'members': []})
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
+            cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
-            if not room_data:
-                emit('members_list', {'members': []})
-                return
-            members = _build_members_data(cur, room_data)
-        emit('members_list', {'members': members})
+            members = _build_members_data(cur, room_data) if room_data else []
+        emit('members_list', {'room': room, 'members': members})
     except Exception as e:
         log.exception('get_members error: %s', e)
-        emit('members_list', {'members': []})
+        emit('members_list', {'room': room, 'members': []})
 
 
 @socketio.on('kick_member')
 @authenticated
 def handle_kick_member(requester, data):
-    target = data.get('target', '')
-    room = data.get('room', '')
+    target = str_field(data, 'target')
+    room = str_field(data, 'room')
     try:
-        levels = _levels(room, requester, target)
-        if not levels or levels[0] < 1 or levels[0] <= levels[1]:
+        if not moderation.can_moderate(room, requester, target):
             fail('kick_result', 'no_permission')
             return
         moderation.kick(room, target)
@@ -346,39 +329,33 @@ def handle_kick_member(requester, data):
 @socketio.on('set_admin')
 @authenticated
 def handle_set_admin(requester, data):
+    room, target = str_field(data, 'room'), str_field(data, 'target')
+    remove = bool(data.get('remove'))
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
+            cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
-            if not room_data:
+            if not room_data or get_level(requester, room_data) < 2 or get_level(target, room_data) >= 2:
                 fail('set_admin_result', 'no_permission')
                 return
-            req_level = get_level(requester, room_data)
-            tgt_level = get_level(data['target'], room_data)
-            remove = data.get('remove', False)
-            if req_level < 2 or tgt_level >= 2:
-                fail('set_admin_result', 'no_permission')
-                return
-            if data['target'] not in (room_data['members'] or []):
+            if target not in (room_data['members'] or []):
                 fail('set_admin_result', 'user_not_in_room')
                 return
-            admins = list(room_data['admins'] or [])
             if remove:
-                if data['target'] in admins:
-                    admins.remove(data['target'])
-                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
-                    conn.commit()
+                cur.execute('UPDATE rooms SET admins = array_remove(admins, %s) WHERE name = %s', (target, room))
             else:
-                if data['target'] not in admins:
-                    admins.append(data['target'])
-                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
-                    conn.commit()
-            cur.execute('SELECT screenname FROM users WHERE username = %s', (data['target'],))
+                cur.execute(
+                    'UPDATE rooms SET admins = array_append(admins, %s)'
+                    ' WHERE name = %s AND NOT (%s = ANY(COALESCE(admins, ARRAY[]::text[])))',
+                    (target, room, target),
+                )
+            conn.commit()
+            cur.execute('SELECT screenname FROM users WHERE username = %s', (target,))
             row = cur.fetchone()
-            target_screen = row['screenname'] if row else data['target']
-        emit('set_admin_result', {'success': True, 'target': data['target'], 'remove': remove})
-        emit_system_msg(data['room'], 'admin_removed' if remove else 'admin_added', name=target_screen)
+            target_screen = row['screenname'] if row else target
+        emit('set_admin_result', {'success': True, 'target': target, 'remove': remove})
+        emit_system_msg(room, 'admin_removed' if remove else 'admin_added', name=target_screen)
     except Exception as e:
         log.exception('set_admin error: %s', e)
         fail('set_admin_result', 'server_error')
@@ -387,8 +364,8 @@ def handle_set_admin(requester, data):
 @socketio.on('set_room_password')
 @authenticated
 def handle_set_room_password(requester, data):
-    room = data.get('room', '')
-    password = data.get('password') or None
+    room = str_field(data, 'room')
+    password = str_field(data, 'password').strip() or None
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -411,42 +388,31 @@ def handle_set_room_password(requester, data):
 @socketio.on('close_room')
 @authenticated
 def handle_close_room(requester, data):
-    if data.get('room') == LOBBY:
+    room = str_field(data, 'room')
+    if not room or room == LOBBY:
         return
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
+            cur.execute('SELECT owner FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
-            if not room_data or get_level(requester, room_data) < 2:
-                fail('close_room_result', 'no_permission')
-                return
-            emit(
-                'message',
-                {
-                    'screenname': '系统',
-                    'text': '房间已被关闭',
-                    'system': True,
-                    'room': data['room'],
-                    'meta': {'system': {'code': 'room_closed', 'params': {}}},
-                },
-                to=data['room'],
-            )
-            emit('room_closed', {}, to=data['room'])
-            cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
-            cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))
-            cur.execute('DELETE FROM room_invites WHERE room = %s', (data['room'],))
-            cur.execute('DELETE FROM room_restrictions WHERE room = %s', (data['room'],))
-            conn.commit()
-        close_room(data['room'])
+        if not room_data or get_level(requester, room_data) < 2:
+            fail('close_room_result', 'no_permission')
+            return
+        moderation.close_room(room)
+        emit('close_room_result', {'success': True, 'room': room})
     except Exception as e:
         log.exception('close_room error: %s', e)
+        fail('close_room_result', 'server_error')
 
 
 @socketio.on('find_room')
 @authenticated
 def handle_find_room(username, data):
-    code = data.get('code', '').strip()
+    code = str_field(data, 'code').strip()
+    if not check_msg_rate(f'find_room:{username}', max_msgs=10, window=60):
+        fail('find_room_result', 'too_many_attempts', {'secs': 60})
+        return
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -568,27 +534,17 @@ def handle_invite_to_room(inviter, data):
 @socketio.on('text_mute')
 @authenticated
 def handle_text_mute(requester, data):
-    room, target = data.get('room', ''), data.get('target', '')
-    try:
-        levels = _levels(room, requester, target)
-    except Exception:
-        return
-    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
-        return
-    moderation.mute(room, target, int(data.get('duration_seconds', 0)))
+    room, target = str_field(data, 'room'), str_field(data, 'target')
+    if moderation.can_moderate(room, requester, target):
+        moderation.mute(room, target, int_field(data, 'duration_seconds'))
 
 
 @socketio.on('text_unmute')
 @authenticated
 def handle_text_unmute(requester, data):
-    room, target = data.get('room', ''), data.get('target', '')
-    try:
-        levels = _levels(room, requester, target)
-    except Exception:
-        return
-    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
-        return
-    moderation.unmute(room, target)
+    room, target = str_field(data, 'room'), str_field(data, 'target')
+    if moderation.can_moderate(room, requester, target):
+        moderation.unmute(room, target)
 
 
 # ── Block / Report ────────────────────────────────────────────
@@ -597,9 +553,9 @@ def handle_text_unmute(requester, data):
 @socketio.on('report_user')
 @authenticated
 def handle_report_user(reporter, data):
-    reported = data.get('reported', '')
-    reason = data.get('reason', '').strip()
-    if not reporter or not reported or reporter == reported:
+    reported = str_field(data, 'reported')
+    reason = str_field(data, 'reason').strip()[:MAX_REPORT_LEN]
+    if not reported or reporter == reported:
         return
     try:
         with get_db() as conn:
@@ -617,8 +573,8 @@ def handle_report_user(reporter, data):
 @socketio.on('block_user')
 @authenticated
 def handle_block_user(blocker, data):
-    blocked = data.get('blocked', '')
-    if not blocker or not blocked or blocker == blocked:
+    blocked = str_field(data, 'blocked')
+    if not blocked or blocker == blocked:
         return
     try:
         with get_db() as conn:
@@ -636,8 +592,8 @@ def handle_block_user(blocker, data):
 @socketio.on('unblock_user')
 @authenticated
 def handle_unblock_user(blocker, data):
-    blocked = data.get('blocked', '')
-    if not blocker or not blocked:
+    blocked = str_field(data, 'blocked')
+    if not blocked:
         return
     try:
         with get_db() as conn:

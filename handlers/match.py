@@ -160,9 +160,7 @@ def _mine(username: str) -> Side | None:
 def on_disconnect(username: str | None, sid: str):
     if not username:
         return
-    ticket = queue.leave(username)
-    if ticket and ticket.sid != sid:
-        queue.join(ticket)  # a different tab of theirs is the one waiting
+    queue.leave(username, sid=sid)  # only if this socket is the one waiting
     side = _live.get(username)
     if side and side.sid == sid:
         _end(username, 'disconnected')

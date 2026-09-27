@@ -17,7 +17,7 @@ import secrets
 
 import sentry_sdk
 from flask import request
-from flask_socketio import emit, rooms
+from flask_socketio import emit, join_room, rooms
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from db import get_db
@@ -36,6 +36,10 @@ GUEST_PREFIX = 'guest:'
 _serializer = URLSafeTimedSerializer(app.config['SECRET_KEY'], salt='socket-auth')
 
 sid_users: dict = {}  # { sid: username }
+
+# Socket.IO room holding every signed-in (non-guest) socket. Presence changes go
+# only here: guests and signed-out sockets must not learn who is online.
+MEMBERS_ROOM = 'members'
 
 
 def _pw_fingerprint(password_hash: str) -> str:
@@ -84,24 +88,39 @@ def verify_token(token: str):
 def bind(username: str):
     """Attach `username` to the current socket and mark it online (guests stay invisible)."""
     sid = request.sid
+    if sid_users.get(sid) not in (None, username):
+        unbind(sid)  # this socket was signed in as someone else
     sid_users[sid] = username
     if is_guest(username):
         return
+    join_room(MEMBERS_ROOM)
     was_online = username in online_users
     online_users.setdefault(username, set()).add(sid)
     if not was_online:
-        socketio.emit('online_status_changed', {'username': username, 'online': True})
+        socketio.emit('online_status_changed', {'username': username, 'online': True}, to=MEMBERS_ROOM)
 
 
 def unbind(sid: str):
     """Detach the socket; returns the username it belonged to (or None)."""
     username = sid_users.pop(sid, None)
+    socketio.server.leave_room(sid, MEMBERS_ROOM, namespace='/')
     if username and username in online_users:
         online_users[username].discard(sid)
         if not online_users[username]:
             del online_users[username]
-            socketio.emit('online_status_changed', {'username': username, 'online': False})
+            socketio.emit('online_status_changed', {'username': username, 'online': False}, to=MEMBERS_ROOM)
     return username
+
+
+def end_sessions(username: str, keep_sid: str | None = None):
+    """Sign out every live socket of `username` (except `keep_sid`): used when the
+    password changes or the account is renamed or deleted, since their tokens no
+    longer verify and they must not keep acting as that user until they reconnect."""
+    for sid in list(online_users.get(username, [])):
+        if sid == keep_sid:
+            continue
+        socketio.emit('session_expired', {}, to=sid)
+        unbind(sid)
 
 
 def current_user():

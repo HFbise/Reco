@@ -4,41 +4,17 @@ from flask import request
 from flask_socketio import emit
 
 import moderation
+import voice_state
 from auth_session import authenticated, in_room
 from db import get_db
 from extensions import socketio
-from state import get_level, rooms_stream, rooms_voice, sid_to_voice
+from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
 
 
-def _relay(event: str, username: str, data: dict, sender_key: str, **kwargs):
-    """Forward a signaling/status event to the room, stamping the real sender."""
-    room = data.get('room')
-    if not in_room(room):
-        return
-    data[sender_key] = username
-    emit(event, data, to=room, **kwargs)
-
-
-def _room_levels(room: str, requester: str, target: str):
-    """(requester_level, target_level), or None if the room doesn't exist."""
-    with get_db() as conn:
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
-        room_data = cur.fetchone()
-    if not room_data:
-        return None
-    return get_level(requester, room_data), get_level(target, room_data)
-
-
-@socketio.on('voice_join')
-@authenticated
-def handle_voice_join(username, data):
-    room = data.get('room')
-    if not in_room(room):
-        return
-    screenname, avatar_expression, avatar_color = username, 'Smile', '#5865F2'
+def _profile(username: str) -> dict:
+    member = {'username': username, 'screenname': username, 'avatar_expression': 'Smile', 'avatar_color': '#5865F2'}
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -47,154 +23,135 @@ def handle_voice_join(username, data):
             )
             row = cur.fetchone()
         if row:
-            screenname = row['screenname']
-            avatar_expression = row.get('avatar_expression') or avatar_expression
-            avatar_color = row.get('avatar_color') or avatar_color
+            member['screenname'] = row['screenname']
+            member['avatar_expression'] = row.get('avatar_expression') or member['avatar_expression']
+            member['avatar_color'] = row.get('avatar_color') or member['avatar_color']
     except Exception as e:
-        log.exception('voice_join profile error: %s', e)
+        log.exception('voice profile error: %s', e)
+    return member
 
+
+def _to_peer(event: str, username: str, data: dict):
+    """WebRTC signaling goes only to the peer it's for. Offers and ICE candidates
+    contain network addresses, so they must not be broadcast to the whole room."""
+    room, target = data.get('room'), data.get('to')
+    if not in_room(room) or request.sid not in voice_state.sids(username, room):
+        return
+    data['from'] = username
+    for sid in voice_state.sids(target, room):
+        emit(event, data, to=sid)
+
+
+def _to_room(event: str, username: str, data: dict, include_self: bool = True):
+    """Voice status (mute, speaking, streams) for everyone in the room, stamped with the real sender."""
+    room = data.get('room')
+    if not in_room(room):
+        return
+    data['username'] = username
+    emit(event, data, to=room, include_self=include_self)
+
+
+@socketio.on('voice_join')
+@authenticated
+def handle_voice_join(username, data):
+    room = data.get('room')
+    if not in_room(room):
+        return
     if moderation.is_restricted(room, username, moderation.VOICE):
         emit('voice_banned', {'target': username, 'room': room})
         return
-    rooms_voice.setdefault(room, {'voice_members': []})
-
-    if not any(m['username'] == username for m in rooms_voice[room]['voice_members']):
-        rooms_voice[room]['voice_members'].append(
-            {
-                'username': username,
-                'screenname': screenname,
-                'avatar_expression': avatar_expression,
-                'avatar_color': avatar_color,
-            }
-        )
-    sid_to_voice[request.sid] = (username, room)
-    emit(
-        'voice_user_joined',
-        {
-            'username': username,
-            'screenname': screenname,
-            'avatar_expression': avatar_expression,
-            'avatar_color': avatar_color,
-            'room': room,
-        },
-        to=room,
-    )
-    emit('voice_current_members', {'members': rooms_voice[room]['voice_members']})
+    member = _profile(username)
+    voice_state.join(request.sid, room, member)
+    emit('voice_user_joined', {**member, 'room': room}, to=room)
+    emit('voice_current_members', {'members': voice_state.members(room)})
 
 
 @socketio.on('voice_leave')
 @authenticated
 def handle_voice_leave(username, data):
-    room = data.get('room')
-    if room in rooms_voice:
-        rooms_voice[room]['voice_members'] = [
-            m for m in rooms_voice[room]['voice_members'] if m['username'] != username
-        ]
-    sid_to_voice.pop(request.sid, None)
-    if room:
-        emit('voice_user_left', {'username': username, 'room': room}, to=room)
+    voice_state.leave_sid(request.sid)
 
 
 @socketio.on('voice_offer')
 @authenticated
 def handle_voice_offer(username, data):
-    _relay('voice_offer', username, data, 'from')
+    _to_peer('voice_offer', username, data)
 
 
 @socketio.on('voice_answer')
 @authenticated
 def handle_voice_answer(username, data):
-    _relay('voice_answer', username, data, 'from')
+    _to_peer('voice_answer', username, data)
 
 
 @socketio.on('voice_ice')
 @authenticated
 def handle_voice_ice(username, data):
-    _relay('voice_ice', username, data, 'from')
+    _to_peer('voice_ice', username, data)
 
 
 @socketio.on('voice_mute_status')
 @authenticated
 def handle_voice_mute(username, data):
-    _relay('voice_mute_status', username, data, 'username')
+    _to_room('voice_mute_status', username, data)
 
 
 @socketio.on('voice_speaking')
 @authenticated
 def handle_voice_speaking(username, data):
-    _relay('voice_speaking', username, data, 'username')
+    _to_room('voice_speaking', username, data)
 
 
 @socketio.on('ping_check')
-def handle_ping_check(data):
+def handle_ping_check(data=None):
     emit('pong_check', data)
 
 
 @socketio.on('voice_ban')
 @authenticated
 def handle_voice_ban(requester, data):
-    room = data.get('room')
-    target = data.get('target')
-    try:
-        levels = _room_levels(room, requester, target)
-    except Exception:
-        return
-    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
-        return
-    moderation.restrict(room, target, moderation.VOICE, int(data.get('duration_seconds', 0)))
+    room, target = str_field(data, 'room'), str_field(data, 'target')
+    if moderation.can_moderate(room, requester, target):
+        moderation.restrict(room, target, moderation.VOICE, int_field(data, 'duration_seconds'))
 
 
 @socketio.on('voice_unban')
 @authenticated
 def handle_voice_unban(requester, data):
-    room = data.get('room')
-    target = data.get('target')
-    try:
-        levels = _room_levels(room, requester, target)
-    except Exception:
-        return
-    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
-        return
-    moderation.lift(room, target, moderation.VOICE)
+    room, target = str_field(data, 'room'), str_field(data, 'target')
+    if moderation.can_moderate(room, requester, target):
+        moderation.lift(room, target, moderation.VOICE)
 
 
 @socketio.on('stream_start')
 @authenticated
 def handle_stream_start(username, data):
     room = data.get('room')
-    if not in_room(room):
+    # Only someone in the voice channel can share: viewers receive it over the voice connections
+    if not in_room(room) or request.sid not in voice_state.sids(username, room):
         return
-    screenname = username
-    try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
-            row = cur.fetchone()
-        if row:
-            screenname = row['screenname']
-    except Exception as e:
-        log.exception('stream_start profile error: %s', e)
-    rooms_stream.setdefault(room, {})[username] = screenname
+    screenname = _profile(username)['screenname']
+    voice_state.start_stream(room, username, screenname)
     data['screenname'] = screenname
-    _relay('stream_start', username, data, 'username', include_self=False)
+    _to_room('stream_start', username, data, include_self=False)
 
 
 @socketio.on('stream_stop')
 @authenticated
 def handle_stream_stop(username, data):
     room = data.get('room')
-    if room:
-        rooms_stream.get(room, {}).pop(username, None)
-    _relay('stream_stop', username, data, 'username', include_self=False)
+    if in_room(room):
+        voice_state.stop_stream(room, username)
+    _to_room('stream_stop', username, data, include_self=False)
 
 
 @socketio.on('stream_audio_start')
 @authenticated
 def handle_stream_audio_start(username, data):
-    _relay('stream_audio_start', username, data, 'username', include_self=False)
+    _to_room('stream_audio_start', username, data, include_self=False)
 
 
 @socketio.on('stream_audio_stop')
 @authenticated
 def handle_stream_audio_stop(username, data):
-    _relay('stream_audio_stop', username, data, 'username', include_self=False)
+    _to_room('stream_audio_stop', username, data, include_self=False)

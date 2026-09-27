@@ -283,6 +283,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     socket.on('join_dm_result', onJoinDmResult);
     socket.on('leave_room_result', onLeaveRoomResult);
     socket.on('kicked_from_room', onKickedFromRoom);
+    socket.on('room_closed', onKickedFromRoom);
     socket.on('message', onMessage);
 
     return () => {
@@ -299,6 +300,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       socket.off('join_dm_result', onJoinDmResult);
       socket.off('leave_room_result', onLeaveRoomResult);
       socket.off('kicked_from_room', onKickedFromRoom);
+      socket.off('room_closed', onKickedFromRoom);
       socket.off('message', onMessage);
     };
   }, [currentUser, setBlocked, t]);

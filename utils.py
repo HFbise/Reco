@@ -1,3 +1,5 @@
+import hmac
+
 from werkzeug.security import check_password_hash, generate_password_hash
 
 # Stored as ids; clients show them in the user's language (i18n keys `secq-<id>`).
@@ -34,4 +36,17 @@ def verify_password(stored: str, provided: str):
     """Returns (ok, needs_migrate). Supports lazy migration from plaintext."""
     if stored.startswith('pbkdf2:') or stored.startswith('scrypt:'):
         return check_password_hash(stored, provided), False
-    return stored == provided, stored == provided
+    ok = hmac.compare_digest(stored.encode(), provided.encode())
+    return ok, ok
+
+
+def str_field(data, key: str) -> str:
+    """data[key] if it is a string, else ''. Event payloads come straight from
+    clients, so anything may be missing or of the wrong type."""
+    value = data.get(key) if isinstance(data, dict) else None
+    return value if isinstance(value, str) else ''
+
+
+def int_field(data, key: str, default: int = 0) -> int:
+    value = data.get(key) if isinstance(data, dict) else None
+    return value if isinstance(value, int) and not isinstance(value, bool) else default

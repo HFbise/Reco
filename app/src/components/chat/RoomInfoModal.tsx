@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Modal, Platform } from 'react-native';
+import { showAlert } from '../../lib/alert';
+import { LOBBY_ID } from '../../lib/i18n';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import type { RoomInfo } from '../../hooks/useRoomChat';
@@ -11,18 +13,27 @@ interface Props {
   room: RoomInfo;
   onClose: () => void;
   onLeave: () => void;
+  /** Owner only: delete the room for everyone */
+  onCloseRoom: () => void;
   /** Resolves with the server reply; null clears the password */
   onSetPassword: (pw: string | null) => Promise<any>;
   onCopied: () => void;
 }
 
-/** Room code, member count, owner password controls and "leave room". */
-export function RoomInfoModal({ visible, name, room, onClose, onLeave, onSetPassword, onCopied }: Props) {
+/** Room code, member count, owner password controls, and "leave room" (or "close room" for the owner). */
+export function RoomInfoModal({ visible, name, room, onClose, onLeave, onCloseRoom, onSetPassword, onCopied }: Props) {
   const c = useColors();
   const t = useT();
   const [editingPw, setEditingPw] = useState(false);
   const [newPw, setNewPw] = useState('');
   const [error, setError] = useState('');
+
+  function confirmCloseRoom() {
+    showAlert(t('close-room'), t('close-room-confirm'), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('close-room'), style: 'destructive', onPress: onCloseRoom },
+    ]);
+  }
 
   async function togglePassword() {
     if (room.hasPassword) {
@@ -99,9 +110,16 @@ export function RoomInfoModal({ visible, name, room, onClose, onLeave, onSetPass
           <TouchableOpacity style={[s.solidBtn, { backgroundColor: c.accent }]} onPress={onClose}>
             <Text style={s.solidText}>{t('close')}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[s.outlineBtn, { borderColor: c.danger }]} onPress={onLeave}>
-            <Text style={[s.outlineText, { color: c.danger }]}>{t('leave-room')}</Text>
-          </TouchableOpacity>
+          {/* The lobby can't be left; an owner closes their room instead of leaving it */}
+          {room.isOwner ? (
+            <TouchableOpacity style={[s.outlineBtn, { borderColor: c.danger }]} onPress={confirmCloseRoom}>
+              <Text style={[s.outlineText, { color: c.danger }]}>{t('close-room')}</Text>
+            </TouchableOpacity>
+          ) : name !== LOBBY_ID && (
+            <TouchableOpacity style={[s.outlineBtn, { borderColor: c.danger }]} onPress={onLeave}>
+              <Text style={[s.outlineText, { color: c.danger }]}>{t('leave-room')}</Text>
+            </TouchableOpacity>
+          )}
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>

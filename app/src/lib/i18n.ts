@@ -143,6 +143,13 @@ const zh = {
   // Kicked / muted
   'kicked-title': '被踢出房间',
   'kicked-msg': '管理员将你踢出了该房间',
+  'room-closed-title': '房间已关闭',
+  'close-room': '关闭房间',
+  'close-room-confirm': '房间和所有消息会被永久删除，所有成员都会被移出。确定吗？',
+  'room-closed-msg': '房主关闭了这个房间',
+  'join-failed': '无法进入房间',
+  'rate-limited': '发送太快了，请稍等一下',
+  'send-failed': '消息发送失败，请重试',
   'you-are-muted': '你已被禁言',
   'dm-blocked': '无法发送：你们之间有一方拉黑了对方',
 
@@ -192,6 +199,7 @@ const zh = {
   'srv-wrong_old_password': '当前密码错误',
   'srv-wrong_answer': '答案错误',
   'srv-missing_fields': '请填写必填项',
+  'srv-invalid_avatar': '头像设置无效',
   'srv-invalid_profile': '显示名 1-{max_name} 字，简介最多 {max_bio} 字',
   'srv-invalid_room_name': '房间名需为 1-{max} 个字符',
   'srv-room_exists': '房间已存在',
@@ -478,6 +486,13 @@ const en: Record<keyof typeof zh, string> = {
   // Kicked / muted
   'kicked-title': 'Removed from room',
   'kicked-msg': 'An admin removed you from this room',
+  'room-closed-title': 'Room closed',
+  'close-room': 'Close room',
+  'close-room-confirm': 'The room and all its messages will be deleted for everyone. Continue?',
+  'room-closed-msg': 'The owner closed this room',
+  'join-failed': "Couldn't open this room",
+  'rate-limited': "You're sending too fast, slow down a little",
+  'send-failed': "Message couldn't be sent, please try again",
   'you-are-muted': 'You are muted',
   'dm-blocked': "Can't send: one of you has blocked the other",
 
@@ -527,6 +542,7 @@ const en: Record<keyof typeof zh, string> = {
   'srv-wrong_old_password': 'Current password is incorrect',
   'srv-wrong_answer': 'Incorrect answer',
   'srv-missing_fields': 'Please fill in all required fields',
+  'srv-invalid_avatar': 'Invalid avatar',
   'srv-invalid_profile': 'Display name must be 1-{max_name} characters and bio at most {max_bio}',
   'srv-invalid_room_name': 'Room name must be 1-{max} characters',
   'srv-room_exists': 'A room with that name already exists',

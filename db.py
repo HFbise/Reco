@@ -11,6 +11,11 @@ _pool = pg_pool.ThreadedConnectionPool(
     POOL_MAX,
     os.environ.get('DATABASE_URL'),
     cursor_factory=RealDictCursor,
+    # Detect connections the server or a proxy dropped while idle
+    keepalives=1,
+    keepalives_idle=30,
+    keepalives_interval=10,
+    keepalives_count=3,
 )
 # psycopg2's pool raises PoolError when exhausted instead of waiting; with many
 # handler threads (gunicorn --threads) a burst would fail. Make callers queue.
@@ -30,11 +35,13 @@ class _Conn:
         if self._c is None:
             return
         try:
-            if self._c.status != 0:
-                self._c.rollback()
+            if not self._c.closed:
+                self._c.rollback()  # never hand back a connection mid-transaction
         except Exception:
             pass
-        _pool.putconn(self._c)
+        # A connection that died (server restart, dropped by a proxy) is discarded,
+        # otherwise the next caller would get it and fail
+        _pool.putconn(self._c, close=bool(self._c.closed))
         self._c = None
         _slots.release()
 
@@ -49,7 +56,11 @@ def get_db(timeout: float = 30) -> _Conn:
     if not _slots.acquire(timeout=timeout):
         raise TimeoutError('database connection pool exhausted')
     try:
-        return _Conn(_pool.getconn())
+        conn = _pool.getconn()
+        if conn.closed:
+            _pool.putconn(conn, close=True)
+            conn = _pool.getconn()
+        return _Conn(conn)
     except Exception:
         _slots.release()
         raise

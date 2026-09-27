@@ -8,7 +8,7 @@ import { useColors } from '../hooks/useColors';
 import { useIsDesktop } from '../hooks/useIsDesktop';
 import { useT } from '../hooks/useT';
 import { useVoice } from '../hooks/useVoice';
-import { useRoomChat } from '../hooks/useRoomChat';
+import { useRoomChat, type ChatToast } from '../hooks/useRoomChat';
 import { loadRecentEmojis, recordRecentEmoji, buildReactionQuickList } from '../lib/recentEmojis';
 import type { Message } from './MessageBubble';
 import { EmojiPicker } from './EmojiPicker';
@@ -26,6 +26,12 @@ import type { DmMeta, ExternalVoice } from './chat/types';
 export type { DmMeta, ExternalVoice } from './chat/types';
 
 const REACTION_BAR_H = 54;
+const TOAST_TEXT = {
+  'muted': 'you-are-muted',
+  'dm-blocked': 'dm-blocked',
+  'rate-limited': 'rate-limited',
+  'send-failed': 'send-failed',
+} as const satisfies Record<ChatToast, string>;
 
 interface Props {
   name: string;
@@ -95,18 +101,18 @@ export function ChatPanel({
   const chat = useRoomChat({
     name,
     password,
-    onKicked: () => {
+    onRemoved: (reason) => {
       if (inVoiceHere) voice.leaveVoice();
-      showAlert(t('kicked-title'), t('kicked-msg'));
+      if (reason === 'kicked') showAlert(t('kicked-title'), t('kicked-msg'));
+      else if (!chat.room.isOwner) showAlert(t('room-closed-title'), t('room-closed-msg'));
       handleBack();
     },
     onJoinFailed: (reply) => {
-      if (reply.wrong_password) {
-        showAlert(t('wrong-password'), t.server(reply, 'wrong-password'));
-        onClose?.();
-      }
+      // Wrong password, room gone, kicked, server error: there is nothing to show here
+      showAlert(reply.wrong_password ? t('wrong-password') : t('join-failed'), t.server(reply, 'join-failed'));
+      handleBack();
     },
-    onToast: (kind) => showToast(t(kind === 'muted' ? 'you-are-muted' : 'dm-blocked')),
+    onToast: (kind) => showToast(t(TOAST_TEXT[kind])),
   });
   const showVoiceBar = !hideVoiceBar && !isDm && !isGuest && (inVoiceHere || chat.voiceMembers.length > 0);
 
@@ -292,6 +298,7 @@ export function ChatPanel({
         room={chat.room}
         onClose={() => setShowRoomInfo(false)}
         onLeave={() => { setShowRoomInfo(false); chat.leave(); handleBack(); }}
+        onCloseRoom={() => { setShowRoomInfo(false); chat.close(); }}
         onSetPassword={chat.setRoomPassword}
         onCopied={() => showToast(t('copied'))}
       />

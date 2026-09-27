@@ -7,10 +7,11 @@ Callers are responsible for permission checks; these functions do the work
 import logging
 import re
 
-from auth_session import unbind
+import voice_state
+from auth_session import end_sessions
 from db import get_db
 from extensions import socketio
-from state import emit_system_msg, online_users, rooms_voice
+from state import emit_system_msg, get_level, online_users
 
 log = logging.getLogger(__name__)
 
@@ -27,6 +28,22 @@ def _screenname(cur, username: str) -> str:
     cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
     row = cur.fetchone()
     return row['screenname'] if row else username
+
+
+def can_moderate(room: str, requester: str, target: str) -> bool:
+    """Room owners and admins may act on members ranked below them."""
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute('SELECT owner, admins FROM rooms WHERE name = %s', (room,))
+            room_data = cur.fetchone()
+    except Exception as e:
+        log.exception('can_moderate error: %s', e)
+        return False
+    if not room_data:
+        return False
+    mine, theirs = get_level(requester, room_data), get_level(target, room_data)
+    return mine >= 1 and mine > theirs
 
 
 def evict(username: str, room: str):
@@ -54,9 +71,24 @@ def kick(room: str, target: str) -> bool:
         conn.commit()
     for sid in list(online_users.get(target, [])):
         socketio.emit('kicked_from_room', {'room': room}, to=sid)
+    voice_state.remove_user(target, room)
     evict(target, room)
     emit_system_msg(room, 'user_kicked', name=target_screen)
     return True
+
+
+def close_room(room: str):
+    """Delete a room and everything in it; everyone inside is told it's gone."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM rooms WHERE name = %s', (room,))
+        cur.execute('DELETE FROM messages WHERE room = %s', (room,))
+        cur.execute('DELETE FROM room_invites WHERE room = %s', (room,))
+        cur.execute('DELETE FROM room_restrictions WHERE room = %s', (room,))
+        conn.commit()
+    socketio.emit('room_closed', {'room': room}, to=room)
+    voice_state.close(room)
+    socketio.close_room(room)
 
 
 def unkick(room: str, target: str):
@@ -89,10 +121,8 @@ def restrict(room: str, target: str, kind: str, duration: int = 0):
     if kind == TEXT:
         socketio.emit('text_muted', {'target': target, 'duration': duration, 'room': room}, to=room)
     else:
-        members = rooms_voice.get(room, {}).get('voice_members', [])
-        rooms_voice.get(room, {})['voice_members'] = [m for m in members if m['username'] != target]
         socketio.emit('voice_banned', {'target': target, 'room': room}, to=room)
-        socketio.emit('voice_user_left', {'username': target, 'room': room}, to=room)
+        voice_state.remove_user(target, room)
     if expires_at is not None:
 
         def lift_when_expired():
@@ -245,6 +275,7 @@ def rename_user(old: str, new: str):
             new_room = dm_room_id(new, other)
             cur.execute('UPDATE messages SET room = %s WHERE room = %s', (new_room, row['room']))
             cur.execute('UPDATE dm_closed SET dm_room = %s WHERE dm_room = %s', (new_room, row['room']))
+            cur.execute('UPDATE matches SET dm_room = %s WHERE dm_room = %s', (new_room, row['room']))
         cur.execute('UPDATE dm_closed SET username = %s WHERE username = %s', (new, old))
 
         cur.execute('UPDATE blocks SET blocker = %s WHERE blocker = %s', (new, old))
@@ -261,7 +292,5 @@ def rename_user(old: str, new: str):
         cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (old,))
         conn.commit()
 
-    for sid in list(online_users.get(old, [])):
-        socketio.emit('session_expired', {}, to=sid)
-        unbind(sid)
+    end_sessions(old)
     return None
