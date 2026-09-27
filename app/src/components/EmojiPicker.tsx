@@ -6,7 +6,7 @@ import {
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { useLangStore } from '../store/langStore';
-import { EMOJI_CDN, type Lang } from '../lib/i18n';
+import { EMOJI_CDN, hasKey, type I18nKey, type Lang } from '../lib/i18n';
 import { Radius, Spacing } from '../theme';
 
 interface EmojiEntry { emoji: string; annotation: string; group: number; tags?: string[]; }
@@ -27,12 +27,16 @@ async function loadEmojiData(lang: Lang): Promise<EmojiEntry[]> {
     .then(r => r.json())
     .then((raw: any) => {
       const arr: any[] = Array.isArray(raw) ? raw : (raw.emoji || []);
-      _cache[lang] = arr.map((item: any) => ({
-        emoji: item.emoji,
-        annotation: item.annotation || '',
-        group: item.group ?? 0,
-        tags: item.tags,
-      }));
+      // Only groups we have a tab for: this drops group 2 (bare skin-tone and hair
+      // components, not emoji on their own) and entries without a group
+      _cache[lang] = arr
+        .filter((item: any) => hasKey(`emoji-group-${item.group}`))
+        .map((item: any) => ({
+          emoji: item.emoji,
+          annotation: item.annotation || '',
+          group: item.group,
+          tags: item.tags,
+        }));
       return _cache[lang]!;
     })
     .catch(() => {
@@ -83,7 +87,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
       .sort(([a], [b]) => a - b)
       .map(([g, emojis]) => ({
         group: g,
-        label: t(`emoji-group-${g}` as any) ?? `Group ${g}`,
+        label: t(`emoji-group-${g}` as I18nKey),
         emojis,
       }));
   }, [allEmojis, t]);
@@ -118,7 +122,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
               onPress={() => setCatIdx(i)}
               activeOpacity={0.7}
             >
-              <Text style={s.catTabText}>{cat.label.split(' ')[0]}</Text>
+              <Text style={s.catTabText} accessibilityLabel={cat.label}>{cat.label.split(' ')[0]}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -148,7 +152,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
 
 const s = StyleSheet.create({
   box: {
-    width: 344, maxHeight: 440,
+    width: 344, maxWidth: '94%' as any, maxHeight: 440,
     borderRadius: Radius.lg, overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2, shadowRadius: 16, elevation: 12,

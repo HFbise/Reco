@@ -82,17 +82,18 @@ const zh = {
   'audio-managed': '音频设备由系统管理',
 
   // Emoji picker
+  'emoji': '表情',
   'emoji-search': '搜索表情…',
   'emoji-no-result': '无结果',
   'emoji-group-0': '😀 表情',
   'emoji-group-1': '🧑 人物',
-  'emoji-group-2': '🐶 动物',
-  'emoji-group-3': '🍎 食物',
-  'emoji-group-4': '✈️ 旅行',
-  'emoji-group-5': '🎉 活动',
-  'emoji-group-6': '💡 物品',
-  'emoji-group-7': '💯 符号',
-  'emoji-group-8': '🏳️ 旗帜',
+  'emoji-group-3': '🐶 动物',
+  'emoji-group-4': '🍎 食物',
+  'emoji-group-5': '✈️ 旅行',
+  'emoji-group-6': '🎉 活动',
+  'emoji-group-7': '💡 物品',
+  'emoji-group-8': '💯 符号',
+  'emoji-group-9': '🏳️ 旗帜',
 
   // DM
   'direct-messages': '私信',
@@ -416,17 +417,18 @@ const en: Record<keyof typeof zh, string> = {
   'audio-managed': 'Audio devices are managed by the system',
 
   // Emoji picker
+  'emoji': 'Emoji',
   'emoji-search': 'Search emoji…',
   'emoji-no-result': 'No results',
   'emoji-group-0': '😀 Smileys',
   'emoji-group-1': '🧑 People',
-  'emoji-group-2': '🐶 Animals',
-  'emoji-group-3': '🍎 Food',
-  'emoji-group-4': '✈️ Travel',
-  'emoji-group-5': '🎉 Activities',
-  'emoji-group-6': '💡 Objects',
-  'emoji-group-7': '💯 Symbols',
-  'emoji-group-8': '🏳️ Flags',
+  'emoji-group-3': '🐶 Animals',
+  'emoji-group-4': '🍎 Food',
+  'emoji-group-5': '✈️ Travel',
+  'emoji-group-6': '🎉 Activities',
+  'emoji-group-7': '💡 Objects',
+  'emoji-group-8': '💯 Symbols',
+  'emoji-group-9': '🏳️ Flags',
 
   // DM
   'direct-messages': 'Direct Messages',

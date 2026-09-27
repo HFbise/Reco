@@ -58,7 +58,7 @@ export function Composer(p: Props) {
   }
   return (
     <View style={[s.inputArea, { backgroundColor: c.bg }]}>
-      <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7}>
+      <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7} accessibilityLabel={t('emoji')}>
         <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textMuted} />
       </TouchableOpacity>
       <TextInput
