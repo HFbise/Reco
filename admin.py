@@ -1,11 +1,14 @@
 import os
 import functools
+import hmac
 import logging
 from flask import Blueprint, request, redirect, url_for, session, make_response
 from db import get_db
 from urllib.parse import quote
 from utils import hash_password
-from handlers.auth import delete_account
+from state import check_login_rate, record_login_fail, reset_login_attempts, online_users
+import moderation
+from moderation import delete_account
 
 log = logging.getLogger(__name__)
 
@@ -63,6 +66,10 @@ form.inline { display: inline; }
 .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
 .modal input { width: 100%; margin-bottom: 14px; }
 .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
+.notice { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
+.notice-ok { background: #e7f6ec; color: #1f7a3d; }
+.notice-err { background: #fdecec; color: #b3261e; }
+select { padding: 5px 8px; border: 1px solid #e0e0e6; border-radius: 7px; font-size: 13px; }
 '''
 
 TOPBAR = '''
@@ -133,10 +140,20 @@ def index():
 
 @admin_bp.route('/login', methods=['GET', 'POST'])
 def login():
+    if not ADMIN_PASSWORD:
+        return login_page('后台未启用：服务器没有设置 ADMIN_PASSWORD'), 503
     if request.method == 'POST':
-        if request.form.get('password') == ADMIN_PASSWORD:
+        # Render sits behind a proxy; the first X-Forwarded-For hop is the client
+        ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
+        rate_key = f'admin-login:{ip}'
+        allowed, secs = check_login_rate(rate_key)
+        if not allowed:
+            return login_page(f'尝试过多，请 {secs} 秒后重试'), 429
+        if hmac.compare_digest((request.form.get('password') or '').encode(), ADMIN_PASSWORD.encode()):
+            reset_login_attempts(rate_key)
             session['admin_authed'] = True
             return redirect(url_for('admin.dashboard'))
+        record_login_fail(rate_key)
         return login_page('密码错误')
     return login_page()
 
@@ -195,7 +212,7 @@ def feedback():
     for r in rows:
         ts = r['created_at'].strftime('%Y-%m-%d %H:%M') if r.get('created_at') else ''
         rows_html += f'''<tr>
-          <td class="mono">{r["username"]}</td>
+          <td class="mono">{_esc(r["username"])}</td>
           <td><div class="pre">{_esc(r["text"])}</div></td>
           <td class="mono">{ts}</td>
           <td>
@@ -240,8 +257,8 @@ def reports():
     for r in rows:
         ts = r['created_at'].strftime('%Y-%m-%d %H:%M') if r.get('created_at') else ''
         rows_html += f'''<tr>
-          <td class="mono">{r["reporter"]}</td>
-          <td class="mono">{r["reported"]}</td>
+          <td class="mono">{_esc(r["reporter"])}</td>
+          <td class="mono"><a href="/admin/users?q={_url(r["reported"])}">{_esc(r["reported"])}</a></td>
           <td>{_esc(r["reason"] or "")}</td>
           <td class="mono">{ts}</td>
           <td>
@@ -304,6 +321,7 @@ def users():
             f'<td style="color:#888">{_esc(r["bio"] or "")}</td>'
             f'<td>'
             f'<button class="btn btn-ghost" data-u="{uname}" onclick="openReset(this.dataset.u)">重置密码</button> '
+            f'<button class="btn btn-ghost" data-u="{uname}" onclick="openRename(this.dataset.u)">改用户名</button> '
             f'<form class="inline" method="post" action="/admin/users/{_url(r["username"])}/delete"'
             f' data-u="{uname}" onsubmit="return confirm(\'永久删除用户 \' + this.dataset.u + \'？\')">'
             f'<button class="btn btn-danger">删除</button></form>'
@@ -315,6 +333,7 @@ def users():
     pagination = _pages(total, p, PER_PAGE, base)
 
     body = f'''
+    {_notice()}
     <h2>用户管理 <span style="font-size:14px;font-weight:400;color:#888">共 {total} 个用户</span></h2>
     <form class="search-row" method="get">
       <input type="search" name="q" value="{_esc(q)}" placeholder="搜索用户名或显示名…">
@@ -340,7 +359,30 @@ def users():
         </form>
       </div>
     </div>
+    <div class="modal-overlay" id="rename-modal">
+      <div class="modal">
+        <h3>修改用户名</h3>
+        <p style="color:#888;font-size:13px;margin-bottom:12px">3-20 位小写字母、数字或下划线。该用户会被登出，需要用新用户名重新登录；旧用户名将永久停用。</p>
+        <form method="post" id="rename-form" action="">
+          <input type="text" name="new_username" id="new_username" placeholder="新用户名" autocomplete="off">
+          <div class="modal-btns">
+            <button type="button" class="btn btn-ghost" onclick="closeModal('rename-modal')">取消</button>
+            <button type="submit" class="btn btn-primary">确认修改</button>
+          </div>
+        </form>
+      </div>
+    </div>
     <script>
+    function openRename(u) {{
+      document.getElementById('rename-form').action = '/admin/users/' + encodeURIComponent(u) + '/rename';
+      document.getElementById('new_username').value = '';
+      document.getElementById('rename-modal').classList.add('open');
+      setTimeout(() => document.getElementById('new_username').focus(), 50);
+    }}
+    function closeModal(id) {{ document.getElementById(id).classList.remove('open'); }}
+    document.getElementById('rename-modal').addEventListener('click', function(e) {{
+      if (e.target === this) closeModal('rename-modal');
+    }});
     function openReset(u) {{
       document.getElementById('reset-form').action = '/admin/users/' + encodeURIComponent(u) + '/reset-password';
       document.getElementById('new_pw').value = '';
@@ -360,13 +402,23 @@ def users():
 def reset_user_password(username):
     new_pw = (request.form.get('new_password') or '').strip()
     if len(new_pw) < 6:
-        return redirect(url_for('admin.users') + '?error=密码至少6位')
+        return _back(url_for('admin.users'), error='密码至少6位')
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('UPDATE users SET password = %s WHERE username = %s',
                     (hash_password(new_pw), username))
         conn.commit()
-    return redirect(url_for('admin.users'))
+    return _back(url_for('admin.users'), ok=f'已重置 {username} 的密码')
+
+
+@admin_bp.route('/users/<username>/rename', methods=['POST'])
+@login_required
+def rename_user(username):
+    new = (request.form.get('new_username') or '').strip().lower()
+    error = moderation.rename_user(username, new)
+    if error:
+        return _back(url_for('admin.users'), error=error)
+    return _back(url_for('admin.users') + f'?q={_url(new)}', ok=f'{username} 已改名为 {new}')
 
 
 @admin_bp.route('/users/<username>/delete', methods=['POST'])
@@ -420,6 +472,9 @@ def rooms():
     return page(body, 'rm')
 
 
+MUTE_OPTIONS = [(600, '10 分钟'), (3600, '1 小时'), (86400, '1 天'), (0, '永久')]
+
+
 @admin_bp.route('/rooms/<path:room_name>/detail')
 @login_required
 def room_detail(room_name):
@@ -432,26 +487,40 @@ def room_detail(room_name):
         if not room:
             return redirect(url_for('admin.rooms'))
         members = list(room['members'] or [])
-        if members:
-            cur.execute(
-                'SELECT username, screenname FROM users WHERE username = ANY(%s)',
-                (members,)
-            )
-            user_map = {r['username']: r for r in cur.fetchall()}
-        else:
-            user_map = {}
+        kicked = list(room.get('kicked') or [])
+        cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', (members + kicked,))
+        user_map = {r['username']: r for r in cur.fetchall()}
         cur.execute('SELECT COUNT(*) AS c FROM messages WHERE room = %s', (room_name,))
         msg_total = cur.fetchone()['c']
         cur.execute(
-            'SELECT username, screenname, text, recalled, edited, created_at, system'
+            'SELECT id, username, screenname, text, recalled, edited, created_at, system'
             ' FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT %s OFFSET %s',
             (room_name, PER_PAGE, offset)
         )
         msgs = list(reversed(cur.fetchall()))
 
-    from state import online_users
     admins_set = set(room['admins'] or [])
     owner = room.get('owner') or ''
+    base = f'/admin/rooms/{_url(room_name)}'
+    here = f'{base}/detail' + (f'?page={p}' if p > 1 else '')
+
+    def action(path, label, fields=None, danger=False, confirm=None):
+        hidden = ''.join(f'<input type="hidden" name="{k}" value="{_esc(v)}">' for k, v in (fields or {}).items())
+        guard = ' onsubmit="return confirm(this.dataset.confirm)"' if confirm else ''
+        data = f' data-confirm="{_esc(confirm)}"' if confirm else ''
+        cls = 'btn-danger' if danger else 'btn-ghost'
+        return (f'<form class="inline" method="post" action="{path}"{guard}{data}>{hidden}'
+                f'<input type="hidden" name="next" value="{_esc(here)}">'
+                f'<button class="btn {cls}">{label}</button></form>')
+
+    def mute_control(u):
+        if moderation.is_muted(room_name, u):
+            return action(f'{base}/unmute', '解除禁言', {'username': u})
+        options = ''.join(f'<option value="{secs}">{label}</option>' for secs, label in MUTE_OPTIONS)
+        return (f'<form class="inline" method="post" action="{base}/mute">'
+                f'<input type="hidden" name="username" value="{_esc(u)}">'
+                f'<input type="hidden" name="next" value="{_esc(here)}">'
+                f'<select name="duration">{options}</select> <button class="btn btn-ghost">禁言</button></form>')
 
     members_html = ''
     for u in members:
@@ -459,11 +528,26 @@ def room_detail(room_name):
         role = '房主' if u == owner else ('管理员' if u in admins_set else '')
         online_dot = '🟢' if u in online_users else '⚪'
         role_html = f'<span class="tag tag-blue">{role}</span>' if role else ''
+        muted_html = ' <span class="tag">禁言中</span>' if moderation.is_muted(room_name, u) else ''
         members_html += (
             f'<tr><td>{online_dot} <span class="mono">{_esc(u)}</span></td>'
             f'<td>{_esc(info.get("screenname", ""))}</td>'
-            f'<td>{role_html}</td></tr>'
+            f'<td>{role_html}{muted_html}</td>'
+            f'<td style="white-space:nowrap">{mute_control(u)} '
+            f'{action(f"{base}/kick", "踢出", {"username": u}, danger=True, confirm=f"把 {u} 踢出房间？踢出后无法再加入，直到解封。")}'
+            f'</td></tr>'
         )
+
+    kicked_html = ''.join(
+        f'<tr><td class="mono">{_esc(u)}</td><td>{_esc(user_map.get(u, {}).get("screenname", ""))}</td>'
+        f'<td>{action(f"{base}/unkick", "解封", {"username": u})}</td></tr>'
+        for u in kicked
+    )
+    kicked_card = f'''
+        <div class="card" style="margin-top:16px">
+          <div class="card-header">已踢出 ({len(kicked)})</div>
+          <table><tr><th>用户名</th><th>显示名</th><th></th></tr>{kicked_html}</table>
+        </div>''' if kicked else ''
 
     msgs_html = ''
     for m in msgs:
@@ -475,40 +559,86 @@ def room_detail(room_name):
             text = _esc(text)
             if m.get('edited'):
                 text += ' <span style="color:#aaa;font-size:11px">(已编辑)</span>'
+        recall_btn = '' if m.get('recalled') or m.get('system') else action(
+            f'/admin/messages/{m["id"]}/recall', '撤回', danger=True, confirm='撤回这条消息？')
         style = 'color:#aaa' if m.get('system') else ''
         msgs_html += (
             f'<tr style="{style}"><td class="mono">{ts}</td>'
             f'<td class="mono">{_esc(m["screenname"] or m["username"])}</td>'
-            f'<td>{text}</td></tr>'
+            f'<td>{text}</td><td>{recall_btn}</td></tr>'
         )
 
-    rname = _esc(room_name)
-    msg_pagination = _pages(msg_total, p, PER_PAGE, f'/admin/rooms/{rname}/detail')
+    msg_pagination = _pages(msg_total, p, PER_PAGE, f'{base}/detail')
     body = f'''
+    {_notice()}
     <p style="margin-bottom:16px"><a href="/admin/rooms">← 返回房间列表</a></p>
-    <h2>{rname}</h2>
-    <div style="display:grid;grid-template-columns:280px 1fr;gap:16px;align-items:start">
+    <h2>{_esc(room_name)}</h2>
+    <div style="display:grid;grid-template-columns:minmax(420px,auto) 1fr;gap:16px;align-items:start">
       <div>
         <div class="card">
           <div class="card-header">成员 ({len(members)})</div>
           <table>
-            <tr><th>用户名</th><th>显示名</th><th>身份</th></tr>
-            {members_html or "<tr><td colspan='3' style='color:#aaa;padding:20px;text-align:center'>暂无成员</td></tr>"}
+            <tr><th>用户名</th><th>显示名</th><th>状态</th><th></th></tr>
+            {members_html or "<tr><td colspan='4' style='color:#aaa;padding:20px;text-align:center'>暂无成员</td></tr>"}
           </table>
         </div>
+        {kicked_card}
       </div>
       <div>
         <div class="card">
           <div class="card-header">消息记录（共 {msg_total} 条）</div>
           <table>
-            <tr><th>时间</th><th>发送者</th><th>内容</th></tr>
-            {msgs_html or "<tr><td colspan='3' style='color:#aaa;padding:20px;text-align:center'>暂无消息</td></tr>"}
+            <tr><th>时间</th><th>发送者</th><th>内容</th><th></th></tr>
+            {msgs_html or "<tr><td colspan='4' style='color:#aaa;padding:20px;text-align:center'>暂无消息</td></tr>"}
           </table>
         </div>
         {msg_pagination}
       </div>
     </div>'''
     return page(body, 'rm')
+
+
+def _form_user():
+    return (request.form.get('username') or '').strip()
+
+
+@admin_bp.route('/rooms/<path:room_name>/kick', methods=['POST'])
+@login_required
+def kick_member(room_name):
+    u = _form_user()
+    moderation.kick(room_name, u)
+    return _back(ok=f'已把 {u} 踢出 {room_name}')
+
+
+@admin_bp.route('/rooms/<path:room_name>/unkick', methods=['POST'])
+@login_required
+def unkick_member(room_name):
+    u = _form_user()
+    moderation.unkick(room_name, u)
+    return _back(ok=f'{u} 可以重新加入 {room_name} 了')
+
+
+@admin_bp.route('/rooms/<path:room_name>/mute', methods=['POST'])
+@login_required
+def mute_member(room_name):
+    u = _form_user()
+    moderation.mute(room_name, u, int(request.form.get('duration', 0)))
+    return _back(ok=f'已禁言 {u}')
+
+
+@admin_bp.route('/rooms/<path:room_name>/unmute', methods=['POST'])
+@login_required
+def unmute_member(room_name):
+    u = _form_user()
+    moderation.unmute(room_name, u)
+    return _back(ok=f'已解除 {u} 的禁言')
+
+
+@admin_bp.route('/messages/<int:msg_id>/recall', methods=['POST'])
+@login_required
+def recall_message(msg_id):
+    moderation.recall(msg_id)
+    return _back(ok='消息已撤回')
 
 
 @admin_bp.route('/rooms/<path:room_name>/close', methods=['POST'])
@@ -531,6 +661,26 @@ def close_room(room_name):
 def _esc(s):
     return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
             .replace('"', '&quot;').replace("'", '&#39;'))
+
+
+def _back(default=None, ok=None, error=None):
+    """Redirect to the form's `next` (admin pages only) or `default`, carrying a notice."""
+    target = request.form.get('next') or default or url_for('admin.dashboard')
+    if not target.startswith('/admin/'):
+        target = url_for('admin.dashboard')
+    msg = error or ok
+    if msg:
+        target += ('&' if '?' in target else '?') + ('error=' if error else 'ok=') + quote(msg)
+    return redirect(target)
+
+
+def _notice():
+    error, ok = request.args.get('error'), request.args.get('ok')
+    if error:
+        return f'<div class="notice notice-err">{_esc(error)}</div>'
+    if ok:
+        return f'<div class="notice notice-ok">{_esc(ok)}</div>'
+    return ''
 
 
 def _url(s):

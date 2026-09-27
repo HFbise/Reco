@@ -157,7 +157,7 @@ def _migrate():
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT FALSE")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT")
-            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN DEFAULT FALSE")
+            cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS is_admin")
             cur.execute('''CREATE TABLE IF NOT EXISTS reports (
                 id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, reported TEXT NOT NULL,
                 reason TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW())''')
@@ -184,13 +184,11 @@ def _migrate():
                         break
                 cur.execute("UPDATE rooms SET code = %s WHERE name = %s", (code, row['name']))
 
-            # Ensure lobby exists
-            cur.execute("SELECT name FROM rooms WHERE name = '大厅'")
-            if not cur.fetchone():
-                cur.execute(
-                    "INSERT INTO rooms (name, admins, members, owner) VALUES (%s, %s, %s, %s)",
-                    ('大厅', [], [], 'admin')
-                )
+            # The lobby belongs to nobody: it is moderated only from the admin panel
+            cur.execute(
+                "INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', NULL)"
+                " ON CONFLICT (name) DO UPDATE SET owner = NULL, admins = '{}'"
+            )
             conn.commit()
     except Exception as e:
         log.error('migration failed: %s', e)

@@ -60,7 +60,6 @@ export default function AuthScreen() {
         username: data.username,
         screenname: data.screenname,
         bio: data.bio || '',
-        is_admin: data.is_admin,
         avatar_expression: data.avatar_expression || 'Smile',
         avatar_color: data.avatar_color,
         token: data.token,

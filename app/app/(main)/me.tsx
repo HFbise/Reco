@@ -154,7 +154,6 @@ export default function MeScreen() {
             <View style={s.info}>
               <Text style={[s.name, { color: c.text }]}>{currentUser?.screenname}</Text>
               <Text style={[s.handle, { color: c.textMuted }]}>@{currentUser?.username}</Text>
-              {currentUser?.is_admin && <Text style={[s.adminBadge, { color: c.accent }]}>🛡 {t('admin')}</Text>}
             </View>
           </View>
         </View>
@@ -353,7 +352,6 @@ const s = StyleSheet.create({
   info: { flexDirection: 'column', gap: 3 },
   name: { fontSize: 18, fontWeight: String(Fonts.bold) as any },
   handle: { fontSize: 13 },
-  adminBadge: { fontSize: 12, marginTop: 2 },
 
   section: { marginHorizontal: Spacing.lg },
   sectionLabel: { fontSize: 12, fontWeight: String(Fonts.semibold) as any, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6, paddingLeft: 4 },

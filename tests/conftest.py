@@ -40,7 +40,7 @@ def clean_state():
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(f"TRUNCATE {', '.join(TABLES)} RESTART IDENTITY")
-        cur.execute("INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', 'admin')")
+        cur.execute("INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', NULL)")
         conn.commit()
     for d in (state.online_users, state.login_attempts, state.message_rate,
               state.rooms_voice, state.rooms_text_muted, auth_session.sid_users):

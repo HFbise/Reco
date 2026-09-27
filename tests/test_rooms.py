@@ -61,18 +61,24 @@ def test_closed_dm_is_hidden_until_a_new_message_arrives():
     assert [d['dm_room'] for d in events(alice, 'dms_list')[0]['dms']] == ['dm:alice:bob']
 
 
-def test_restart_keeps_site_admins_in_their_rooms():
-    # Regression: _migrate() used to strip is_admin users from every room on startup
+def test_restart_keeps_members_and_room_admins():
+    # Regression: _migrate() used to strip some users from every room on startup
     import app as app_module
-    create_user('admin')
-    with get_db() as conn:
-        cur = conn.cursor()
-        cur.execute("UPDATE users SET is_admin = TRUE WHERE username = 'admin'")
-        conn.commit()
-    create_room('club', owner='someone', members=['admin'], admins=['admin'])
+    create_user('bise')
+    create_room('club', owner='someone', members=['bise'], admins=['bise'])
     app_module._migrate()
     room = query("SELECT members, admins FROM rooms WHERE name = 'club'")[0]
-    assert room['members'] == ['admin'] and room['admins'] == ['admin']
-    admin = connect_as('admin')
-    admin.emit('get_rooms', {})
-    assert [r['name'] for r in events(admin, 'rooms_list')[0]['rooms']] == ['大厅', 'club']
+    assert room['members'] == ['bise'] and room['admins'] == ['bise']
+    bise = connect_as('bise')
+    bise.emit('get_rooms', {})
+    assert [r['name'] for r in events(bise, 'rooms_list')[0]['rooms']] == ['大厅', 'club']
+
+
+def test_lobby_has_no_owner_or_room_admins_after_startup():
+    import app as app_module
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE rooms SET owner = 'admin', admins = '{mod}' WHERE name = '大厅'")
+        conn.commit()
+    app_module._migrate()
+    assert query("SELECT owner, admins FROM rooms WHERE name = '大厅'") == [{'owner': None, 'admins': []}]

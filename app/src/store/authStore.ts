@@ -6,7 +6,6 @@ export interface User {
   username: string;
   screenname: string;
   bio: string;
-  is_admin: boolean;
   avatar_expression: string;
   avatar_color: string;
   token: string; // signed session token from login_result; sent in the socket handshake

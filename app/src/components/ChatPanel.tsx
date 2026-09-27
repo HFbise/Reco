@@ -121,6 +121,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
   const [roomCode, setRoomCode] = useState('');
   const [memberCount, setMemberCount] = useState(0);
   const [isOwner, setIsOwner] = useState(false);
+  const [myLevel, setMyLevel] = useState(0); // 2 owner, 1 room admin, 0 member (from join_result)
   const [roomHasPassword, setRoomHasPassword] = useState(!!password);
   const [isTextMuted, setIsTextMuted] = useState(false);
   const [showSetPwArea, setShowSetPwArea] = useState(false);
@@ -173,6 +174,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
           if (data.code) setRoomCode(data.code);
           if (data.members) setMemberCount(data.members.length);
           if (data.is_owner) setIsOwner(true);
+          setMyLevel(data.my_level ?? 0);
         } else if (data.wrong_password) {
           Alert.alert(t('wrong-password'), data.msg);
           onClose?.();
@@ -220,8 +222,8 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     socket.on('voice_mute_status', onRoomVoiceMute);
 
     const onTextMutedNotify = () => { showToast(t('you-are-muted')); setIsTextMuted(true); };
-    const onTextMuted = (data: any) => { if (data.target === currentUser.username) setIsTextMuted(true); };
-    const onTextUnmuted = (data: any) => { if (data.target === currentUser.username) setIsTextMuted(false); };
+    const onTextMuted = (data: any) => { if (data.room === name && data.target === currentUser.username) setIsTextMuted(true); };
+    const onTextUnmuted = (data: any) => { if (data.room === name && data.target === currentUser.username) setIsTextMuted(false); };
     const onRoomPasswordChanged = (data: { room: string; has_password: boolean }) => {
       if (data.room === name) setRoomHasPassword(data.has_password);
     };
@@ -380,7 +382,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
 
   const blockedSet = new Set(useBlockStore(s => s.blocked));
   const canEdit = selectedMsg?.isOwn;
-  const canRecall = selectedMsg?.isOwn || currentUser?.is_admin;
+  const canRecall = selectedMsg?.isOwn || myLevel >= 1;
   const feed = buildFeed(messages.filter(m => m.system || !blockedSet.has(m.username)));
   const reactionQuickList = buildReactionQuickList(recentEmojis);
 
@@ -538,7 +540,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
               );
             }
             const canEditMsg = msg.isOwn;
-            const canRecallMsg = msg.isOwn || !!currentUser?.is_admin;
+            const canRecallMsg = msg.isOwn || myLevel >= 1;
             return (
               <MessageBubble
                 msg={msg}
@@ -778,7 +780,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
               <Text style={[s.roomInfoVal, { color: c.text }]}>{memberCount}{t('people-unit') ? ' ' + t('people-unit') : ''}</Text>
             </View>
 
-            {(isOwner || currentUser?.is_admin) && (
+            {isOwner && (
               <View style={s.roomInfoAdminArea}>
                 <TouchableOpacity
                   style={[s.roomInfoAdminBtn, { borderColor: c.border }]}

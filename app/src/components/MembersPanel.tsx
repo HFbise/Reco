@@ -78,9 +78,8 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
     return 0;
   }
 
-  const { currentUser } = useAuthStore();
   const myMember = members.find(m => m.username === currentUsername);
-  const myLevel = myMember ? getLevel(myMember) : (currentUser?.is_admin ? 3 : 0);
+  const myLevel = myMember ? getLevel(myMember) : 0;
 
   function doKick(target: Member) {
     Alert.alert(t('confirm-kick-title'), t('confirm-kick'), [

@@ -1,5 +1,4 @@
 import logging
-import re
 from flask import request
 from flask_socketio import emit
 from extensions import socketio
@@ -7,25 +6,12 @@ from db import get_db
 from state import check_login_rate, record_login_fail, reset_login_attempts
 from utils import hash_password, verify_password, SECURITY_QUESTIONS, DEFAULT_PASSWORD
 from auth_session import make_token, bind, unbind, authenticated
+from moderation import USERNAME_RE, RESERVED_USERNAMES, delete_account
 
 log = logging.getLogger(__name__)
 
-# Usernames end up inside DM room ids ('dm:alice:bob') and admin-panel URLs
-USERNAME_RE = re.compile(r'^[a-z0-9_]{3,20}$')
-RESERVED_USERNAMES = {'system', 'admin'}  # 'system' authors system messages; 'admin' owns the lobby
 MAX_SCREENNAME_LEN = 32
 MAX_BIO_LEN = 200
-
-
-def delete_account(cur, username: str):
-    """Remove a user. The name is retired so nobody can re-register it and
-    inherit its DM history (DM rooms are keyed by username) or room ownership."""
-    cur.execute('UPDATE rooms SET members = array_remove(members, %s),'
-                ' admins = array_remove(admins, %s)', (username, username))
-    cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s', (username, username))
-    cur.execute('DELETE FROM dm_closed WHERE username = %s', (username,))
-    cur.execute('DELETE FROM users WHERE username = %s', (username,))
-    cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
 
 @socketio.on('register')

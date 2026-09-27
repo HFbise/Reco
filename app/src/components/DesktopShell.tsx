@@ -316,7 +316,6 @@ export function DesktopShell() {
                   />
                   <Text style={[s.meName, { color: c.text }]}>{currentUser?.screenname}</Text>
                   <Text style={[s.meHandle, { color: c.textMuted }]}>@{currentUser?.username}</Text>
-                  {currentUser?.is_admin && <Text style={[s.adminBadge, { color: c.accent }]}>🛡 {t('admin')}</Text>}
                 </View>
 
                 <View style={s.meSection}>
@@ -691,7 +690,6 @@ const s = StyleSheet.create({
   meCard: { borderRadius: Radius.lg, padding: Spacing.xl, alignItems: 'center', gap: Spacing.sm },
   meName: { fontSize: 20, fontWeight: String(Fonts.bold) as any },
   meHandle: { fontSize: 13 },
-  adminBadge: { fontSize: 12 },
   meSection: { gap: 6 },
   meSectionLabel: { fontSize: 11, fontWeight: String(Fonts.semibold) as any, textTransform: 'uppercase', letterSpacing: 0.5, paddingLeft: 4 },
   meBioCard: { borderRadius: Radius.lg, padding: 14, minHeight: 52 },

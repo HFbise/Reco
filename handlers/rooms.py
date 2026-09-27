@@ -3,7 +3,7 @@ import logging
 import random
 import string
 from datetime import datetime, timezone
-from flask_socketio import emit, join_room, leave_room, close_room
+from flask_socketio import emit, join_room, close_room
 from extensions import socketio
 from db import get_db
 from state import (
@@ -12,6 +12,7 @@ from state import (
     emit_system_msg,
 )
 from auth_session import authenticated, in_room, dm_participants
+import moderation
 
 log = logging.getLogger(__name__)
 
@@ -55,10 +56,15 @@ def _build_members_data(cur, room_data: dict) -> list:
 MAX_ROOM_NAME_LEN = 32
 
 
-def _evict(username: str, room: str):
-    """Remove all of a user's sockets from a Socket.IO room (after kick)."""
-    for sid in list(online_users.get(username, [])):
-        leave_room(room, sid=sid, namespace='/')
+def _levels(room: str, requester: str, target: str):
+    """(requester_level, target_level) in `room`, or None if it doesn't exist."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
+        room_data = cur.fetchone()
+    if not room_data:
+        return None
+    return get_level(requester, room_data), get_level(target, room_data)
 
 
 def _needs_password(username: str, room_data: dict) -> bool:
@@ -242,7 +248,7 @@ def handle_leave_room(username, data):
             cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
             row = cur.fetchone()
             leaver_screen = row['screenname'] if row else username
-        _evict(username, room)
+        moderation.evict(username, room)
         emit('leave_room_result', {'success': True, 'room': room})
         emit_system_msg(room, f'{leaver_screen} 离开了房间')
     except Exception as e:
@@ -301,34 +307,11 @@ def handle_kick_member(requester, data):
     target = data.get('target', '')
     room = data.get('room', '')
     try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
-            room_data = cur.fetchone()
-            if not room_data:
-                return
-            req_level = get_level(requester, room_data)
-            tgt_level = get_level(target, room_data)
-            if req_level < 1 or req_level <= tgt_level:
-                emit('kick_result', {'success': False, 'msg': '无权限'})
-                return
-            members = list(room_data['members'] or [])
-            if target in members:
-                members.remove(target)
-            kicked = list(room_data.get('kicked') or [])
-            if target not in kicked:
-                kicked.append(target)
-            cur.execute('UPDATE rooms SET members = %s, kicked = %s WHERE name = %s',
-                        (members, kicked, room))
-            conn.commit()
-            cur.execute('SELECT screenname FROM users WHERE username = %s', (target,))
-            row = cur.fetchone()
-            target_screen = row['screenname'] if row else target
-        if target in online_users:
-            for sid in list(online_users[target]):
-                socketio.emit('kicked_from_room', {'room': room}, to=sid)
-            _evict(target, room)
-        emit_system_msg(room, f'{target_screen} 被踢出了房间')
+        levels = _levels(room, requester, target)
+        if not levels or levels[0] < 1 or levels[0] <= levels[1]:
+            emit('kick_result', {'success': False, 'msg': '无权限'})
+            return
+        moderation.kick(room, target)
         emit('kick_result', {'success': True})
     except Exception as e:
         log.error('kick_member error: %s', e)
@@ -537,56 +520,27 @@ def handle_invite_to_room(inviter, data):
 @socketio.on('text_mute')
 @authenticated
 def handle_text_mute(requester, data):
-    from state import rooms_text_muted
-    import time
+    room, target = data.get('room', ''), data.get('target', '')
     try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
-            room_data = cur.fetchone()
-        if not room_data:
-            return
-        req_level = get_level(requester, room_data)
-        tgt_level = get_level(data['target'], room_data)
-        if req_level < 1 or req_level <= tgt_level:
-            return
+        levels = _levels(room, requester, target)
     except Exception:
         return
-    room = data['room']
-    target = data['target']
-    duration = int(data.get('duration_seconds', 0))
-    rooms_text_muted.setdefault(room, {})
-    expiry = None if duration == 0 else time.time() + duration
-    rooms_text_muted[room][target] = expiry
-    emit('text_muted', {'target': target, 'duration': duration}, to=room)
-    if duration > 0:
-        def auto_unmute(r=room, t=target, e=expiry):
-            socketio.sleep(duration)
-            if r in rooms_text_muted and rooms_text_muted[r].get(t) == e:
-                del rooms_text_muted[r][t]
-                socketio.emit('text_unmuted', {'target': t}, to=r)
-        socketio.start_background_task(auto_unmute)
+    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
+        return
+    moderation.mute(room, target, int(data.get('duration_seconds', 0)))
 
 
 @socketio.on('text_unmute')
 @authenticated
 def handle_text_unmute(requester, data):
-    from state import rooms_text_muted
+    room, target = data.get('room', ''), data.get('target', '')
     try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute('SELECT * FROM rooms WHERE name = %s', (data['room'],))
-            room_data = cur.fetchone()
-        req_level = get_level(requester, room_data) if room_data else 0
-        tgt_level = get_level(data['target'], room_data) if room_data else 0
-        if not room_data or req_level < 1 or req_level <= tgt_level:
-            return
+        levels = _levels(room, requester, target)
     except Exception:
         return
-    room = data['room']
-    if room in rooms_text_muted:
-        rooms_text_muted[room].pop(data['target'], None)
-    emit('text_unmuted', {'target': data['target']}, to=room)
+    if not levels or levels[0] < 1 or levels[0] <= levels[1]:
+        return
+    moderation.unmute(room, target)
 
 
 # ── Block / Report ────────────────────────────────────────────

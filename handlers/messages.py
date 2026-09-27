@@ -1,13 +1,13 @@
 import json
 import logging
-import time
 from datetime import datetime, timezone
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
-from state import check_msg_rate, get_level, online_users, rooms_text_muted, push_tokens
+from state import check_msg_rate, get_level, online_users, push_tokens
 from handlers.push import send_push
 from auth_session import authenticated, in_room
+import moderation
 
 log = logging.getLogger(__name__)
 
@@ -26,13 +26,9 @@ def handle_message(username, data):
     if not check_msg_rate(username):
         emit('message_rate_limited', {})
         return
-    room_muted = rooms_text_muted.get(room, {})
-    if username in room_muted:
-        expiry = room_muted[username]
-        if expiry is None or expiry > time.time():
-            emit('text_muted_notify', {})
-            return
-        del room_muted[username]
+    if moderation.is_muted(room, username):
+        emit('text_muted_notify', {})
+        return
 
     # Built server-side: clients can't spoof the sender, display name or `system` flag.
     msg = {'username': username, 'screenname': username, 'room': room, 'text': text}
@@ -108,9 +104,7 @@ def handle_recall_message(username, data):
                 room_data = cur.fetchone()
                 if not room_data or get_level(username, room_data) < 1:
                     return
-            cur.execute('UPDATE messages SET recalled = true WHERE id = %s', (msg_id,))
-            conn.commit()
-        emit('message_recalled', {'id': msg_id, 'room': room}, to=room)
+        moderation.recall(msg_id)
     except Exception as e:
         log.error('recall_message error: %s', e)
 
