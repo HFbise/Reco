@@ -103,3 +103,16 @@ def test_turn_credentials_only_for_logged_in_users():
     servers = web.get('/api/ice-servers', headers={'Authorization': f'Bearer {token}'}).get_json()
     turn = [s for s in servers if s['urls'].startswith('turn:')]
     assert len(turn) == 2 and all(s['username'].endswith(':alice') and s['credential'] for s in turn)
+
+
+def test_health_check_reports_database_status(monkeypatch):
+    import app as app_module
+    web = app.test_client()
+    ok = web.get('/health')
+    assert ok.status_code == 200 and ok.get_json()['database'] == 'ok'
+
+    def db_down(*_a, **_k):
+        raise OSError('connection refused')
+    monkeypatch.setattr(app_module, 'get_db', db_down)
+    down = web.get('/health')
+    assert down.status_code == 503 and down.get_json()['database'] == 'unreachable'

@@ -13,6 +13,7 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
 )
+log = logging.getLogger('app')
 
 from flask import send_from_directory, request, jsonify
 from extensions import app, socketio
@@ -57,6 +58,20 @@ def service_worker():
     resp.headers['Service-Worker-Allowed'] = '/'
     resp.headers['Cache-Control'] = 'no-cache'
     return resp
+
+
+# ── Health check ──────────────────────────────────────────────
+@app.route('/health')
+def health():
+    """For the platform's health checks and uptime monitors: 200 only if the
+    database answers too, so a lost DB connection shows up as unhealthy."""
+    try:
+        with get_db(timeout=5) as conn:
+            conn.cursor().execute('SELECT 1')
+    except Exception as e:
+        log.error('health check failed: %s', e)
+        return jsonify(status='error', database='unreachable'), 503
+    return jsonify(status='ok', database='ok', online_users=len(online_users))
 
 
 # ── Privacy policy ────────────────────────────────────────────
