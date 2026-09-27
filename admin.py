@@ -20,58 +20,66 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 # ── HTML helpers ──────────────────────────────────────────────
 
 CSS = """
+:root {
+  color-scheme: dark;
+  --bg: #1f2023; --surface: #2a2b2f; --surface2: #34353b; --border: #3b3c42; --row: #303137;
+  --text: #e6e6e9; --muted: #9b9ca3; --accent: #4f8ef7; --accent-bg: rgba(79,142,247,.16);
+  --danger: #ED4245; --danger-bg: rgba(237,66,69,.16); --ok: #57c27a; --ok-bg: rgba(59,165,92,.16);
+}
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f0f3; color: #222; font-size: 14px; }
-a { color: #4f8ef7; text-decoration: none; }
-.topbar { background: #fff; border-bottom: 1px solid #e0e0e6; padding: 0 28px; height: 52px;
+body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+a { color: #6ea1ff; text-decoration: none; }
+.topbar { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px;
           display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 10; }
-.topbar h1 { font-size: 18px; font-weight: 700; color: #4f8ef7; margin-right: 20px; }
+.topbar h1 { font-size: 18px; font-weight: 700; color: var(--accent); margin-right: 20px; }
 .topbar-left { display: flex; align-items: center; }
-nav a { color: #555; padding: 7px 11px; border-radius: 7px; font-size: 13px; font-weight: 500; }
-nav a:hover { background: #f0f0f3; }
-nav a.active { background: #e8f0fe; color: #4f8ef7; }
+nav a { color: var(--muted); padding: 7px 11px; border-radius: 7px; font-size: 13px; font-weight: 500; }
+nav a:hover { background: var(--surface2); color: var(--text); }
+nav a.active { background: var(--accent-bg); color: var(--accent); }
 .content { max-width: 1100px; margin: 28px auto; padding: 0 20px; }
 h2 { font-size: 20px; font-weight: 700; margin-bottom: 20px; }
 .stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
-.stat { background: #fff; border-radius: 12px; padding: 18px; border: 1px solid #e0e0e6; text-align: center; }
-.stat-num { font-size: 30px; font-weight: 700; color: #4f8ef7; }
-.stat-label { font-size: 12px; color: #888; margin-top: 4px; }
-.card { background: #fff; border-radius: 12px; border: 1px solid #e0e0e6; overflow: hidden; margin-bottom: 20px; }
-.card-header { padding: 14px 18px; border-bottom: 1px solid #f0f0f3; font-weight: 600; font-size: 15px; }
+.stat { background: var(--surface); border-radius: 12px; padding: 18px; border: 1px solid var(--border); text-align: center; }
+.stat-num { font-size: 30px; font-weight: 700; color: var(--accent); }
+.stat-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+.card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; margin-bottom: 20px; }
+.card-header { padding: 14px 18px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 15px; }
 table { width: 100%; border-collapse: collapse; }
-th { text-align: left; padding: 9px 14px; color: #888; font-size: 11px; font-weight: 600; text-transform: uppercase;
-     letter-spacing: .04em; border-bottom: 1px solid #f0f0f3; background: #fafafa; }
-td { padding: 11px 14px; border-bottom: 1px solid #f8f8f8; vertical-align: top; }
+th { text-align: left; padding: 9px 14px; color: var(--muted); font-size: 11px; font-weight: 600; text-transform: uppercase;
+     letter-spacing: .04em; border-bottom: 1px solid var(--border); background: var(--surface2); }
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
 tr:last-child td { border-bottom: none; }
-tr:hover td { background: #fafbff; }
+tr:hover td { background: var(--row); }
 .btn { display: inline-block; padding: 5px 13px; border-radius: 7px; font-size: 12px; font-weight: 600;
        cursor: pointer; border: none; font-family: inherit; }
-.btn-primary { background: #4f8ef7; color: #fff; }
-.btn-danger { background: #ED4245; color: #fff; }
-.btn-ghost { background: #f0f0f3; color: #555; }
+.btn-primary { background: var(--accent); color: #fff; }
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-ghost { background: var(--surface2); color: var(--text); }
 .btn:hover { opacity: .85; }
 .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
 input[type=text], input[type=password], input[type=search] {
-  padding: 8px 12px; border: 1px solid #e0e0e6; border-radius: 8px; font-size: 14px; outline: none; width: 260px; }
-input:focus { border-color: #4f8ef7; }
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; width: 260px;
+  background: var(--bg); color: var(--text); }
+input:focus { border-color: var(--accent); }
 form.inline { display: inline; }
 .tag { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
-.tag-blue { background: #e8f0fe; color: #4f8ef7; }
-.tag-red { background: #fde8e8; color: #ED4245; }
+.tag-blue { background: var(--accent-bg); color: #6ea1ff; }
+.tag-red { background: var(--danger-bg); color: #ff7b7d; }
 .pre { white-space: pre-wrap; word-break: break-all; max-width: 500px; line-height: 1.5; }
-.mono { font-family: monospace; font-size: 12px; color: #888; }
-.logout { color: #888; font-size: 13px; }
-.logout:hover { color: #ED4245; }
-.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; align-items: center; justify-content: center; }
+.mono { font-family: monospace; font-size: 12px; color: var(--muted); }
+.logout { color: var(--muted); font-size: 13px; }
+.logout:hover { color: var(--danger); }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 100; align-items: center; justify-content: center; }
 .modal-overlay.open { display: flex; }
-.modal { background: #fff; border-radius: 14px; padding: 28px; width: 360px; }
+.modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 360px; }
 .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
 .modal input { width: 100%; margin-bottom: 14px; }
 .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
 .notice { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
-.notice-ok { background: #e7f6ec; color: #1f7a3d; }
-.notice-err { background: #fdecec; color: #b3261e; }
-select { padding: 5px 8px; border: 1px solid #e0e0e6; border-radius: 7px; font-size: 13px; }
+.notice-ok { background: var(--ok-bg); color: var(--ok); }
+.notice-err { background: var(--danger-bg); color: #ff7b7d; }
+select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 7px; font-size: 13px;
+         background: var(--bg); color: var(--text); }
 """
 
 TOPBAR = """
@@ -100,14 +108,14 @@ def page(body, active=''):
 
 LOGIN_EXTRA_CSS = """
 body { display: flex; align-items: center; justify-content: center; height: 100vh; }
-.box { background: #fff; border-radius: 16px; padding: 40px; width: 320px; border: 1px solid #e0e0e6; }
-.box h1 { font-size: 22px; font-weight: 700; color: #4f8ef7; margin-bottom: 24px; }
-.box input { display: block; width: 100%; margin-bottom: 12px; padding: 10px 14px;
-             border: 1px solid #e0e0e6; border-radius: 8px; font-size: 14px; outline: none; }
-.box input:focus { border-color: #4f8ef7; }
-.box button { width: 100%; padding: 11px; background: #4f8ef7; color: #fff; border: none;
+.box { background: var(--surface); border-radius: 16px; padding: 40px; width: 320px; border: 1px solid var(--border); }
+.box h1 { font-size: 22px; font-weight: 700; color: var(--accent); margin-bottom: 24px; }
+.box input { display: block; width: 100%; margin-bottom: 12px; padding: 10px 14px; background: var(--bg); color: var(--text);
+             border: 1px solid var(--border); border-radius: 8px; font-size: 14px; outline: none; }
+.box input:focus { border-color: var(--accent); }
+.box button { width: 100%; padding: 11px; background: var(--accent); color: #fff; border: none;
               border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
-.err { color: #ED4245; font-size: 13px; margin-bottom: 10px; }
+.err { color: #ff7b7d; font-size: 13px; margin-bottom: 10px; }
 """
 
 
@@ -231,11 +239,11 @@ def feedback():
           </td></tr>"""
 
     body = f"""
-    <h2>用户反馈 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 条</span></h2>
+    <h2>用户反馈 <span style="font-size:14px;font-weight:400;color:var(--muted)">共 {len(rows)} 条</span></h2>
     <div class="card">
       <table>
         <tr><th>用户</th><th>内容</th><th>时间</th><th></th></tr>
-        {rows_html or "<tr><td colspan='4' style='color:#aaa;text-align:center;padding:30px'>暂无反馈</td></tr>"}
+        {rows_html or "<tr><td colspan='4' style='color:var(--muted);text-align:center;padding:30px'>暂无反馈</td></tr>"}
       </table>
     </div>"""
     return page(body, 'fb')
@@ -281,11 +289,11 @@ def reports():
           </td></tr>"""
 
     body = f"""
-    <h2>举报记录 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 条</span></h2>
+    <h2>举报记录 <span style="font-size:14px;font-weight:400;color:var(--muted)">共 {len(rows)} 条</span></h2>
     <div class="card">
       <table>
         <tr><th>举报人</th><th>被举报</th><th>原因</th><th>时间</th><th></th><th></th></tr>
-        {rows_html or "<tr><td colspan='6' style='color:#aaa;text-align:center;padding:30px'>暂无举报</td></tr>"}
+        {rows_html or "<tr><td colspan='6' style='color:var(--muted);text-align:center;padding:30px'>暂无举报</td></tr>"}
       </table>
     </div>"""
     return page(body, 'rp')
@@ -307,7 +315,7 @@ def match_transcript(match_id):
     if not match:
         body = (
             f'<p><a href="/admin/reports">← 返回举报</a></p><h2>匹配 #{match_id}</h2>'
-            '<div class="card" style="padding:20px;color:#888">记录已超过 7 天，已自动删除。</div>'
+            '<div class="card" style="padding:20px;color:var(--muted)">记录已超过 7 天，已自动删除。</div>'
         )
         return page(body, 'rp')
     rows = ''.join(
@@ -318,12 +326,12 @@ def match_transcript(match_id):
     started = match['started_at'].strftime('%Y-%m-%d %H:%M') if match.get('started_at') else ''
     body = f"""
     <p style="margin-bottom:16px"><a href="/admin/reports">← 返回举报</a></p>
-    <h2>匹配 #{match_id} <span style="font-size:14px;font-weight:400;color:#888">
+    <h2>匹配 #{match_id} <span style="font-size:14px;font-weight:400;color:var(--muted)">
       {_esc(match['mode'])} · {started} · {_esc(match['user_a'])} ↔ {_esc(match['user_b'])}
       · 结束原因：{_esc(match.get('end_reason') or '进行中')}</span></h2>
     <div class="card"><table>
       <tr><th>时间</th><th>发送者</th><th>内容</th></tr>
-      {rows or "<tr><td colspan='3' style='color:#aaa;padding:20px;text-align:center'>没有消息</td></tr>"}
+      {rows or "<tr><td colspan='3' style='color:var(--muted);padding:20px;text-align:center'>没有消息</td></tr>"}
     </table></div>"""
     return page(body, 'rp')
 
@@ -367,7 +375,7 @@ def users():
         rows_html += (
             f'<tr><td class="mono">{uname}</td>'
             f'<td>{_esc(r["screenname"] or "")}</td>'
-            f'<td style="color:#888">{_esc(r["bio"] or "")}</td>'
+            f'<td style="color:var(--muted)">{_esc(r["bio"] or "")}</td>'
             f'<td>'
             f'<button class="btn btn-ghost" data-u="{uname}" onclick="openReset(this.dataset.u)">重置密码</button> '
             f'<button class="btn btn-ghost" data-u="{uname}" onclick="openRename(this.dataset.u)">改用户名</button> '
@@ -377,13 +385,13 @@ def users():
             f'</td></tr>'
         )
 
-    empty = "<tr><td colspan='4' style='color:#aaa;text-align:center;padding:30px'>未找到用户</td></tr>"
+    empty = "<tr><td colspan='4' style='color:var(--muted);text-align:center;padding:30px'>未找到用户</td></tr>"
     base = f'/admin/users?q={_esc(q)}' if q else '/admin/users'
     pagination = _pages(total, p, PER_PAGE, base)
 
     body = f'''
     {_notice()}
-    <h2>用户管理 <span style="font-size:14px;font-weight:400;color:#888">共 {total} 个用户</span></h2>
+    <h2>用户管理 <span style="font-size:14px;font-weight:400;color:var(--muted)">共 {total} 个用户</span></h2>
     <form class="search-row" method="get">
       <input type="search" name="q" value="{_esc(q)}" placeholder="搜索用户名或显示名…">
       <button class="btn btn-primary" type="submit">搜索</button>
@@ -411,7 +419,7 @@ def users():
     <div class="modal-overlay" id="rename-modal">
       <div class="modal">
         <h3>修改用户名</h3>
-        <p style="color:#888;font-size:13px;margin-bottom:12px">3-20 位小写字母、数字或下划线。该用户会被登出，需要用新用户名重新登录；旧用户名将永久停用。</p>
+        <p style="color:var(--muted);font-size:13px;margin-bottom:12px">3-20 位小写字母、数字或下划线。该用户会被登出，需要用新用户名重新登录；旧用户名将永久停用。</p>
         <form method="post" id="rename-form" action="">
           <input type="text" name="new_username" id="new_username" placeholder="新用户名" autocomplete="off">
           <div class="modal-btns">
@@ -516,11 +524,11 @@ def rooms():
         )
 
     body = f"""
-    <h2>聊天室 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 个</span></h2>
+    <h2>聊天室 <span style="font-size:14px;font-weight:400;color:var(--muted)">共 {len(rows)} 个</span></h2>
     <div class="card">
       <table>
         <tr><th>名称</th><th>房间号</th><th>房主</th><th>成员数</th><th></th></tr>
-        {rows_html or "<tr><td colspan='5' style='color:#aaa;text-align:center;padding:30px'>暂无房间</td></tr>"}
+        {rows_html or "<tr><td colspan='5' style='color:var(--muted);text-align:center;padding:30px'>暂无房间</td></tr>"}
       </table>
     </div>"""
     return page(body, 'rm')
@@ -623,17 +631,17 @@ def room_detail(room_name):
         ts = m['created_at'].strftime('%m-%d %H:%M') if m.get('created_at') else ''
         text = m['text'] or ''
         if m.get('recalled'):
-            text = '<span style="color:#aaa">（已撤回）</span>'
+            text = '<span style="color:var(--muted)">（已撤回）</span>'
         else:
             text = _esc(text)
             if m.get('edited'):
-                text += ' <span style="color:#aaa;font-size:11px">(已编辑)</span>'
+                text += ' <span style="color:var(--muted);font-size:11px">(已编辑)</span>'
         recall_btn = (
             ''
             if m.get('recalled') or m.get('system')
             else action(f'/admin/messages/{m["id"]}/recall', '撤回', danger=True, confirm='撤回这条消息？')
         )
-        style = 'color:#aaa' if m.get('system') else ''
+        style = 'color:var(--muted)' if m.get('system') else ''
         msgs_html += (
             f'<tr style="{style}"><td class="mono">{ts}</td>'
             f'<td class="mono">{_esc(m["screenname"] or m["username"])}</td>'
@@ -651,7 +659,7 @@ def room_detail(room_name):
           <div class="card-header">成员 ({len(members)})</div>
           <table>
             <tr><th>用户名</th><th>显示名</th><th>状态</th><th></th></tr>
-            {members_html or "<tr><td colspan='4' style='color:#aaa;padding:20px;text-align:center'>暂无成员</td></tr>"}
+            {members_html or "<tr><td colspan='4' style='color:var(--muted);padding:20px;text-align:center'>暂无成员</td></tr>"}
           </table>
         </div>
         {kicked_card}
@@ -661,7 +669,7 @@ def room_detail(room_name):
           <div class="card-header">消息记录（共 {msg_total} 条）</div>
           <table>
             <tr><th>时间</th><th>发送者</th><th>内容</th><th></th></tr>
-            {msgs_html or "<tr><td colspan='4' style='color:#aaa;padding:20px;text-align:center'>暂无消息</td></tr>"}
+            {msgs_html or "<tr><td colspan='4' style='color:var(--muted);padding:20px;text-align:center'>暂无消息</td></tr>"}
           </table>
         </div>
         {msg_pagination}
@@ -783,7 +791,7 @@ def _pages(total, page, per_page, base_url):
         return ''
     sep = '&' if '?' in base_url else '?'
     parts = ['<div style="display:flex;gap:6px;align-items:center;margin-top:14px;flex-wrap:wrap">']
-    parts.append(f'<span style="color:#888;font-size:13px">第 {page}/{total_pages} 页，共 {total} 条</span>')
+    parts.append(f'<span style="color:var(--muted);font-size:13px">第 {page}/{total_pages} 页，共 {total} 条</span>')
     if page > 1:
         parts.append(f'<a href="{base_url}{sep}page=1" class="btn btn-ghost">«</a>')
         parts.append(f'<a href="{base_url}{sep}page={page - 1}" class="btn btn-ghost">‹ 上一页</a>')
