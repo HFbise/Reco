@@ -301,7 +301,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       socket.off('kicked_from_room', onKickedFromRoom);
       socket.off('message', onMessage);
     };
-  }, [currentUser]);
+  }, [currentUser, setBlocked, t]);
 
   // Sort by lastActivity desc
   // 不排序：顺序由服务器决定，新消息到达时 onMessage 把房间移到第0位（同老 web bumpRoomToTop）
@@ -616,7 +616,7 @@ const s = StyleSheet.create({
 
   sidebarHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth,
+    height: 50, paddingHorizontal: 14, borderBottomWidth: 1, // lines up with the chat header
   },
   sidebarTitle: { fontSize: 16, fontWeight: String(Fonts.bold) as any },
 

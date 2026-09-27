@@ -86,7 +86,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
         label: t(`emoji-group-${g}` as any) ?? `Group ${g}`,
         emojis,
       }));
-  }, [allEmojis, lang]);
+  }, [allEmojis, t]);
 
   const displayEmojis = useMemo(() => {
     const q = search.trim().toLowerCase();

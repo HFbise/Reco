@@ -22,7 +22,7 @@ export default function RoomScreen() {
 
   useEffect(() => {
     if (!isDm) setRoom(name);
-  }, [name, isDm]);
+  }, [name, isDm, setRoom]);
 
   const dmMeta: DmMeta | null = isDm && otherUsername
     ? { screenname: displayName ?? otherUsername, username: otherUsername, avatarExpression, avatarColor }

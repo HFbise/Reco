@@ -7,7 +7,7 @@ on:
 
 jobs:
   backend:
-    name: Backend tests
+    name: Backend + end-to-end tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -25,7 +25,9 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - run: pip install -r requirements.txt pytest ruff==0.16.9 "python-socketio[client]"
+      - run: pip install -r requirements.txt pytest ruff==0.16.9 "python-socketio[client]" playwright==1.63.0
+      - name: Browser for end-to-end tests
+        run: python -m playwright install --with-deps chromium
       - name: Lint (ruff)
         run: ruff check . && ruff format --check .
       - run: pytest tests -q
@@ -35,7 +37,7 @@ jobs:
           DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
 
   frontend:
-    name: Frontend lint & typecheck
+    name: Frontend lint, typecheck & unit tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -50,3 +52,4 @@ jobs:
       - run: npm ci --legacy-peer-deps
       - run: npm run typecheck
       - run: npm run lint
+      - run: npm test

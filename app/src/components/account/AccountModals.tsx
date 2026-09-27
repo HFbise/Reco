@@ -1,0 +1,183 @@
+import { useEffect, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import { ModalFrame, modalInputStyle } from './ModalFrame';
+import { AvatarView, EXPRESSIONS, AVATAR_COLORS_LIST } from '../AvatarView';
+import { useColors } from '../../hooks/useColors';
+import { useT } from '../../hooks/useT';
+import { useAuthStore } from '../../store/authStore';
+import { showAlert } from '../../lib/alert';
+import { changePassword, deleteAccount, submitFeedback, updateProfile } from '../../lib/account';
+
+interface DialogProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+/** Reset a dialog's fields each time it opens. */
+function useOnOpen(visible: boolean, reset: () => void) {
+  useEffect(() => {
+    if (visible) reset();
+    // reset is recreated every render; only opening should trigger it
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+}
+
+export function ChangePasswordModal({ visible, onClose }: DialogProps) {
+  const c = useColors();
+  const t = useT();
+  const [oldPw, setOldPw] = useState('');
+  const [newPw, setNewPw] = useState('');
+  const [confirmPw, setConfirmPw] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useOnOpen(visible, () => { setOldPw(''); setNewPw(''); setConfirmPw(''); setError(''); });
+
+  async function save() {
+    if (!oldPw || !newPw || !confirmPw) { setError(t('err-fill-required')); return; }
+    if (newPw !== confirmPw) { setError(t('err-password-mismatch')); return; }
+    setBusy(true);
+    const reply = await changePassword(oldPw, newPw);
+    setBusy(false);
+    if (!reply.success) { setError(t.server(reply, 'err-change-failed')); return; }
+    onClose();
+    showAlert(t('password-changed'));
+  }
+
+  const input = modalInputStyle(c);
+  return (
+    <ModalFrame visible={visible} onClose={onClose} title={t('change-password')} error={error}
+      confirmLabel={t('save')} onConfirm={save} busy={busy}>
+      <TextInput style={input} placeholder={t('ph-old-password')} placeholderTextColor={c.textMuted} value={oldPw}
+        onChangeText={setOldPw} secureTextEntry autoComplete="current-password" textContentType="password" />
+      <TextInput style={input} placeholder={t('ph-new-password')} placeholderTextColor={c.textMuted} value={newPw}
+        onChangeText={setNewPw} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
+      <TextInput style={input} placeholder={t('ph-confirm-password')} placeholderTextColor={c.textMuted} value={confirmPw}
+        onChangeText={setConfirmPw} secureTextEntry autoComplete="new-password" textContentType="newPassword"
+        onSubmitEditing={save} />
+    </ModalFrame>
+  );
+}
+
+export function EditProfileModal({ visible, onClose }: DialogProps) {
+  const c = useColors();
+  const t = useT();
+  const currentUser = useAuthStore((s) => s.currentUser);
+  const [screenname, setScreenname] = useState('');
+  const [bio, setBio] = useState('');
+  const [expression, setExpression] = useState('Smile');
+  const [color, setColor] = useState(AVATAR_COLORS_LIST[0]);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useOnOpen(visible, () => {
+    setScreenname(currentUser?.screenname ?? '');
+    setBio(currentUser?.bio ?? '');
+    setExpression(currentUser?.avatar_expression || 'Smile');
+    setColor(currentUser?.avatar_color || AVATAR_COLORS_LIST[0]);
+    setError('');
+  });
+
+  async function save() {
+    if (!screenname.trim()) { setError(t('err-name-required')); return; }
+    setBusy(true);
+    const reply = await updateProfile({ screenname: screenname.trim(), bio: bio.trim(), expression, color });
+    setBusy(false);
+    if (!reply.success) { setError(t.server(reply, 'err-save-failed')); return; }
+    onClose();
+  }
+
+  const input = modalInputStyle(c);
+  return (
+    <ModalFrame visible={visible} onClose={onClose} title={t('edit-profile')} error={error}
+      confirmLabel={t('save')} onConfirm={save} busy={busy}>
+      <View style={s.avatarPicker}>
+        <AvatarView expression={expression} color={color} username={currentUser?.username}
+          screenname={currentUser?.screenname} size={56} />
+        <View style={s.grid}>
+          {EXPRESSIONS.map((key) => (
+            <TouchableOpacity key={key} style={[s.exprOpt, expression === key && s.exprSelected]}
+              onPress={() => setExpression(key)} activeOpacity={0.7}>
+              <AvatarView expression={key} color={color} size={38} />
+            </TouchableOpacity>
+          ))}
+        </View>
+        <View style={s.grid}>
+          {AVATAR_COLORS_LIST.map((col) => (
+            <TouchableOpacity key={col} style={[s.colorDot, { backgroundColor: col }, color === col && s.colorSelected]}
+              onPress={() => setColor(col)} activeOpacity={0.7} />
+          ))}
+        </View>
+      </View>
+      <Text style={[s.label, { color: c.textMuted }]}>{t('display-name')}</Text>
+      <TextInput style={input} value={screenname} onChangeText={setScreenname} placeholder={t('display-name')}
+        placeholderTextColor={c.textMuted} maxLength={32} />
+      <Text style={[s.label, { color: c.textMuted }]}>{t('bio-label')}</Text>
+      <TextInput style={[input, s.multiline]} value={bio} onChangeText={setBio} placeholder={t('ph-bio')}
+        placeholderTextColor={c.textMuted} multiline numberOfLines={3} textAlignVertical="top" maxLength={200} />
+    </ModalFrame>
+  );
+}
+
+export function FeedbackModal({ visible, onClose }: DialogProps) {
+  const c = useColors();
+  const t = useT();
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useOnOpen(visible, () => { setText(''); setError(''); });
+
+  async function send() {
+    setBusy(true);
+    const reply = await submitFeedback(text.trim());
+    setBusy(false);
+    if (!reply.success) { setError(t.server(reply, 'err-save-failed')); return; }
+    onClose();
+    showAlert(t('feedback-sent'));
+  }
+
+  return (
+    <ModalFrame visible={visible} onClose={onClose} title={t('feedback-title')} error={error}
+      confirmLabel={t('feedback-submit')} onConfirm={send} busy={busy} confirmDisabled={!text.trim()}>
+      <TextInput style={[modalInputStyle(c), s.multiline, { minHeight: 100 }]} placeholder={t('feedback-ph')}
+        placeholderTextColor={c.textMuted} value={text} onChangeText={setText} multiline maxLength={2000}
+        textAlignVertical="top" />
+    </ModalFrame>
+  );
+}
+
+export function DeleteAccountModal({ visible, onClose }: DialogProps) {
+  const c = useColors();
+  const t = useT();
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useOnOpen(visible, () => { setPassword(''); setError(''); });
+
+  async function confirm() {
+    if (!password) { setError(t('err-fill-required')); return; }
+    setBusy(true);
+    const reply = await deleteAccount(password);
+    setBusy(false);
+    if (!reply.success) setError(t.server(reply, 'err-save-failed'));
+  }
+
+  return (
+    <ModalFrame visible={visible} onClose={onClose} title={t('confirm-delete-title')} titleColor={c.danger}
+      error={error} confirmLabel={t('delete-account')} onConfirm={confirm} busy={busy} danger>
+      <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>{t('confirm-delete-msg')}</Text>
+      <TextInput style={modalInputStyle(c)} placeholder={t('ph-password')} placeholderTextColor={c.textMuted}
+        value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password"
+        textContentType="password" onSubmitEditing={confirm} />
+    </ModalFrame>
+  );
+}
+
+const s = StyleSheet.create({
+  avatarPicker: { alignItems: 'center', gap: 10 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+  exprOpt: { padding: 2, borderRadius: 22, borderWidth: 2, borderColor: 'transparent' },
+  exprSelected: { borderColor: '#4f8ef7' },
+  colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'transparent' },
+  colorSelected: { borderColor: '#fff', transform: [{ scale: 1.15 }] },
+  label: { fontSize: 12, marginBottom: -6 },
+  multiline: { minHeight: 70 },
+});

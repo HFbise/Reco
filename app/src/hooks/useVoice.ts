@@ -198,6 +198,10 @@ export function useVoice(room: string) {
     Object.keys(peerConnsRef.current).forEach(closePeer);
   }
 
+  // Effects below subscribe once per room; they reach these (re-created every render) through a ref
+  const actions = useRef({ connectToPeer, answerPeer, stopLocalStream, closePeer, stopLive, stopStreamAudio });
+  actions.current = { connectToPeer, answerPeer, stopLocalStream, closePeer, stopLive, stopStreamAudio };
+
   // ── socket listeners ──────────────────────────────────────
 
   useEffect(() => {
@@ -215,7 +219,7 @@ export function useVoice(room: string) {
       if (inVoiceRef.current && localStreamRef.current) {
         for (const m of members) {
           if (m.username !== userRef.current?.username) {
-            await connectToPeer(m.username);
+            await actions.current.connectToPeer(m.username);
           }
         }
       }
@@ -227,19 +231,19 @@ export function useVoice(room: string) {
         prev.some(m => m.username === data.username) ? prev : [...prev, data]
       );
       if (inVoiceRef.current && data.username !== userRef.current?.username && localStreamRef.current) {
-        await connectToPeer(data.username);
+        await actions.current.connectToPeer(data.username);
       }
     };
 
     const onVoiceUserLeft = (data: { username: string; room?: string }) => {
       if (data.room && data.room !== roomRef.current) return;
       setVoiceMembers(prev => prev.filter(m => m.username !== data.username));
-      closePeer(data.username);
+      actions.current.closePeer(data.username);
     };
 
     const onVoiceOffer = async (data: any) => {
       if (data.to !== userRef.current?.username || !inVoiceRef.current) return;
-      await answerPeer(data.from, data.offer);
+      await actions.current.answerPeer(data.from, data.offer);
     };
 
     const onVoiceAnswer = async (data: any) => {
@@ -275,7 +279,7 @@ export function useVoice(room: string) {
     const onVoiceBanned = (data: { target: string; room?: string }) => {
       if (data.room && data.room !== roomRef.current) return;
       if (data.target === userRef.current?.username && inVoiceRef.current) {
-        stopLocalStream();
+        actions.current.stopLocalStream();
         inVoiceRef.current = false;
         setInVoice(false);
         setIsMuted(false);
@@ -304,7 +308,7 @@ export function useVoice(room: string) {
     // Reconnect: re-join voice after socket reconnects
     const onConnect = () => {
       if (inVoiceRef.current && userRef.current && roomRef.current) {
-        Object.keys(peerConnsRef.current).forEach(closePeer);
+        Object.keys(peerConnsRef.current).forEach(actions.current.closePeer);
         socket.emit('voice_join', {
           username: userRef.current.username,
           screenname: userRef.current.screenname,
@@ -359,9 +363,9 @@ export function useVoice(room: string) {
       try { speakAudioCtxRef.current?.close(); } catch {}
       speakAudioCtxRef.current = null;
       if (inVoiceRef.current) {
-        stopLive(false);
-        stopStreamAudio(false);
-        stopLocalStream();
+        actions.current.stopLive(false);
+        actions.current.stopStreamAudio(false);
+        actions.current.stopLocalStream();
         getSocket().emit('voice_leave', {
           username: userRef.current?.username,
           room: roomRef.current,

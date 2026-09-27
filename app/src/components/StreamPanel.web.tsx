@@ -65,8 +65,8 @@ function useVideoStream(videoRef: React.RefObject<HTMLVideoElement | null>, stre
   useEffect(() => {
     const v = videoRef.current;
     if (v) { v.srcObject = stream; v.play().catch(() => {}); }
-    return () => { if (videoRef.current) videoRef.current.srcObject = null; };
-  }, [stream]);
+    return () => { if (v) v.srcObject = null; };
+  }, [stream, videoRef]);
 }
 
 function fullscreen(el: HTMLElement | null) {
@@ -132,6 +132,7 @@ function FloaterCard({ screenname, stream, onPopIn }: {
   useVideoStream(videoRef, stream);
 
   const floaterRef = useRef<HTMLDivElement>(null);
+  const listeners = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
   const drag = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
 
   function onMouseDown(e: React.MouseEvent) {
@@ -139,6 +140,7 @@ function FloaterCard({ screenname, stream, onPopIn }: {
     if (!el) return;
     const r = el.getBoundingClientRect();
     drag.current = { startX: e.clientX, startY: e.clientY, ox: r.left, oy: r.top };
+    listeners.current = { move: onMouseMove, up: onMouseUp };
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
     e.preventDefault();
@@ -159,9 +161,13 @@ function FloaterCard({ screenname, stream, onPopIn }: {
     window.removeEventListener('mouseup', onMouseUp);
   }
 
+  // If unmounted mid-drag, detach the listeners that were actually attached
   useEffect(() => () => {
-    window.removeEventListener('mousemove', onMouseMove);
-    window.removeEventListener('mouseup', onMouseUp);
+    const l = listeners.current;
+    if (l) {
+      window.removeEventListener('mousemove', l.move);
+      window.removeEventListener('mouseup', l.up);
+    }
   }, []);
 
   return (

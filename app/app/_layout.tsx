@@ -46,7 +46,7 @@ export default function RootLayout() {
       loadLang(),
       loadSound(),
     ]).then(() => setReady(true));
-  }, []);
+  }, [loadUser, loadTheme, loadLang, loadSound]);
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: scheme === 'dark' ? '#2a2b2f' : '#f0f0f3' }} />;
 

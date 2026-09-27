@@ -28,6 +28,8 @@ export function unregisterPushToken() {
 export function usePushNotifications(onNotificationTap?: (roomName: string) => void) {
   const username = useAuthStore(s => s.currentUser?.username);
   const responseListenerRef = useRef<Notifications.Subscription | null>(null);
+  const onTapRef = useRef(onNotificationTap);
+  onTapRef.current = onNotificationTap;
 
   useEffect(() => {
     if (username) registerForPushAsync();
@@ -36,7 +38,7 @@ export function usePushNotifications(onNotificationTap?: (roomName: string) => v
   useEffect(() => {
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {
       const room = response.notification.request.content.data?.room as string | undefined;
-      if (room && onNotificationTap) onNotificationTap(room);
+      if (room) onTapRef.current?.(room);
     });
 
     return () => {

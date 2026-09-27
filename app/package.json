@@ -9,7 +9,8 @@
     "web": "expo start --web",
     "dev": "concurrently --names \"flask,expo\" --prefix-colors \"yellow,cyan\" \"python ../app.py\" \"expo start --web\"",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test \"src/**/*.test.ts\""
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",
@@ -40,6 +41,7 @@
     "babel-plugin-module-resolver": "^5.0.3",
     "concurrently": "^9.2.1",
     "eslint": "^9.39.5",
-    "eslint-config-expo": "~10.0.0"
+    "eslint-config-expo": "~10.0.0",
+    "tsx": "^4.23.15"
   }
 }
