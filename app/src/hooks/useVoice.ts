@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Alert } from 'react-native';
 import { getSocket } from '../lib/socket';
+import { SERVER_URL } from '../lib/config';
 import { useAuthStore } from '../store/authStore';
 import { useLangStore } from '../store/langStore';
 import { t as _t } from '../lib/i18n';
@@ -29,12 +30,25 @@ export interface VoiceMember {
   isStreamingAudio?: boolean;
 }
 
-const ICE_CONFIG = {
+// Fallback when TURN credentials can't be fetched: STUN only (fails behind strict NATs)
+const STUN_ONLY = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
   ],
 };
+
+/** Short-lived TURN credentials from our server, so voice works across restrictive networks. */
+async function fetchIceConfig(token?: string) {
+  if (!token) return STUN_ONLY;
+  try {
+    const res = await fetch(`${SERVER_URL}/api/ice-servers`, { headers: { Authorization: `Bearer ${token}` } });
+    const servers = await res.json();
+    return Array.isArray(servers) && servers.length ? { iceServers: servers } : STUN_ONLY;
+  } catch {
+    return STUN_ONLY;
+  }
+}
 
 export function useVoice(room: string) {
   const { currentUser } = useAuthStore();
@@ -53,6 +67,7 @@ export function useVoice(room: string) {
 
   // Stable refs — safe to read inside async socket handlers
   const inVoiceRef = useRef(false);
+  const iceConfigRef = useRef<RTCConfiguration | any>(STUN_ONLY);
   const localStreamRef = useRef<any>(null);
   const peerConnsRef = useRef<Record<string, any>>({});
   const remoteStreamsRef = useRef<Record<string, any>>({});
@@ -124,7 +139,7 @@ export function useVoice(room: string) {
 
   async function connectToPeer(targetUsername: string) {
     if (!PC || !localStreamRef.current) return;
-    const pc = new (PC as any)(ICE_CONFIG);
+    const pc = new (PC as any)(iceConfigRef.current);
     peerConnsRef.current[targetUsername] = pc;
     localStreamRef.current.getTracks().forEach((track: any) => {
       pc.addTrack(track, localStreamRef.current);
@@ -150,7 +165,7 @@ export function useVoice(room: string) {
     if (!PC || !SDP || !localStreamRef.current) return;
     let pc = peerConnsRef.current[targetUsername];
     if (!pc || pc.signalingState === 'closed') {
-      pc = new (PC as any)(ICE_CONFIG);
+      pc = new (PC as any)(iceConfigRef.current);
       peerConnsRef.current[targetUsername] = pc;
       localStreamRef.current.getTracks().forEach((track: any) => {
         pc.addTrack(track, localStreamRef.current);
@@ -367,8 +382,12 @@ export function useVoice(room: string) {
       const audioConstraints: any = micDeviceIdRef.current
         ? { deviceId: { ideal: micDeviceIdRef.current } }
         : true;
-      const stream = await getUserMedia({ audio: audioConstraints, video: false });
+      const [stream, iceConfig] = await Promise.all([
+        getUserMedia({ audio: audioConstraints, video: false }),
+        fetchIceConfig(currentUser?.token),
+      ]);
       if (!stream) throw new Error(T('voice-stream-error'));
+      iceConfigRef.current = iceConfig;
       localStreamRef.current = stream;
       inVoiceRef.current = true;
       setInVoice(true);

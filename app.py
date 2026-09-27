@@ -111,8 +111,10 @@ TURN_SECRET = os.environ.get('TURN_SECRET', '')
 
 @app.route('/api/ice-servers')
 def get_ice_servers():
-    # TURN relays cost bandwidth: only hand credentials to logged-in users
-    username = verify_token(request.args.get('t', ''))
+    # TURN relays cost bandwidth: only hand credentials to logged-in users.
+    # Token goes in a header, not the URL, so it stays out of access logs.
+    auth = request.headers.get('Authorization', '')
+    username = verify_token(auth[7:] if auth.startswith('Bearer ') else '')
     if not username or not TURN_SECRET:
         return jsonify([])
     expiry    = int(time.time()) + 86400

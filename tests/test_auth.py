@@ -92,3 +92,14 @@ def test_security_answer_is_stored_hashed():
     assert events(client, 'register_result')[0]['success']
     stored = query('SELECT security_answer FROM users WHERE username = %s', 'carol')[0]['security_answer']
     assert stored.startswith('scrypt:') and 'paris' not in stored.lower()
+
+
+def test_turn_credentials_only_for_logged_in_users():
+    create_user('alice')
+    _, token = login('alice')
+    web = app.test_client()
+    assert web.get('/api/ice-servers').get_json() == []
+    assert web.get(f'/api/ice-servers?t={token}').get_json() == []  # token must not travel in the URL
+    servers = web.get('/api/ice-servers', headers={'Authorization': f'Bearer {token}'}).get_json()
+    turn = [s for s in servers if s['urls'].startswith('turn:')]
+    assert len(turn) == 2 and all(s['username'].endswith(':alice') and s['credential'] for s in turn)
