@@ -7,6 +7,7 @@ uncaught Socket.IO handler errors are reported by `report_socket_error`.
 Authenticated handlers run in their own scope tagged with the event and user
 (see auth_session.authenticated).
 """
+
 import logging
 import os
 
@@ -25,8 +26,8 @@ def init():
         dsn=dsn,
         environment='production' if os.environ.get('RENDER') else 'development',
         release=os.environ.get('RENDER_GIT_COMMIT'),  # set by Render: ties errors to the deployed commit
-        send_default_pii=False,   # no IPs / cookies / headers; the username is attached explicitly
-        traces_sample_rate=0,     # errors only; no performance tracing
+        send_default_pii=False,  # no IPs / cookies / headers; the username is attached explicitly
+        traces_sample_rate=0,  # errors only; no performance tracing
     )
     enabled = True
     log.info('Sentry error monitoring enabled')

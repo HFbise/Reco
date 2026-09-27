@@ -1,5 +1,6 @@
 """Room passwords and closing DMs."""
-from conftest import create_user, create_room, events, connect_as, query, get_db
+
+from conftest import connect_as, create_room, create_user, events, get_db, query
 
 
 def join(client, room, password=''):
@@ -64,6 +65,7 @@ def test_closed_dm_is_hidden_until_a_new_message_arrives():
 def test_restart_keeps_members_and_room_admins():
     # Regression: _migrate() used to strip some users from every room on startup
     import app as app_module
+
     create_user('bise')
     create_room('club', owner='someone', members=['bise'], admins=['bise'])
     app_module._migrate()
@@ -76,6 +78,7 @@ def test_restart_keeps_members_and_room_admins():
 
 def test_lobby_has_no_owner_or_room_admins_after_startup():
     import app as app_module
+
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute("UPDATE rooms SET owner = 'admin', admins = '{mod}' WHERE name = '大厅'")
@@ -90,25 +93,37 @@ def test_system_messages_carry_a_code_for_translation():
     alice.emit('join', {'room': '大厅', 'skip_history': True})
     system = [m for m in events(alice, 'message') if m.get('system')]
     assert system[-1]['meta'] == {'system': {'code': 'user_joined', 'params': {'name': 'Alice'}}}
-    stored = query("SELECT text, meta FROM messages WHERE system")[0]
-    assert stored['text'] == 'Alice 加入了房间'   # readable fallback for the admin panel
+    stored = query('SELECT text, meta FROM messages WHERE system')[0]
+    assert stored['text'] == 'Alice 加入了房间'  # readable fallback for the admin panel
     assert stored['meta']['system']['code'] == 'user_joined'
 
 
 def test_legacy_system_messages_are_converted_to_codes():
     import app as app_module
+
     with get_db() as conn:
         cur = conn.cursor()
-        for text in ('Alice 加入了房间', 'Bob Smith 离开了房间', 'Carol 被踢出了房间',
-                     'Dan 成为了管理员', 'Eve 被取消了管理员', '某种未知的旧格式'):
-            cur.execute("INSERT INTO messages (room, username, screenname, text, system)"
-                        " VALUES ('大厅', 'system', '系统', %s, TRUE)", (text,))
-        cur.execute("INSERT INTO messages (room, username, screenname, text)"
-                    " VALUES ('大厅', 'alice', 'Alice', '我刚加入了房间')")  # ordinary chat: untouched
+        for text in (
+            'Alice 加入了房间',
+            'Bob Smith 离开了房间',
+            'Carol 被踢出了房间',
+            'Dan 成为了管理员',
+            'Eve 被取消了管理员',
+            '某种未知的旧格式',
+        ):
+            cur.execute(
+                'INSERT INTO messages (room, username, screenname, text, system)'
+                " VALUES ('大厅', 'system', '系统', %s, TRUE)",
+                (text,),
+            )
+        cur.execute(
+            'INSERT INTO messages (room, username, screenname, text)'
+            " VALUES ('大厅', 'alice', 'Alice', '我刚加入了房间')"
+        )  # ordinary chat: untouched
         conn.commit()
     app_module._migrate()
     app_module._migrate()  # idempotent
-    rows = {r['text']: r['meta'] for r in query("SELECT text, meta FROM messages")}
+    rows = {r['text']: r['meta'] for r in query('SELECT text, meta FROM messages')}
     assert rows['Alice 加入了房间'] == {'system': {'code': 'user_joined', 'params': {'name': 'Alice'}}}
     assert rows['Bob Smith 离开了房间']['system']['params'] == {'name': 'Bob Smith'}
     assert rows['Carol 被踢出了房间']['system']['code'] == 'user_kicked'

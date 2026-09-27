@@ -1,12 +1,14 @@
-import os
-import html
-import logging
 import base64
-import hmac
 import hashlib
+import hmac
+import html
 import json
+import logging
+import os
 import time
+
 from dotenv import load_dotenv
+
 load_dotenv()
 
 logging.basicConfig(
@@ -15,49 +17,46 @@ logging.basicConfig(
 )
 log = logging.getLogger('app')
 
-from flask import send_from_directory, request, jsonify
-from extensions import app, socketio
-from db import get_db
-from state import rooms_voice, online_users, LOBBY
-from auth_session import verify_token
-from admin import admin_bp
+from flask import jsonify, request, send_from_directory
 
-import handlers  # registers all socket event handlers
+from admin import admin_bp
+from auth_session import verify_token
+from db import get_db
+from extensions import app, socketio
+from state import LOBBY, online_users, rooms_voice
 
 app.register_blueprint(admin_bp)
 
-# ── Static / SPA ──────────────────────────────────────────────
+# ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
 
 
 @app.route('/')
 def index():
-    if os.path.isdir(DIST_DIR):
-        return send_from_directory(DIST_DIR, 'index.html')
-    return send_from_directory('templates', 'index.html')
+    return send_from_directory(DIST_DIR, 'index.html')
 
 
 @app.route('/<path:path>')
 def spa_static(path):
-    if os.path.isdir(DIST_DIR):
-        full = os.path.join(DIST_DIR, path)
-        if os.path.isfile(full):
-            return send_from_directory(DIST_DIR, path)
-        return send_from_directory(DIST_DIR, 'index.html')
-    return send_from_directory('templates', 'index.html')
+    if os.path.isfile(os.path.join(DIST_DIR, path)):
+        return send_from_directory(DIST_DIR, path)
+    return send_from_directory(DIST_DIR, 'index.html')  # client-side routes
 
 
-@app.route('/favicon.ico')
-def favicon():
-    return send_from_directory('static', 'icon.svg', mimetype='image/svg+xml')
+# Browsers that used the retired vanilla frontend still have its service worker
+# registered. This replacement clears its caches and unregisters itself.
+_RETIRED_SERVICE_WORKER = """self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(
+  caches.keys()
+    .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+    .then(() => self.registration.unregister())
+));
+"""
 
 
 @app.route('/sw.js')
-def service_worker():
-    resp = app.send_static_file('sw.js')
-    resp.headers['Service-Worker-Allowed'] = '/'
-    resp.headers['Cache-Control'] = 'no-cache'
-    return resp
+def retired_service_worker():
+    return _RETIRED_SERVICE_WORKER, 200, {'Content-Type': 'application/javascript', 'Cache-Control': 'no-cache'}
 
 
 # ── Health check ──────────────────────────────────────────────
@@ -84,7 +83,8 @@ def _privacy_contact():
 
 @app.route('/privacy')
 def privacy_policy():
-    return '''<!DOCTYPE html>
+    return (
+        """<!DOCTYPE html>
 <html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Reco 隐私政策</title>
 <style>body{font-family:-apple-system,sans-serif;max-width:680px;margin:40px auto;padding:0 20px;color:#222;line-height:1.7}h1{color:#4f8ef7}h2{margin-top:2em}a{color:#4f8ef7}</style>
@@ -106,7 +106,10 @@ def privacy_policy():
 <p>你可以随时在 App 内「我的资料 → 删除账号」永久删除账号及相关数据。</p>
 <h2>联系我们</h2>
 __CONTACT__
-</body></html>'''.replace('__CONTACT__', _privacy_contact()), 200, {'Content-Type': 'text/html; charset=utf-8'}
+</body></html>""".replace('__CONTACT__', _privacy_contact()),
+        200,
+        {'Content-Type': 'text/html; charset=utf-8'},
+    )
 
 
 # ── Voice leave beacon (page close) ──────────────────────────
@@ -127,8 +130,8 @@ def api_voice_leave():
 
 
 # ── TURN credentials ──────────────────────────────────────────
-TURN_HOST   = os.environ.get('TURN_HOST', '')
-TURN_PORT   = int(os.environ.get('TURN_PORT', '3478'))
+TURN_HOST = os.environ.get('TURN_HOST', '')
+TURN_PORT = int(os.environ.get('TURN_PORT', '3478'))
 TURN_SECRET = os.environ.get('TURN_SECRET', '')
 
 
@@ -140,18 +143,16 @@ def get_ice_servers():
     username = verify_token(auth[7:] if auth.startswith('Bearer ') else '')
     if not username or not TURN_HOST or not TURN_SECRET:
         return jsonify([])
-    expiry    = int(time.time()) + 86400
+    expiry = int(time.time()) + 86400
     turn_user = f'{expiry}:{username}'
-    turn_pass = base64.b64encode(
-        hmac.new(TURN_SECRET.encode(), turn_user.encode(), hashlib.sha1).digest()
-    ).decode()
-    return jsonify([
-        {'urls': f'stun:{TURN_HOST}:{TURN_PORT}'},
-        {'urls': f'turn:{TURN_HOST}:{TURN_PORT}',
-         'username': turn_user, 'credential': turn_pass},
-        {'urls': f'turn:{TURN_HOST}:{TURN_PORT}?transport=tcp',
-         'username': turn_user, 'credential': turn_pass},
-    ])
+    turn_pass = base64.b64encode(hmac.new(TURN_SECRET.encode(), turn_user.encode(), hashlib.sha1).digest()).decode()
+    return jsonify(
+        [
+            {'urls': f'stun:{TURN_HOST}:{TURN_PORT}'},
+            {'urls': f'turn:{TURN_HOST}:{TURN_PORT}', 'username': turn_user, 'credential': turn_pass},
+            {'urls': f'turn:{TURN_HOST}:{TURN_PORT}?transport=tcp', 'username': turn_user, 'credential': turn_pass},
+        ]
+    )
 
 
 # ── Startup migrations ────────────────────────────────────────
@@ -163,71 +164,74 @@ LEGACY_SYSTEM_SUFFIXES = {
     'admin_removed': ' 被取消了管理员',
 }
 
+
 def _migrate():
     log = logging.getLogger('migrate')
     try:
         with get_db() as conn:
             cur = conn.cursor()
             # Base tables (no-ops on an existing database; lets a fresh DB bootstrap itself)
-            cur.execute('''CREATE TABLE IF NOT EXISTS users (
+            cur.execute("""CREATE TABLE IF NOT EXISTS users (
                 username TEXT PRIMARY KEY, screenname TEXT NOT NULL, password TEXT NOT NULL,
-                bio TEXT DEFAULT '', security_question TEXT, security_answer TEXT)''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS rooms (
-                name TEXT PRIMARY KEY, admins TEXT[] DEFAULT '{}', members TEXT[] DEFAULT '{}')''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS messages (
+                bio TEXT DEFAULT '', security_question TEXT, security_answer TEXT)""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS rooms (
+                name TEXT PRIMARY KEY, admins TEXT[] DEFAULT '{}', members TEXT[] DEFAULT '{}')""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS messages (
                 id SERIAL PRIMARY KEY, room TEXT NOT NULL, username TEXT NOT NULL,
                 screenname TEXT, text TEXT NOT NULL, time TEXT,
-                created_at TIMESTAMPTZ DEFAULT NOW())''')
-            cur.execute("CREATE INDEX IF NOT EXISTS messages_room_created_idx ON messages(room, created_at)")
-            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta JSONB")
-            cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT")
-            cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT")
-            cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]")
-            cur.execute("ALTER TABLE rooms ADD COLUMN IF NOT EXISTS code TEXT")
-            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT FALSE")
-            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE")
+                created_at TIMESTAMPTZ DEFAULT NOW())""")
+            cur.execute('CREATE INDEX IF NOT EXISTS messages_room_created_idx ON messages(room, created_at)')
+            cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta JSONB')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS kicked TEXT[]')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS code TEXT')
+            cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS recalled BOOLEAN DEFAULT FALSE')
+            cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE')
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb")
-            cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT FALSE")
-            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT")
-            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT")
-            cur.execute("ALTER TABLE users DROP COLUMN IF EXISTS is_admin")
-            cur.execute('''CREATE TABLE IF NOT EXISTS reports (
+            cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT FALSE')
+            cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT')
+            cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT')
+            cur.execute('ALTER TABLE users DROP COLUMN IF EXISTS is_admin')
+            cur.execute("""CREATE TABLE IF NOT EXISTS reports (
                 id SERIAL PRIMARY KEY, reporter TEXT NOT NULL, reported TEXT NOT NULL,
-                reason TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW())''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS blocks (
-                blocker TEXT NOT NULL, blocked TEXT NOT NULL, PRIMARY KEY (blocker, blocked))''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS feedback (
+                reason TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT NOW())""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS blocks (
+                blocker TEXT NOT NULL, blocked TEXT NOT NULL, PRIMARY KEY (blocker, blocked))""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS feedback (
                 id SERIAL PRIMARY KEY, username TEXT NOT NULL, text TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW())''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS push_tokens (
+                created_at TIMESTAMPTZ DEFAULT NOW())""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS push_tokens (
                 token TEXT PRIMARY KEY, username TEXT NOT NULL, platform TEXT,
-                updated_at TIMESTAMPTZ DEFAULT NOW())''')
-            cur.execute("CREATE INDEX IF NOT EXISTS push_tokens_username_idx ON push_tokens(username)")
+                updated_at TIMESTAMPTZ DEFAULT NOW())""")
+            cur.execute('CREATE INDEX IF NOT EXISTS push_tokens_username_idx ON push_tokens(username)')
             # Text mutes ('text') and voice bans ('voice'); NULL expires_at = until lifted
-            cur.execute('''CREATE TABLE IF NOT EXISTS room_restrictions (
+            cur.execute("""CREATE TABLE IF NOT EXISTS room_restrictions (
                 room TEXT NOT NULL, username TEXT NOT NULL, kind TEXT NOT NULL,
-                expires_at TIMESTAMPTZ, PRIMARY KEY (room, username, kind))''')
+                expires_at TIMESTAMPTZ, PRIMARY KEY (room, username, kind))""")
             # One-time passes into password-protected rooms
-            cur.execute('''CREATE TABLE IF NOT EXISTS room_invites (
+            cur.execute("""CREATE TABLE IF NOT EXISTS room_invites (
                 room TEXT NOT NULL, username TEXT NOT NULL, invited_by TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (room, username))''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS deleted_usernames (
-                username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())''')
-            cur.execute('''CREATE TABLE IF NOT EXISTS dm_closed (
+                created_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (room, username))""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS deleted_usernames (
+                username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())""")
+            cur.execute("""CREATE TABLE IF NOT EXISTS dm_closed (
                 username TEXT NOT NULL, dm_room TEXT NOT NULL,
-                closed_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (username, dm_room))''')
-            cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL")
+                closed_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (username, dm_room))""")
+            cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL')
 
             # Backfill missing room codes
-            import random, string
-            cur.execute("SELECT name FROM rooms WHERE code IS NULL")
+            import random
+            import string
+
+            cur.execute('SELECT name FROM rooms WHERE code IS NULL')
             for row in cur.fetchall():
                 while True:
                     code = ''.join(random.choices(string.digits, k=6))
                     cur.execute('SELECT 1 FROM rooms WHERE code = %s', (code,))
                     if not cur.fetchone():
                         break
-                cur.execute("UPDATE rooms SET code = %s WHERE name = %s", (code, row['name']))
+                cur.execute('UPDATE rooms SET code = %s WHERE name = %s', (code, row['name']))
 
             # System messages from before they carried a code: recover code + name from the
             # Chinese sentence so clients can show them in any language (idempotent).
@@ -245,7 +249,7 @@ def _migrate():
             cur.execute(
                 "INSERT INTO rooms (name, admins, members, owner) VALUES (%s, '{}', '{}', NULL)"
                 " ON CONFLICT (name) DO UPDATE SET owner = NULL, admins = '{}'",
-                (LOBBY,)
+                (LOBBY,),
             )
             conn.commit()
     except Exception as e:

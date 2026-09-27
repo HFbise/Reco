@@ -1,5 +1,6 @@
 """Identity comes from the server session, never from event payloads."""
-from conftest import create_user, create_room, events, connect_as, query
+
+from conftest import connect_as, create_room, create_user, events, query
 
 
 def join(client, room, password=''):
@@ -52,9 +53,16 @@ def test_message_sender_and_system_flag_cannot_be_spoofed():
     create_user('alice', screenname='Alice')
     alice = connect_as('alice')
     assert join(alice, '大厅')['success']
-    alice.emit('message', {
-        'room': '大厅', 'text': 'hi', 'username': 'admin', 'screenname': '系统', 'system': True,
-    })
+    alice.emit(
+        'message',
+        {
+            'room': '大厅',
+            'text': 'hi',
+            'username': 'admin',
+            'screenname': '系统',
+            'system': True,
+        },
+    )
     msg = events(alice, 'message')[-1]
     assert msg['username'] == 'alice' and msg['screenname'] == 'Alice' and 'system' not in msg
     row = query("SELECT username, system FROM messages WHERE text = 'hi'")[0]

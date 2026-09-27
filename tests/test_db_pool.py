@@ -1,4 +1,5 @@
 """The connection pool queues callers instead of failing when all connections are busy."""
+
 import threading
 import time
 
@@ -19,8 +20,8 @@ def test_exhausted_pool_waits_for_a_free_connection():
     t = threading.Thread(target=worker)
     t.start()
     time.sleep(0.3)
-    assert 'ok' not in got          # still waiting, not crashed
-    held.pop().close()              # free one connection
+    assert 'ok' not in got  # still waiting, not crashed
+    held.pop().close()  # free one connection
     t.join(5)
     assert got.get('ok')
     for c in held:

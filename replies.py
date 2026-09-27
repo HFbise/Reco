@@ -4,6 +4,7 @@ The server sends a stable error code plus parameters, never display text; the
 client translates `code` into the user's language (see app/src/lib/i18n.ts,
 keys prefixed `srv-`). This lets one room hold English and Chinese users.
 """
+
 from flask_socketio import emit
 
 

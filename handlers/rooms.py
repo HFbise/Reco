@@ -2,19 +2,24 @@ import json
 import logging
 import random
 import string
-from datetime import datetime, timezone
-from flask_socketio import emit, join_room, close_room
-from extensions import socketio
+from datetime import UTC, datetime
+
+from flask_socketio import close_room, emit, join_room
+
+import moderation
+from auth_session import authenticated, dm_participants, in_room
 from db import get_db
+from extensions import socketio
 from replies import fail
 from state import (
+    LOBBY,
+    emit_system_msg,
     get_level,
-    online_users, rooms_voice, rooms_stream,
-    emit_system_msg, LOBBY,
+    online_users,
+    rooms_stream,
+    rooms_voice,
 )
 from utils import hash_password, verify_password
-from auth_session import authenticated, in_room, dm_participants
-import moderation
 
 log = logging.getLogger(__name__)
 
@@ -34,23 +39,24 @@ def _build_members_data(cur, room_data: dict) -> list:
     user_rows = {}
     if member_usernames:
         cur.execute(
-            'SELECT username, screenname, avatar_expression, avatar_color'
-            ' FROM users WHERE username = ANY(%s)',
-            (member_usernames,)
+            'SELECT username, screenname, avatar_expression, avatar_color FROM users WHERE username = ANY(%s)',
+            (member_usernames,),
         )
         user_rows = {r['username']: r for r in cur.fetchall()}
     members = []
     for u in member_usernames:
         row = user_rows.get(u, {})
-        members.append({
-            'username': u,
-            'screenname': row.get('screenname', u),
-            'is_admin': u in admins_set,
-            'is_owner': u == owner,
-            'is_online': u in online_users,
-            'avatar_expression': row.get('avatar_expression') or 'Smile',
-            'avatar_color': row.get('avatar_color') or '#5865F2',
-        })
+        members.append(
+            {
+                'username': u,
+                'screenname': row.get('screenname', u),
+                'is_admin': u in admins_set,
+                'is_owner': u == owner,
+                'is_online': u in online_users,
+                'avatar_expression': row.get('avatar_expression') or 'Smile',
+                'avatar_color': row.get('avatar_color') or '#5865F2',
+            }
+        )
     members.sort(key=lambda m: (0 if m['is_online'] else 1, m['screenname']))
     return members
 
@@ -99,19 +105,22 @@ def handle_create_room(username, data):
                 return
             code = _gen_unique_room_code(cur)
             cur.execute(
-                'INSERT INTO rooms (name, admins, members, password, owner, code)'
-                ' VALUES (%s, %s, %s, %s, %s, %s)',
-                (room, [], [], hash_password(password) if password else None, username, code)
+                'INSERT INTO rooms (name, admins, members, password, owner, code) VALUES (%s, %s, %s, %s, %s, %s)',
+                (room, [], [], hash_password(password) if password else None, username, code),
             )
             conn.commit()
-        emit('create_room_result', {
-            'success': True, 'room': room,
-            'has_password': bool(password), 'code': code,
-        })
+        emit(
+            'create_room_result',
+            {
+                'success': True,
+                'room': room,
+                'has_password': bool(password),
+                'code': code,
+            },
+        )
         # Only the creator's own sessions (other devices) need this, not every user
         for sid in list(online_users.get(username, [])):
-            socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username},
-                          to=sid)
+            socketio.emit('new_room_created', {'room': room, 'has_password': bool(password), 'owner': username}, to=sid)
     except Exception as e:
         log.exception('create_room error: %s', e)
         fail('create_room_result', 'server_error')
@@ -144,8 +153,9 @@ def handle_join(username, data):
                         fail('join_result', 'wrong_password', wrong_password=True)
                         return
                     if needs_migrate:  # legacy plaintext room password
-                        cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
-                                    (hash_password(data['password']), room))
+                        cur.execute(
+                            'UPDATE rooms SET password = %s WHERE name = %s', (hash_password(data['password']), room)
+                        )
                 conn.commit()
 
             join_room(room)
@@ -167,32 +177,30 @@ def handle_join(username, data):
             if not data.get('skip_history'):
                 if since:
                     cur.execute(
-                        'SELECT * FROM messages WHERE room = %s AND created_at > %s'
-                        ' ORDER BY created_at ASC LIMIT 50',
-                        (room, since)
+                        'SELECT * FROM messages WHERE room = %s AND created_at > %s ORDER BY created_at ASC LIMIT 50',
+                        (room, since),
                     )
                     history = cur.fetchall()
                 else:
-                    cur.execute(
-                        'SELECT * FROM messages WHERE room = %s'
-                        ' ORDER BY created_at DESC LIMIT 50',
-                        (room,)
-                    )
+                    cur.execute('SELECT * FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT 50', (room,))
                     history = list(reversed(cur.fetchall()))
                 for msg in history:
-                    emit('message', {
-                        'id': msg['id'],
-                        'username': msg['username'],
-                        'screenname': msg['screenname'],
-                        'text': msg['text'],
-                        'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
-                        'room': room,
-                        'recalled': bool(msg.get('recalled')),
-                        'edited': bool(msg.get('edited')),
-                        'reactions': dict(msg.get('reactions') or {}),
-                        'system': bool(msg.get('system')),
-                        'meta': dict(msg['meta']) if msg.get('meta') else None,
-                    })
+                    emit(
+                        'message',
+                        {
+                            'id': msg['id'],
+                            'username': msg['username'],
+                            'screenname': msg['screenname'],
+                            'text': msg['text'],
+                            'time': msg['created_at'].isoformat() if msg.get('created_at') else msg['time'],
+                            'room': room,
+                            'recalled': bool(msg.get('recalled')),
+                            'edited': bool(msg.get('edited')),
+                            'reactions': dict(msg.get('reactions') or {}),
+                            'system': bool(msg.get('system')),
+                            'meta': dict(msg['meta']) if msg.get('meta') else None,
+                        },
+                    )
 
             # Get joiner screenname for system message
             joiner_screen = username
@@ -201,27 +209,34 @@ def handle_join(username, data):
             if row:
                 joiner_screen = row['screenname']
 
-        emit('join_result', {
-            'success': True, 'room': room,
-            'is_owner': username == owner,
-            'is_admin': username in admins_set,
-            'my_level': my_level,
-            'members': members_data,
-            'code': room_code,
-            'is_first_join': is_first_join,
-            'has_password': bool(room_data.get('password')),
-        })
+        emit(
+            'join_result',
+            {
+                'success': True,
+                'room': room,
+                'is_owner': username == owner,
+                'is_admin': username in admins_set,
+                'my_level': my_level,
+                'members': members_data,
+                'code': room_code,
+                'is_first_join': is_first_join,
+                'has_password': bool(room_data.get('password')),
+            },
+        )
         emit('members_list', {'room': room, 'members': members_data}, to=room)
 
         if is_first_join:
             emit_system_msg(room, 'user_joined', name=joiner_screen)
 
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
-            emit('voice_members_view', {
-                'members': rooms_voice[room]['voice_members'],
-                'banned': moderation.restricted_users(room, moderation.VOICE),
-                'room': room,
-            })
+            emit(
+                'voice_members_view',
+                {
+                    'members': rooms_voice[room]['voice_members'],
+                    'banned': moderation.restricted_users(room, moderation.VOICE),
+                    'room': room,
+                },
+            )
         for uname, sname in rooms_stream.get(room, {}).items():
             emit('stream_start', {'username': uname, 'screenname': sname, 'room': room})
 
@@ -276,13 +291,18 @@ def handle_get_rooms(username, data):
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                "SELECT name, password, code, owner, admins, members FROM rooms"
-                " WHERE name = %s OR %s = ANY(members)",
-                (LOBBY, username)
+                'SELECT name, password, code, owner, admins, members FROM rooms WHERE name = %s OR %s = ANY(members)',
+                (LOBBY, username),
             )
-            rooms = [{'name': r['name'], 'has_password': bool(r['password']),
-                      'needs_password': _needs_password(username, r),
-                      'code': r.get('code') or ''} for r in cur.fetchall()]
+            rooms = [
+                {
+                    'name': r['name'],
+                    'has_password': bool(r['password']),
+                    'needs_password': _needs_password(username, r),
+                    'code': r.get('code') or '',
+                }
+                for r in cur.fetchall()
+            ]
         lobby = next((r for r in rooms if r['name'] == LOBBY), None)
         if lobby:
             rooms.remove(lobby)
@@ -355,14 +375,12 @@ def handle_set_admin(requester, data):
             if remove:
                 if data['target'] in admins:
                     admins.remove(data['target'])
-                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s',
-                                (admins, data['room']))
+                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
                     conn.commit()
             else:
                 if data['target'] not in admins:
                     admins.append(data['target'])
-                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s',
-                                (admins, data['room']))
+                    cur.execute('UPDATE rooms SET admins = %s WHERE name = %s', (admins, data['room']))
                     conn.commit()
             cur.execute('SELECT screenname FROM users WHERE username = %s', (data['target'],))
             row = cur.fetchone()
@@ -387,8 +405,9 @@ def handle_set_room_password(requester, data):
             if not row or get_level(requester, row) < 2:
                 fail('set_room_password_result', 'no_permission')
                 return
-            cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
-                        (hash_password(password) if password else None, room))
+            cur.execute(
+                'UPDATE rooms SET password = %s WHERE name = %s', (hash_password(password) if password else None, room)
+            )
             conn.commit()
         emit('set_room_password_result', {'success': True})
         socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
@@ -410,8 +429,17 @@ def handle_close_room(requester, data):
             if not room_data or get_level(requester, room_data) < 2:
                 fail('close_room_result', 'no_permission')
                 return
-            emit('message', {'screenname': '系统', 'text': '房间已被关闭', 'system': True, 'room': data['room'],
-                             'meta': {'system': {'code': 'room_closed', 'params': {}}}}, to=data['room'])
+            emit(
+                'message',
+                {
+                    'screenname': '系统',
+                    'text': '房间已被关闭',
+                    'system': True,
+                    'room': data['room'],
+                    'meta': {'system': {'code': 'room_closed', 'params': {}}},
+                },
+                to=data['room'],
+            )
             emit('room_closed', {}, to=data['room'])
             cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
             cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))
@@ -436,11 +464,16 @@ def handle_find_room(username, data):
         if not room:
             fail('find_room_result', 'room_code_not_found')
             return
-        emit('find_room_result', {
-            'success': True, 'room': room['name'],
-            'has_password': bool(room['password']),
-            'needs_password': _needs_password(username, room, invited), 'code': room['code'],
-        })
+        emit(
+            'find_room_result',
+            {
+                'success': True,
+                'room': room['name'],
+                'has_password': bool(room['password']),
+                'needs_password': _needs_password(username, room, invited),
+                'code': room['code'],
+            },
+        )
     except Exception as e:
         log.exception('find_room error: %s', e)
         fail('find_room_result', 'server_error')
@@ -472,10 +505,7 @@ def handle_get_my_admin_rooms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                "SELECT name, code FROM rooms WHERE owner = %s OR %s = ANY(admins)",
-                (username, username)
-            )
+            cur.execute('SELECT name, code FROM rooms WHERE owner = %s OR %s = ANY(admins)', (username, username))
             rooms = [{'name': r['name'], 'code': r.get('code') or ''} for r in cur.fetchall()]
         emit('my_admin_rooms', {'rooms': rooms})
     except Exception as e:
@@ -495,8 +525,7 @@ def handle_invite_to_room(inviter, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)',
-                        ([inviter, target],))
+            cur.execute('SELECT username, screenname FROM users WHERE username = ANY(%s)', ([inviter, target],))
             users = {u['username']: u['screenname'] for u in cur.fetchall()}
             if target not in users:
                 fail('invite_sent', 'user_not_found')
@@ -519,14 +548,16 @@ def handle_invite_to_room(inviter, data):
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, meta)'
                 ' VALUES (%s, %s, %s, %s, %s, %s::jsonb) RETURNING id',
-                (dm_room, inviter, inviter_screen, text,
-                 datetime.now().strftime('%H:%M'), meta)
+                (dm_room, inviter, inviter_screen, text, datetime.now().strftime('%H:%M'), meta),
             )
             msg_id = cur.fetchone()['id']
             conn.commit()
         msg_data = {
-            'id': msg_id, 'username': inviter, 'screenname': inviter_screen,
-            'text': text, 'time': datetime.now(timezone.utc).isoformat(),
+            'id': msg_id,
+            'username': inviter,
+            'screenname': inviter_screen,
+            'text': text,
+            'time': datetime.now(UTC).isoformat(),
             'room': dm_room,
             'meta': {'invite': {'room': room, 'code': room_code}},
         }
@@ -540,6 +571,7 @@ def handle_invite_to_room(inviter, data):
 
 
 # ── Text mute ─────────────────────────────────────────────────
+
 
 @socketio.on('text_mute')
 @authenticated
@@ -569,6 +601,7 @@ def handle_text_unmute(requester, data):
 
 # ── Block / Report ────────────────────────────────────────────
 
+
 @socketio.on('report_user')
 @authenticated
 def handle_report_user(reporter, data):
@@ -579,8 +612,9 @@ def handle_report_user(reporter, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('INSERT INTO reports (reporter, reported, reason) VALUES (%s, %s, %s)',
-                        (reporter, reported, reason))
+            cur.execute(
+                'INSERT INTO reports (reporter, reported, reason) VALUES (%s, %s, %s)', (reporter, reported, reason)
+            )
             conn.commit()
         emit('report_result', {'success': True})
     except Exception as e:
@@ -598,8 +632,7 @@ def handle_block_user(blocker, data):
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                'INSERT INTO blocks (blocker, blocked) VALUES (%s, %s) ON CONFLICT DO NOTHING',
-                (blocker, blocked)
+                'INSERT INTO blocks (blocker, blocked) VALUES (%s, %s) ON CONFLICT DO NOTHING', (blocker, blocked)
             )
             conn.commit()
         emit('block_result', {'success': True, 'blocked': blocked})
@@ -617,8 +650,7 @@ def handle_unblock_user(blocker, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('DELETE FROM blocks WHERE blocker = %s AND blocked = %s',
-                        (blocker, blocked))
+            cur.execute('DELETE FROM blocks WHERE blocker = %s AND blocked = %s', (blocker, blocked))
             conn.commit()
         emit('unblock_result', {'success': True, 'unblocked': blocked})
     except Exception as e:

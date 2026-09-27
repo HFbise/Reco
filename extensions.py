@@ -1,5 +1,6 @@
-import os
 import logging
+import os
+
 from flask import Flask
 from flask_socketio import SocketIO
 
@@ -7,7 +8,7 @@ import monitoring
 
 monitoring.init()  # before the app exists, so the Flask integration hooks in
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)  # the web app is served from app/dist (see app.py)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY')
 if not app.config['SECRET_KEY']:
     # Session tokens are signed with this key; a random one logs everyone out on restart.
@@ -27,4 +28,3 @@ socketio = SocketIO(
 @socketio.on_error_default
 def _on_socket_error(e):
     monitoring.report_socket_error(e)
-

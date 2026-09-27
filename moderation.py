@@ -3,13 +3,14 @@
 Callers are responsible for permission checks; these functions do the work
 (database + live notifications to connected clients).
 """
+
 import logging
 import re
 
-from extensions import socketio
-from db import get_db
-from state import online_users, rooms_voice, emit_system_msg
 from auth_session import unbind
+from db import get_db
+from extensions import socketio
+from state import emit_system_msg, online_users, rooms_voice
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ def evict(username: str, room: str):
 
 
 # ── Rooms ─────────────────────────────────────────────────────
+
 
 def kick(room: str, target: str) -> bool:
     """Remove `target` from the room and bar them from rejoining."""
@@ -76,10 +78,10 @@ def restrict(room: str, target: str, kind: str, duration: int = 0):
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO room_restrictions (room, username, kind, expires_at)"
-            " VALUES (%s, %s, %s, CASE WHEN %s > 0 THEN NOW() + make_interval(secs => %s) END)"
-            " ON CONFLICT (room, username, kind) DO UPDATE SET expires_at = EXCLUDED.expires_at"
-            " RETURNING expires_at",
+            'INSERT INTO room_restrictions (room, username, kind, expires_at)'
+            ' VALUES (%s, %s, %s, CASE WHEN %s > 0 THEN NOW() + make_interval(secs => %s) END)'
+            ' ON CONFLICT (room, username, kind) DO UPDATE SET expires_at = EXCLUDED.expires_at'
+            ' RETURNING expires_at',
             (room, target, kind, duration, duration),
         )
         expires_at = cur.fetchone()['expires_at']
@@ -92,25 +94,31 @@ def restrict(room: str, target: str, kind: str, duration: int = 0):
         socketio.emit('voice_banned', {'target': target, 'room': room}, to=room)
         socketio.emit('voice_user_left', {'username': target, 'room': room}, to=room)
     if expires_at is not None:
+
         def lift_when_expired():
             socketio.sleep(duration)
             # Only if it wasn't replaced by a newer restriction meanwhile
             with get_db() as conn:
                 cur = conn.cursor()
-                cur.execute('DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
-                            ' AND expires_at = %s RETURNING 1', (room, target, kind, expires_at))
+                cur.execute(
+                    'DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
+                    ' AND expires_at = %s RETURNING 1',
+                    (room, target, kind, expires_at),
+                )
                 lifted = cur.fetchone()
                 conn.commit()
             if lifted:
                 socketio.emit(_LIFTED_EVENT[kind], {'target': target, 'room': room}, to=room)
+
         socketio.start_background_task(lift_when_expired)
 
 
 def lift(room: str, target: str, kind: str):
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s',
-                    (room, target, kind))
+        cur.execute(
+            'DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s', (room, target, kind)
+        )
         conn.commit()
     socketio.emit(_LIFTED_EVENT[kind], {'target': target, 'room': room}, to=room)
 
@@ -118,16 +126,22 @@ def lift(room: str, target: str, kind: str):
 def is_restricted(room: str, username: str, kind: str) -> bool:
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('SELECT 1 FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
-                    ' AND (expires_at IS NULL OR expires_at > NOW())', (room, username, kind))
+        cur.execute(
+            'SELECT 1 FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
+            ' AND (expires_at IS NULL OR expires_at > NOW())',
+            (room, username, kind),
+        )
         return cur.fetchone() is not None
 
 
 def restricted_users(room: str, kind: str) -> list:
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('SELECT username FROM room_restrictions WHERE room = %s AND kind = %s'
-                    ' AND (expires_at IS NULL OR expires_at > NOW())', (room, kind))
+        cur.execute(
+            'SELECT username FROM room_restrictions WHERE room = %s AND kind = %s'
+            ' AND (expires_at IS NULL OR expires_at > NOW())',
+            (room, kind),
+        )
         return [r['username'] for r in cur.fetchall()]
 
 
@@ -145,19 +159,23 @@ def is_muted(room: str, username: str) -> bool:
 
 # ── Blocks ────────────────────────────────────────────────────
 
+
 def blocked_either_way(cur, a: str, b: str) -> bool:
-    cur.execute('SELECT 1 FROM blocks WHERE (blocker = %s AND blocked = %s) OR (blocker = %s AND blocked = %s)',
-                (a, b, b, a))
+    cur.execute(
+        'SELECT 1 FROM blocks WHERE (blocker = %s AND blocked = %s) OR (blocker = %s AND blocked = %s)', (a, b, b, a)
+    )
     return cur.fetchone() is not None
 
 
 # ── Messages ──────────────────────────────────────────────────
 
+
 def recall(msg_id) -> bool:
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('UPDATE messages SET recalled = true WHERE id = %s AND recalled IS NOT TRUE RETURNING room',
-                    (msg_id,))
+        cur.execute(
+            'UPDATE messages SET recalled = true WHERE id = %s AND recalled IS NOT TRUE RETURNING room', (msg_id,)
+        )
         row = cur.fetchone()
         conn.commit()
     if not row:
@@ -168,19 +186,23 @@ def recall(msg_id) -> bool:
 
 # ── Accounts ──────────────────────────────────────────────────
 
+
 def username_available(cur, username: str) -> bool:
     if not USERNAME_RE.match(username) or username in RESERVED_USERNAMES:
         return False
-    cur.execute('SELECT 1 FROM users WHERE username = %s'
-                ' UNION SELECT 1 FROM deleted_usernames WHERE username = %s', (username, username))
+    cur.execute(
+        'SELECT 1 FROM users WHERE username = %s UNION SELECT 1 FROM deleted_usernames WHERE username = %s',
+        (username, username),
+    )
     return cur.fetchone() is None
 
 
 def delete_account(cur, username: str):
     """Remove a user. The name is retired so nobody can re-register it and
     inherit its DM history (DM rooms are keyed by username) or room ownership."""
-    cur.execute('UPDATE rooms SET members = array_remove(members, %s),'
-                ' admins = array_remove(admins, %s)', (username, username))
+    cur.execute(
+        'UPDATE rooms SET members = array_remove(members, %s), admins = array_remove(admins, %s)', (username, username)
+    )
     cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s', (username, username))
     cur.execute('DELETE FROM dm_closed WHERE username = %s', (username,))
     cur.execute('DELETE FROM push_tokens WHERE username = %s', (username,))
@@ -212,8 +234,9 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE messages SET username = %s WHERE username = %s', (new, old))
 
         # DM ids embed both usernames in sorted order, so each one is recomputed
-        cur.execute("SELECT DISTINCT room FROM messages WHERE room LIKE %s OR room LIKE %s",
-                    (f'dm:{old}:%', f'dm:%:{old}'))
+        cur.execute(
+            'SELECT DISTINCT room FROM messages WHERE room LIKE %s OR room LIKE %s', (f'dm:{old}:%', f'dm:%:{old}')
+        )
         for row in cur.fetchall():
             parts = row['room'].split(':')
             if len(parts) != 3 or old not in parts[1:]:

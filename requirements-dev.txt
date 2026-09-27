@@ -1,4 +1,5 @@
 -r requirements.txt
 pytest==9.1.1
+ruff==0.16.9
 # Embedded Postgres for local test runs (CI uses a Postgres service instead)
 pgserver==0.1.4

@@ -1,14 +1,16 @@
-import os
 import functools
 import hmac
 import logging
-from flask import Blueprint, request, redirect, url_for, session, make_response
-from db import get_db
+import os
 from urllib.parse import quote
-from utils import hash_password
-from state import check_login_rate, record_login_fail, reset_login_attempts, online_users, LOBBY
+
+from flask import Blueprint, redirect, request, session, url_for
+
 import moderation
+from db import get_db
 from moderation import delete_account
+from state import LOBBY, check_login_rate, online_users, record_login_fail, reset_login_attempts
+from utils import hash_password
 
 log = logging.getLogger(__name__)
 
@@ -17,7 +19,7 @@ ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 
 # ── HTML helpers ──────────────────────────────────────────────
 
-CSS = '''
+CSS = """
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f0f0f3; color: #222; font-size: 14px; }
 a { color: #4f8ef7; text-decoration: none; }
@@ -70,9 +72,9 @@ form.inline { display: inline; }
 .notice-ok { background: #e7f6ec; color: #1f7a3d; }
 .notice-err { background: #fdecec; color: #b3261e; }
 select { padding: 5px 8px; border: 1px solid #e0e0e6; border-radius: 7px; font-size: 13px; }
-'''
+"""
 
-TOPBAR = '''
+TOPBAR = """
 <div class="topbar">
   <div class="topbar-left">
     <h1>Reco Admin</h1>
@@ -86,7 +88,8 @@ TOPBAR = '''
   </div>
   <a href="/admin/logout" class="logout">退出</a>
 </div>
-'''
+"""
+
 
 def page(body, active=''):
     nav = {k: '' for k in ['d', 'fb', 'rp', 'us', 'rm']}
@@ -95,7 +98,7 @@ def page(body, active=''):
     return f'<!DOCTYPE html><html lang="zh"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Reco Admin</title><style>{CSS}</style></head><body>{topbar}<div class="content">{body}</div></body></html>'
 
 
-LOGIN_EXTRA_CSS = '''
+LOGIN_EXTRA_CSS = """
 body { display: flex; align-items: center; justify-content: center; height: 100vh; }
 .box { background: #fff; border-radius: 16px; padding: 40px; width: 320px; border: 1px solid #e0e0e6; }
 .box h1 { font-size: 22px; font-weight: 700; color: #4f8ef7; margin-bottom: 24px; }
@@ -105,7 +108,7 @@ body { display: flex; align-items: center; justify-content: center; height: 100v
 .box button { width: 100%; padding: 11px; background: #4f8ef7; color: #fff; border: none;
               border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; }
 .err { color: #ED4245; font-size: 13px; margin-bottom: 10px; }
-'''
+"""
 
 
 def login_page(error=''):
@@ -128,10 +131,12 @@ def login_required(f):
         if not session.get('admin_authed'):
             return redirect(url_for('admin.login'))
         return f(*a, **kw)
+
     return inner
 
 
 # ── Auth ──────────────────────────────────────────────────────
+
 
 @admin_bp.route('/')
 def index():
@@ -166,6 +171,7 @@ def logout():
 
 # ── Dashboard ─────────────────────────────────────────────────
 
+
 @admin_bp.route('/dashboard')
 @login_required
 def dashboard():
@@ -183,9 +189,10 @@ def dashboard():
         reports = cur.fetchone()['c']
 
     from state import online_users
+
     online = len(online_users)
 
-    body = f'''
+    body = f"""
     <h2>概览</h2>
     <div class="stats">
       <div class="stat"><div class="stat-num">{online}</div><div class="stat-label">当前在线</div></div>
@@ -194,11 +201,12 @@ def dashboard():
       <div class="stat"><div class="stat-num">{messages}</div><div class="stat-label">消息总数</div></div>
       <div class="stat"><div class="stat-num">{feedbacks}</div><div class="stat-label">用户反馈</div></div>
       <div class="stat"><div class="stat-num">{reports}</div><div class="stat-label">举报记录</div></div>
-    </div>'''
+    </div>"""
     return page(body, 'd')
 
 
 # ── Feedback ──────────────────────────────────────────────────
+
 
 @admin_bp.route('/feedback')
 @login_required
@@ -211,25 +219,25 @@ def feedback():
     rows_html = ''
     for r in rows:
         ts = r['created_at'].strftime('%Y-%m-%d %H:%M') if r.get('created_at') else ''
-        rows_html += f'''<tr>
-          <td class="mono">{_esc(r["username"])}</td>
-          <td><div class="pre">{_esc(r["text"])}</div></td>
+        rows_html += f"""<tr>
+          <td class="mono">{_esc(r['username'])}</td>
+          <td><div class="pre">{_esc(r['text'])}</div></td>
           <td class="mono">{ts}</td>
           <td>
-            <form class="inline" method="post" action="/admin/feedback/{r["id"]}/delete"
+            <form class="inline" method="post" action="/admin/feedback/{r['id']}/delete"
                   onsubmit="return confirm('删除这条反馈？')">
               <button class="btn btn-danger">删除</button>
             </form>
-          </td></tr>'''
+          </td></tr>"""
 
-    body = f'''
+    body = f"""
     <h2>用户反馈 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 条</span></h2>
     <div class="card">
       <table>
         <tr><th>用户</th><th>内容</th><th>时间</th><th></th></tr>
         {rows_html or "<tr><td colspan='4' style='color:#aaa;text-align:center;padding:30px'>暂无反馈</td></tr>"}
       </table>
-    </div>'''
+    </div>"""
     return page(body, 'fb')
 
 
@@ -245,6 +253,7 @@ def delete_feedback(fid):
 
 # ── Reports ───────────────────────────────────────────────────
 
+
 @admin_bp.route('/reports')
 @login_required
 def reports():
@@ -256,26 +265,26 @@ def reports():
     rows_html = ''
     for r in rows:
         ts = r['created_at'].strftime('%Y-%m-%d %H:%M') if r.get('created_at') else ''
-        rows_html += f'''<tr>
-          <td class="mono">{_esc(r["reporter"])}</td>
-          <td class="mono"><a href="/admin/users?q={_url(r["reported"])}">{_esc(r["reported"])}</a></td>
-          <td>{_esc(r["reason"] or "")}</td>
+        rows_html += f"""<tr>
+          <td class="mono">{_esc(r['reporter'])}</td>
+          <td class="mono"><a href="/admin/users?q={_url(r['reported'])}">{_esc(r['reported'])}</a></td>
+          <td>{_esc(r['reason'] or '')}</td>
           <td class="mono">{ts}</td>
           <td>
-            <form class="inline" method="post" action="/admin/reports/{r["id"]}/delete"
+            <form class="inline" method="post" action="/admin/reports/{r['id']}/delete"
                   onsubmit="return confirm('删除这条举报？')">
               <button class="btn btn-danger">删除</button>
             </form>
-          </td></tr>'''
+          </td></tr>"""
 
-    body = f'''
+    body = f"""
     <h2>举报记录 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 条</span></h2>
     <div class="card">
       <table>
         <tr><th>举报人</th><th>被举报</th><th>原因</th><th>时间</th><th></th></tr>
         {rows_html or "<tr><td colspan='5' style='color:#aaa;text-align:center;padding:30px'>暂无举报</td></tr>"}
       </table>
-    </div>'''
+    </div>"""
     return page(body, 'rp')
 
 
@@ -293,6 +302,7 @@ def delete_report(rid):
 
 PER_PAGE = 50
 
+
 @admin_bp.route('/users')
 @login_required
 def users():
@@ -306,9 +316,8 @@ def users():
         cur.execute(f'SELECT COUNT(*) AS c FROM users {where}', params_count)
         total = cur.fetchone()['c']
         cur.execute(
-            f'SELECT username, screenname, bio FROM users {where}'
-            f' ORDER BY username LIMIT %s OFFSET %s',
-            (*params_count, PER_PAGE, offset)
+            f'SELECT username, screenname, bio FROM users {where} ORDER BY username LIMIT %s OFFSET %s',
+            (*params_count, PER_PAGE, offset),
         )
         rows = cur.fetchall()
 
@@ -338,7 +347,7 @@ def users():
     <form class="search-row" method="get">
       <input type="search" name="q" value="{_esc(q)}" placeholder="搜索用户名或显示名…">
       <button class="btn btn-primary" type="submit">搜索</button>
-      {"" if not q else '<a href="/admin/users" class="btn btn-ghost">清除</a>'}
+      {'' if not q else '<a href="/admin/users" class="btn btn-ghost">清除</a>'}
     </form>
     <div class="card">
       <table>
@@ -405,8 +414,7 @@ def reset_user_password(username):
         return _back(url_for('admin.users'), error='密码至少6位')
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                    (hash_password(new_pw), username))
+        cur.execute('UPDATE users SET password = %s WHERE username = %s', (hash_password(new_pw), username))
         conn.commit()
     return _back(url_for('admin.users'), ok=f'已重置 {username} 的密码')
 
@@ -433,25 +441,31 @@ def delete_user(username):
 
 # ── Rooms ─────────────────────────────────────────────────────
 
+
 @admin_bp.route('/rooms')
 @login_required
 def rooms():
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('SELECT name, owner, code, password, array_length(members,1) AS mc,'
-                    ' array_length(admins,1) AS ac FROM rooms ORDER BY name')
+        cur.execute(
+            'SELECT name, owner, code, password, array_length(members,1) AS mc,'
+            ' array_length(admins,1) AS ac FROM rooms ORDER BY name'
+        )
         rows = cur.fetchall()
 
-    from state import online_users
     rows_html = ''
     for r in rows:
         mc = r['mc'] or 0
         pw = '🔒' if r.get('password') else ''
         rname = _esc(r['name'])
-        close_btn = '' if r['name'] == LOBBY else (
-            f'<form class="inline" method="post" action="/admin/rooms/{_url(r["name"])}/close"'
-            f' data-name="{rname}" onsubmit="return confirm(\'关闭房间 \' + this.dataset.name + \'？将删除所有消息。\')">'
-            '<button class="btn btn-danger">关闭</button></form>'
+        close_btn = (
+            ''
+            if r['name'] == LOBBY
+            else (
+                f'<form class="inline" method="post" action="/admin/rooms/{_url(r["name"])}/close"'
+                f' data-name="{rname}" onsubmit="return confirm(\'关闭房间 \' + this.dataset.name + \'？将删除所有消息。\')">'
+                '<button class="btn btn-danger">关闭</button></form>'
+            )
         )
         rows_html += (
             f'<tr><td><b>{rname}</b> {pw}</td>'
@@ -461,14 +475,14 @@ def rooms():
             f'<td><a href="/admin/rooms/{_url(r["name"])}/detail" class="btn btn-ghost">详情</a> {close_btn}</td></tr>'
         )
 
-    body = f'''
+    body = f"""
     <h2>聊天室 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 个</span></h2>
     <div class="card">
       <table>
         <tr><th>名称</th><th>房间号</th><th>房主</th><th>成员数</th><th></th></tr>
         {rows_html or "<tr><td colspan='5' style='color:#aaa;text-align:center;padding:30px'>暂无房间</td></tr>"}
       </table>
-    </div>'''
+    </div>"""
     return page(body, 'rm')
 
 
@@ -495,7 +509,7 @@ def room_detail(room_name):
         cur.execute(
             'SELECT id, username, screenname, text, recalled, edited, created_at, system'
             ' FROM messages WHERE room = %s ORDER BY created_at DESC LIMIT %s OFFSET %s',
-            (room_name, PER_PAGE, offset)
+            (room_name, PER_PAGE, offset),
         )
         msgs = list(reversed(cur.fetchall()))
 
@@ -509,9 +523,11 @@ def room_detail(room_name):
         guard = ' onsubmit="return confirm(this.dataset.confirm)"' if confirm else ''
         data = f' data-confirm="{_esc(confirm)}"' if confirm else ''
         cls = 'btn-danger' if danger else 'btn-ghost'
-        return (f'<form class="inline" method="post" action="{path}"{guard}{data}>{hidden}'
-                f'<input type="hidden" name="next" value="{_esc(here)}">'
-                f'<button class="btn {cls}">{label}</button></form>')
+        return (
+            f'<form class="inline" method="post" action="{path}"{guard}{data}>{hidden}'
+            f'<input type="hidden" name="next" value="{_esc(here)}">'
+            f'<button class="btn {cls}">{label}</button></form>'
+        )
 
     text_muted = set(moderation.restricted_users(room_name, moderation.TEXT))
     voice_banned = set(moderation.restricted_users(room_name, moderation.VOICE))
@@ -520,11 +536,13 @@ def room_detail(room_name):
         if active:
             return action(f'{base}/lift', f'解除{label}', {'username': u, 'kind': kind})
         options = ''.join(f'<option value="{secs}">{text}</option>' for secs, text in MUTE_OPTIONS)
-        return (f'<form class="inline" method="post" action="{base}/restrict">'
-                f'<input type="hidden" name="username" value="{_esc(u)}">'
-                f'<input type="hidden" name="kind" value="{kind}">'
-                f'<input type="hidden" name="next" value="{_esc(here)}">'
-                f'<select name="duration">{options}</select> <button class="btn btn-ghost">{label}</button></form>')
+        return (
+            f'<form class="inline" method="post" action="{base}/restrict">'
+            f'<input type="hidden" name="username" value="{_esc(u)}">'
+            f'<input type="hidden" name="kind" value="{kind}">'
+            f'<input type="hidden" name="next" value="{_esc(here)}">'
+            f'<select name="duration">{options}</select> <button class="btn btn-ghost">{label}</button></form>'
+        )
 
     members_html = ''
     for u in members:
@@ -532,8 +550,9 @@ def room_detail(room_name):
         role = '房主' if u == owner else ('管理员' if u in admins_set else '')
         online_dot = '🟢' if u in online_users else '⚪'
         role_html = f'<span class="tag tag-blue">{role}</span>' if role else ''
-        muted_html = ((' <span class="tag">禁言中</span>' if u in text_muted else '')
-                      + (' <span class="tag">语音禁言中</span>' if u in voice_banned else ''))
+        muted_html = (' <span class="tag">禁言中</span>' if u in text_muted else '') + (
+            ' <span class="tag">语音禁言中</span>' if u in voice_banned else ''
+        )
         members_html += (
             f'<tr><td>{online_dot} <span class="mono">{_esc(u)}</span></td>'
             f'<td>{_esc(info.get("screenname", ""))}</td>'
@@ -549,11 +568,15 @@ def room_detail(room_name):
         f'<td>{action(f"{base}/unkick", "解封", {"username": u})}</td></tr>'
         for u in kicked
     )
-    kicked_card = f'''
+    kicked_card = (
+        f"""
         <div class="card" style="margin-top:16px">
           <div class="card-header">已踢出 ({len(kicked)})</div>
           <table><tr><th>用户名</th><th>显示名</th><th></th></tr>{kicked_html}</table>
-        </div>''' if kicked else ''
+        </div>"""
+        if kicked
+        else ''
+    )
 
     msgs_html = ''
     for m in msgs:
@@ -565,8 +588,11 @@ def room_detail(room_name):
             text = _esc(text)
             if m.get('edited'):
                 text += ' <span style="color:#aaa;font-size:11px">(已编辑)</span>'
-        recall_btn = '' if m.get('recalled') or m.get('system') else action(
-            f'/admin/messages/{m["id"]}/recall', '撤回', danger=True, confirm='撤回这条消息？')
+        recall_btn = (
+            ''
+            if m.get('recalled') or m.get('system')
+            else action(f'/admin/messages/{m["id"]}/recall', '撤回', danger=True, confirm='撤回这条消息？')
+        )
         style = 'color:#aaa' if m.get('system') else ''
         msgs_html += (
             f'<tr style="{style}"><td class="mono">{ts}</td>'
@@ -575,7 +601,7 @@ def room_detail(room_name):
         )
 
     msg_pagination = _pages(msg_total, p, PER_PAGE, f'{base}/detail')
-    body = f'''
+    body = f"""
     {_notice()}
     <p style="margin-bottom:16px"><a href="/admin/rooms">← 返回房间列表</a></p>
     <h2>{_esc(room_name)}</h2>
@@ -600,7 +626,7 @@ def room_detail(room_name):
         </div>
         {msg_pagination}
       </div>
-    </div>'''
+    </div>"""
     return page(body, 'rm')
 
 
@@ -661,6 +687,7 @@ def close_room(room_name):
     if room_name == LOBBY:
         return redirect(url_for('admin.rooms'))
     from extensions import socketio
+
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('DELETE FROM messages WHERE room = %s', (room_name,))
@@ -672,9 +699,16 @@ def close_room(room_name):
 
 # ── Util ──────────────────────────────────────────────────────
 
+
 def _esc(s):
-    return (str(s).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            .replace('"', '&quot;').replace("'", '&#39;'))
+    return (
+        str(s)
+        .replace('&', '&amp;')
+        .replace('<', '&lt;')
+        .replace('>', '&gt;')
+        .replace('"', '&quot;')
+        .replace("'", '&#39;')
+    )
 
 
 def _back(default=None, ok=None, error=None):
@@ -708,13 +742,13 @@ def _pages(total, page, per_page, base_url):
     if total_pages <= 1:
         return ''
     sep = '&' if '?' in base_url else '?'
-    parts = [f'<div style="display:flex;gap:6px;align-items:center;margin-top:14px;flex-wrap:wrap">']
+    parts = ['<div style="display:flex;gap:6px;align-items:center;margin-top:14px;flex-wrap:wrap">']
     parts.append(f'<span style="color:#888;font-size:13px">第 {page}/{total_pages} 页，共 {total} 条</span>')
     if page > 1:
         parts.append(f'<a href="{base_url}{sep}page=1" class="btn btn-ghost">«</a>')
-        parts.append(f'<a href="{base_url}{sep}page={page-1}" class="btn btn-ghost">‹ 上一页</a>')
+        parts.append(f'<a href="{base_url}{sep}page={page - 1}" class="btn btn-ghost">‹ 上一页</a>')
     if page < total_pages:
-        parts.append(f'<a href="{base_url}{sep}page={page+1}" class="btn btn-ghost">下一页 ›</a>')
+        parts.append(f'<a href="{base_url}{sep}page={page + 1}" class="btn btn-ghost">下一页 ›</a>')
         parts.append(f'<a href="{base_url}{sep}page={total_pages}" class="btn btn-ghost">»</a>')
     parts.append('</div>')
     return ''.join(parts)

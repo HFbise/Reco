@@ -1,9 +1,11 @@
 import logging
+
 from flask_socketio import emit
-from extensions import socketio
-from db import get_db
-from replies import fail
+
 from auth_session import authenticated
+from db import get_db
+from extensions import socketio
+from replies import fail
 
 log = logging.getLogger(__name__)
 
@@ -21,10 +23,7 @@ def handle_submit_feedback(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute(
-                'INSERT INTO feedback (username, text) VALUES (%s, %s)',
-                (username, text)
-            )
+            cur.execute('INSERT INTO feedback (username, text) VALUES (%s, %s)', (username, text))
             conn.commit()
         emit('feedback_result', {'success': True})
     except Exception as e:

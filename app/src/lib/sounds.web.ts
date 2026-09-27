@@ -16,7 +16,7 @@ export function playNotifSound() {
     const ctx = new AudioContext();
     tone(ctx, 660, ctx.currentTime, 0.12);
     tone(ctx, 880, ctx.currentTime + 0.1, 0.18);
-  } catch (e) {}
+  } catch {}
 }
 
 export function playVoiceJoinSound() {
@@ -24,7 +24,7 @@ export function playVoiceJoinSound() {
     const ctx = new AudioContext();
     tone(ctx, 440, ctx.currentTime, 0.15);
     tone(ctx, 880, ctx.currentTime + 0.13, 0.22);
-  } catch (e) {}
+  } catch {}
 }
 
 export function playVoiceLeaveSound() {
@@ -32,5 +32,5 @@ export function playVoiceLeaveSound() {
     const ctx = new AudioContext();
     tone(ctx, 880, ctx.currentTime, 0.15);
     tone(ctx, 440, ctx.currentTime + 0.13, 0.22);
-  } catch (e) {}
+  } catch {}
 }

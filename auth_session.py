@@ -9,17 +9,18 @@ never from event data.
 The token embeds a fingerprint of the user's password hash, so changing the
 password (or deleting the account) invalidates every previously issued token.
 """
+
 import functools
 import hashlib
 import logging
 
+import sentry_sdk
 from flask import request
 from flask_socketio import emit, rooms
-from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
-import sentry_sdk
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-from extensions import app, socketio
 from db import get_db
+from extensions import app, socketio
 from state import online_users
 
 log = logging.getLogger(__name__)
@@ -85,6 +86,7 @@ def current_user():
 def authenticated(handler):
     """Socket handler decorator: rejects unauthenticated sockets and passes the
     server-side username as the first argument: handler(username, data)."""
+
     @functools.wraps(handler)
     def wrapper(data=None, *_args):
         username = current_user()
@@ -96,6 +98,7 @@ def authenticated(handler):
             scope.set_tag('socket_event', handler.__name__)
             scope.set_user({'username': username})
             return handler(username, data if isinstance(data, dict) else {})
+
     return wrapper
 
 

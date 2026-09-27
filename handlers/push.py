@@ -2,10 +2,10 @@ import json
 import logging
 import threading
 import urllib.request as _req
-from flask_socketio import emit
-from extensions import socketio
-from db import get_db
+
 from auth_session import authenticated
+from db import get_db
+from extensions import socketio
 
 log = logging.getLogger(__name__)
 
@@ -34,8 +34,7 @@ def handle_unregister_push_token(username, data):
     """Called on logout so the device stops receiving this account's notifications."""
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('DELETE FROM push_tokens WHERE token = %s AND username = %s',
-                    ((data.get('token') or ''), username))
+        cur.execute('DELETE FROM push_tokens WHERE token = %s AND username = %s', ((data.get('token') or ''), username))
         conn.commit()
 
 
@@ -56,11 +55,9 @@ def send_push(tokens: list, title: str, body: str, data: dict = None):
 
     def _worker():
         try:
-            payload = json.dumps([
-                {'to': t, 'title': title, 'body': body,
-                 'data': data or {}, 'sound': 'default'}
-                for t in tokens
-            ]).encode('utf-8')
+            payload = json.dumps(
+                [{'to': t, 'title': title, 'body': body, 'data': data or {}, 'sound': 'default'} for t in tokens]
+            ).encode('utf-8')
             req = _req.Request(
                 'https://exp.host/--/api/v2/push/send',
                 data=payload,

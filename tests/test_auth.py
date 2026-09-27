@@ -1,7 +1,17 @@
 """Session tokens: issuing, resuming, rejecting and invalidating."""
+
 from conftest import (
-    socketio, app, create_user, events, anon_client, login, connect_as, query, get_db,
+    anon_client,
+    app,
+    connect_as,
+    create_user,
+    events,
+    get_db,
+    login,
+    query,
+    socketio,
 )
+
 from auth_session import verify_token
 
 
@@ -85,10 +95,16 @@ def test_reset_password_is_rate_limited():
 
 def test_security_answer_is_stored_hashed():
     client = anon_client()
-    client.emit('register', {
-        'username': 'carol', 'screenname': 'Carol', 'password': 'secret123',
-        'security_question': 'birth_city', 'security_answer': 'Paris',
-    })
+    client.emit(
+        'register',
+        {
+            'username': 'carol',
+            'screenname': 'Carol',
+            'password': 'secret123',
+            'security_question': 'birth_city',
+            'security_answer': 'Paris',
+        },
+    )
     assert events(client, 'register_result')[0]['success']
     stored = query('SELECT security_answer FROM users WHERE username = %s', 'carol')[0]['security_answer']
     assert stored.startswith('scrypt:') and 'paris' not in stored.lower()
@@ -107,12 +123,14 @@ def test_turn_credentials_only_for_logged_in_users():
 
 def test_health_check_reports_database_status(monkeypatch):
     import app as app_module
+
     web = app.test_client()
     ok = web.get('/health')
     assert ok.status_code == 200 and ok.get_json()['database'] == 'ok'
 
     def db_down(*_a, **_k):
         raise OSError('connection refused')
+
     monkeypatch.setattr(app_module, 'get_db', db_down)
     down = web.get('/health')
     assert down.status_code == 503 and down.get_json()['database'] == 'unreachable'
@@ -120,11 +138,13 @@ def test_health_check_reports_database_status(monkeypatch):
 
 def test_server_errors_are_not_leaked_to_the_client(monkeypatch, caplog):
     import handlers.auth
+
     create_user('alice')
     alice = connect_as('alice')
 
     def broken_db(*_a, **_k):
         raise RuntimeError('relation "users" does not exist at db-host.internal:5432')
+
     monkeypatch.setattr(handlers.auth, 'get_db', broken_db)
     alice.emit('update_profile', {'screenname': 'Alice', 'bio': ''})
     result = events(alice, 'update_profile_result')[0]
@@ -144,8 +164,10 @@ def test_errors_are_codes_not_display_text():
 def test_legacy_chinese_security_question_is_served_as_an_id():
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("INSERT INTO users (username, screenname, password, security_question, security_answer)"
-                    " VALUES ('old', 'Old', 'x', '你的出生城市是？', 'a')")
+        cur.execute(
+            'INSERT INTO users (username, screenname, password, security_question, security_answer)'
+            " VALUES ('old', 'Old', 'x', '你的出生城市是？', 'a')"
+        )
         conn.commit()
     client = anon_client()
     client.emit('get_security_question', {'username': 'old'})
@@ -154,6 +176,28 @@ def test_legacy_chinese_security_question_is_served_as_an_id():
 
 def test_unknown_security_question_rejected_at_registration():
     client = anon_client()
-    client.emit('register', {'username': 'newbie', 'screenname': 'N', 'password': 'secret123',
-                             'security_question': 'anything I like', 'security_answer': 'a'})
+    client.emit(
+        'register',
+        {
+            'username': 'newbie',
+            'screenname': 'N',
+            'password': 'secret123',
+            'security_question': 'anything I like',
+            'security_answer': 'a',
+        },
+    )
     assert events(client, 'register_result')[0]['code'] == 'missing_fields'
+
+
+def test_web_app_is_served_with_client_side_routing():
+    web = app.test_client()
+    home = web.get('/')
+    assert home.status_code == 200 and b'<div id="root">' in home.data
+    deep_link = web.get('/room/some-room')  # unknown path → the SPA handles it
+    assert deep_link.status_code == 200 and deep_link.data == home.data
+    assert web.get('/favicon.ico').status_code == 200  # real files from app/dist
+
+
+def test_retired_service_worker_unregisters_itself():
+    sw = app.test_client().get('/sw.js')
+    assert sw.status_code == 200 and b'registration.unregister()' in sw.data

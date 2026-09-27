@@ -1,6 +1,6 @@
-import time
 import logging
-from datetime import datetime, timezone
+import time
+from datetime import UTC, datetime
 
 from db import get_db
 
@@ -13,12 +13,13 @@ LOBBY = '大厅'
 
 # Only live, per-process state lives here. Anything that must survive a restart
 # (mutes, voice bans, invites, push tokens) is in the database.
-rooms_voice: dict = {}       # { room: { voice_members } }
-rooms_stream: dict = {}      # { room: { username: screenname } }
-online_users: dict = {}      # { username: set of sids }
-sid_to_voice: dict = {}      # { sid: (username, room) }
-message_rate: dict = {}      # { username: [timestamps] }
-login_attempts: dict = {}    # { username: {'count': N, 'until': float} }
+rooms_voice: dict = {}  # { room: { voice_members } }
+rooms_stream: dict = {}  # { room: { username: screenname } }
+online_users: dict = {}  # { username: set of sids }
+sid_to_voice: dict = {}  # { sid: (username, room) }
+message_rate: dict = {}  # { username: [timestamps] }
+login_attempts: dict = {}  # { username: {'count': N, 'until': float} }
+
 
 def get_level(username: str, room_data: dict) -> int:
     """2=owner, 1=room admin, 0=member"""
@@ -28,7 +29,9 @@ def get_level(username: str, room_data: dict) -> int:
         return 1
     return 0
 
+
 # ── Rate limiting ─────────────────────────────────────────────
+
 
 def check_msg_rate(username: str, max_msgs: int = 8, window: int = 10) -> bool:
     now = time.time()
@@ -64,6 +67,7 @@ def record_login_fail(username: str):
 def reset_login_attempts(username: str):
     login_attempts.pop(username, None)
 
+
 # ── System messages ───────────────────────────────────────────
 
 # Clients render system messages from `code` + `params` in their own language.
@@ -81,7 +85,9 @@ SYSTEM_TEXT_ZH = {
 def emit_system_msg(room: str, code: str, **params):
     # Import here to avoid circular import (socketio lives in extensions)
     import json
+
     from extensions import socketio
+
     text = SYSTEM_TEXT_ZH[code].format(**params)
     meta = {'system': {'code': code, 'params': params}}
     try:
@@ -90,19 +96,23 @@ def emit_system_msg(room: str, code: str, **params):
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, system, meta)'
                 ' VALUES (%s, %s, %s, %s, %s, %s, %s::jsonb) RETURNING id',
-                (room, 'system', '系统', text, datetime.now().strftime('%H:%M'), True, json.dumps(meta))
+                (room, 'system', '系统', text, datetime.now().strftime('%H:%M'), True, json.dumps(meta)),
             )
             msg_id = cur.fetchone()['id']
             conn.commit()
-        socketio.emit('message', {
-            'id': msg_id,
-            'username': 'system',
-            'screenname': '系统',
-            'text': text,
-            'time': datetime.now(timezone.utc).isoformat(),
-            'room': room,
-            'system': True,
-            'meta': meta,
-        }, to=room)
+        socketio.emit(
+            'message',
+            {
+                'id': msg_id,
+                'username': 'system',
+                'screenname': '系统',
+                'text': text,
+                'time': datetime.now(UTC).isoformat(),
+                'room': room,
+                'system': True,
+                'meta': meta,
+            },
+            to=room,
+        )
     except Exception as e:
         log.exception('emit_system_msg failed: %s', e)

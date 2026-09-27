@@ -1,13 +1,15 @@
 import logging
+
 from flask import request
 from flask_socketio import emit
-from extensions import socketio
+
+from auth_session import authenticated, bind, make_token, unbind
 from db import get_db
+from extensions import socketio
+from moderation import RESERVED_USERNAMES, USERNAME_RE, delete_account
 from replies import fail
 from state import check_login_rate, record_login_fail, reset_login_attempts
-from utils import hash_password, verify_password, SECURITY_QUESTIONS, security_question_id
-from auth_session import make_token, bind, unbind, authenticated
-from moderation import USERNAME_RE, RESERVED_USERNAMES, delete_account
+from utils import SECURITY_QUESTIONS, hash_password, security_question_id, verify_password
 
 log = logging.getLogger(__name__)
 
@@ -42,15 +44,17 @@ def handle_register(data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT 1 FROM users WHERE username = %s'
-                        ' UNION SELECT 1 FROM deleted_usernames WHERE username = %s', (username, username))
+            cur.execute(
+                'SELECT 1 FROM users WHERE username = %s UNION SELECT 1 FROM deleted_usernames WHERE username = %s',
+                (username, username),
+            )
             if cur.fetchone():
                 fail('register_result', 'username_taken')
                 return
             cur.execute(
                 'INSERT INTO users (username, screenname, password, bio, security_question, security_answer)'
                 ' VALUES (%s, %s, %s, %s, %s, %s)',
-                (username, screenname, hash_password(password), bio, security_q, hash_password(security_a))
+                (username, screenname, hash_password(password), bio, security_q, hash_password(security_a)),
             )
             conn.commit()
         emit('register_result', {'success': True})
@@ -87,19 +91,21 @@ def handle_login(data):
             stored_hash = hash_password(password)
             with get_db() as conn:
                 cur = conn.cursor()
-                cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                            (stored_hash, user['username']))
+                cur.execute('UPDATE users SET password = %s WHERE username = %s', (stored_hash, user['username']))
                 conn.commit()
         bind(user['username'])
-        emit('login_result', {
-            'success': True,
-            'username': user['username'],
-            'token': make_token(user['username'], stored_hash),
-            'screenname': user['screenname'],
-            'bio': user.get('bio') or '',
-            'avatar_expression': user.get('avatar_expression') or 'Smile',
-            'avatar_color': user.get('avatar_color') or '#5865F2',
-        })
+        emit(
+            'login_result',
+            {
+                'success': True,
+                'username': user['username'],
+                'token': make_token(user['username'], stored_hash),
+                'screenname': user['screenname'],
+                'bio': user.get('bio') or '',
+                'avatar_expression': user.get('avatar_expression') or 'Smile',
+                'avatar_color': user.get('avatar_color') or '#5865F2',
+            },
+        )
     except Exception as e:
         log.exception('login error: %s', e)
         fail('login_result', 'server_error')
@@ -113,19 +119,22 @@ def handle_get_profile(_username, data):
             cur = conn.cursor()
             cur.execute(
                 'SELECT screenname, bio, avatar_expression, avatar_color FROM users WHERE username = %s',
-                (data.get('username', ''),)
+                (data.get('username', ''),),
             )
             user = cur.fetchone()
         if not user:
             emit('profile_result', {'success': False})
             return
-        emit('profile_result', {
-            'success': True,
-            'screenname': user['screenname'],
-            'bio': user['bio'],
-            'avatar_expression': user.get('avatar_expression') or 'Smile',
-            'avatar_color': user.get('avatar_color') or '#5865F2',
-        })
+        emit(
+            'profile_result',
+            {
+                'success': True,
+                'screenname': user['screenname'],
+                'bio': user['bio'],
+                'avatar_expression': user.get('avatar_expression') or 'Smile',
+                'avatar_color': user.get('avatar_color') or '#5865F2',
+            },
+        )
     except Exception as e:
         log.exception('get_profile error: %s', e)
         emit('profile_result', {'success': False})
@@ -138,13 +147,11 @@ def handle_update_profile(username, data):
         screenname = (data.get('screenname') or '').strip()
         bio = (data.get('bio') or '').strip()
         if not screenname or len(screenname) > MAX_SCREENNAME_LEN or len(bio) > MAX_BIO_LEN:
-            fail('update_profile_result', 'invalid_profile',
-                 {'max_name': MAX_SCREENNAME_LEN, 'max_bio': MAX_BIO_LEN})
+            fail('update_profile_result', 'invalid_profile', {'max_name': MAX_SCREENNAME_LEN, 'max_bio': MAX_BIO_LEN})
             return
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('UPDATE users SET screenname = %s, bio = %s WHERE username = %s',
-                        (screenname, bio, username))
+            cur.execute('UPDATE users SET screenname = %s, bio = %s WHERE username = %s', (screenname, bio, username))
             conn.commit()
         emit('update_profile_result', {'success': True, 'screenname': screenname, 'bio': bio})
     except Exception as e:
@@ -181,8 +188,7 @@ def handle_get_security_question(data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT security_question FROM users WHERE username = %s',
-                        (data['username'].strip(),))
+            cur.execute('SELECT security_question FROM users WHERE username = %s', (data['username'].strip(),))
             user = cur.fetchone()
         if not user:
             fail('security_question_result', 'user_not_found')
@@ -209,8 +215,9 @@ def handle_reset_password(data):
                 return
             cur.execute('SELECT security_answer FROM users WHERE username = %s', (username,))
             user = cur.fetchone()
-            ok, needs_migrate = (verify_password(user['security_answer'], answer)
-                                 if user and user['security_answer'] else (False, False))
+            ok, needs_migrate = (
+                verify_password(user['security_answer'], answer) if user and user['security_answer'] else (False, False)
+            )
             if not ok:
                 record_login_fail(rate_key)
                 fail('reset_password_result', 'wrong_answer')
@@ -219,11 +226,13 @@ def handle_reset_password(data):
             if len(data['new_password']) < 6:
                 fail('reset_password_result', 'password_too_short', {'min': 6})
                 return
-            cur.execute('UPDATE users SET password = %s WHERE username = %s',
-                        (hash_password(data['new_password']), username))
+            cur.execute(
+                'UPDATE users SET password = %s WHERE username = %s', (hash_password(data['new_password']), username)
+            )
             if needs_migrate:
-                cur.execute('UPDATE users SET security_answer = %s WHERE username = %s',
-                            (hash_password(answer), username))
+                cur.execute(
+                    'UPDATE users SET security_answer = %s WHERE username = %s', (hash_password(answer), username)
+                )
             conn.commit()
         emit('reset_password_result', {'success': True})
     except Exception as e:
@@ -246,7 +255,7 @@ def handle_save_avatar(username, data):
             cur = conn.cursor()
             cur.execute(
                 'UPDATE users SET avatar_expression = %s, avatar_color = %s WHERE username = %s',
-                (expression, color, username)
+                (expression, color, username),
             )
             conn.commit()
         emit('save_avatar_result', {'success': True, 'expression': expression, 'color': color})

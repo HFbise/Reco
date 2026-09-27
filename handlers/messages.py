@@ -1,13 +1,15 @@
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from flask_socketio import emit
-from extensions import socketio
-from db import get_db
-from state import check_msg_rate, get_level, online_users
-from handlers.push import send_push, tokens_for
-from auth_session import authenticated, in_room, dm_participants
+
 import moderation
+from auth_session import authenticated, dm_participants, in_room
+from db import get_db
+from extensions import socketio
+from handlers.push import send_push, tokens_for
+from state import check_msg_rate, get_level, online_users
 
 log = logging.getLogger(__name__)
 
@@ -50,11 +52,11 @@ def handle_message(username, data):
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time)'
                 ' VALUES (%s, %s, %s, %s, %s) RETURNING id',
-                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M'))
+                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M')),
             )
             msg['id'] = cur.fetchone()['id']
             conn.commit()
-        msg['time'] = datetime.now(timezone.utc).isoformat()
+        msg['time'] = datetime.now(UTC).isoformat()
     except Exception as e:
         log.exception('message save error: %s', e)
 
@@ -64,11 +66,15 @@ def handle_message(username, data):
     if recipient:
         if recipient in online_users:
             for sid in list(online_users[recipient]):
-                socketio.emit('new_dm_notification', {
-                    'dm_room': room,
-                    'from_username': username,
-                    'from_screenname': msg['screenname'],
-                }, to=sid)
+                socketio.emit(
+                    'new_dm_notification',
+                    {
+                        'dm_room': room,
+                        'from_username': username,
+                        'from_screenname': msg['screenname'],
+                    },
+                    to=sid,
+                )
         else:
             send_push(tokens_for([recipient]), msg['screenname'], preview, {'room': room})
         return
@@ -83,7 +89,7 @@ def handle_message(username, data):
                 (room, username, username),
             )
             offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users]
-        send_push(tokens_for(offline), f"{msg['screenname']} in {room}", preview, {'room': room})
+        send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
     except Exception as e:
         log.exception('push notify error: %s', e)
 
@@ -125,8 +131,7 @@ def handle_edit_message(username, data):
             if not msg or msg['recalled'] or msg['username'] != username:
                 return
             room = msg['room']
-            cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s',
-                        (new_text, msg_id))
+            cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s', (new_text, msg_id))
             conn.commit()
         emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room}, to=room)
     except Exception as e:
@@ -159,8 +164,7 @@ def handle_add_reaction(username, data):
                 reactions[emoji] = users
             else:
                 reactions.pop(emoji, None)
-            cur.execute('UPDATE messages SET reactions = %s WHERE id = %s',
-                        (json.dumps(reactions), msg_id))
+            cur.execute('UPDATE messages SET reactions = %s WHERE id = %s', (json.dumps(reactions), msg_id))
             conn.commit()
         emit('reaction_updated', {'id': msg_id, 'reactions': reactions, 'room': room}, to=room)
     except Exception as e:

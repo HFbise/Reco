@@ -246,7 +246,7 @@ export function useVoice(room: string) {
       if (data.to !== userRef.current?.username) return;
       const pc = peerConnsRef.current[data.from];
       if (pc && SDP) {
-        try { await pc.setRemoteDescription(new (SDP as any)(data.answer)); } catch (e) {}
+        try { await pc.setRemoteDescription(new (SDP as any)(data.answer)); } catch {}
       }
     };
 
@@ -254,7 +254,7 @@ export function useVoice(room: string) {
       if (data.to !== userRef.current?.username || !data.candidate) return;
       const pc = peerConnsRef.current[data.from];
       if (pc && ICE) {
-        try { await pc.addIceCandidate(new (ICE as any)(data.candidate)); } catch (e) {}
+        try { await pc.addIceCandidate(new (ICE as any)(data.candidate)); } catch {}
       }
     };
 

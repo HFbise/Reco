@@ -1,9 +1,10 @@
 """State that must survive restarts, server-side blocking, room passwords and invites."""
-import pytest
 
-import state
-from conftest import create_user, create_room, events, connect_as, query, get_db
+import pytest
+from conftest import connect_as, create_room, create_user, events, get_db, query
+
 import handlers.messages
+import state
 
 
 def join(client, room, password=''):
@@ -15,8 +16,11 @@ def join(client, room, password=''):
 def pushes(monkeypatch):
     """Capture push notifications instead of calling Expo."""
     sent = []
-    monkeypatch.setattr(handlers.messages, 'send_push',
-                        lambda tokens, title, body, data=None: sent.append((sorted(tokens), title)) if tokens else None)
+    monkeypatch.setattr(
+        handlers.messages,
+        'send_push',
+        lambda tokens, title, body, data=None: sent.append((sorted(tokens), title)) if tokens else None,
+    )
     return sent
 
 
@@ -28,8 +32,10 @@ def simulate_restart():
 
 # ── mutes & voice bans ────────────────────────────────────────
 
+
 def test_mute_survives_a_restart():
     import moderation
+
     create_user('troll')
     troll = connect_as('troll')
     join(troll, '大厅')
@@ -44,6 +50,7 @@ def test_mute_survives_a_restart():
 
 def test_expired_mute_no_longer_applies():
     import moderation
+
     create_user('troll')
     troll = connect_as('troll')
     join(troll, '大厅')
@@ -58,6 +65,7 @@ def test_expired_mute_no_longer_applies():
 
 def test_voice_ban_blocks_joining_voice_until_lifted():
     import moderation
+
     create_user('owner')
     create_user('loud')
     create_room('club', owner='owner', members=['loud'])
@@ -112,14 +120,16 @@ def test_device_switching_accounts_moves_the_token_and_logout_removes_it():
 
 # ── blocking ──────────────────────────────────────────────────
 
+
 @pytest.mark.parametrize('blocker', ['alice', 'bob'])
 def test_blocked_dm_is_refused_in_both_directions(blocker, pushes):
     create_user('alice')
     create_user('bob')
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("INSERT INTO blocks (blocker, blocked) VALUES (%s, %s)",
-                    (blocker, 'bob' if blocker == 'alice' else 'alice'))
+        cur.execute(
+            'INSERT INTO blocks (blocker, blocked) VALUES (%s, %s)', (blocker, 'bob' if blocker == 'alice' else 'alice')
+        )
         conn.commit()
     alice, bob = connect_as('alice'), connect_as('bob')
     bob.emit('join_dm', {'dm_room': 'dm:alice:bob'})
@@ -140,8 +150,10 @@ def test_room_pushes_skip_members_who_blocked_the_sender(pushes):
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute("INSERT INTO blocks (blocker, blocked) VALUES ('carol', 'alice')")
-        cur.execute("INSERT INTO push_tokens (token, username) VALUES ('ExponentPushToken[b]', 'bob'),"
-                    " ('ExponentPushToken[c]', 'carol')")
+        cur.execute(
+            "INSERT INTO push_tokens (token, username) VALUES ('ExponentPushToken[b]', 'bob'),"
+            " ('ExponentPushToken[c]', 'carol')"
+        )
         conn.commit()
     alice = connect_as('alice')
     join(alice, 'club')
@@ -150,6 +162,7 @@ def test_room_pushes_skip_members_who_blocked_the_sender(pushes):
 
 
 # ── room passwords ────────────────────────────────────────────
+
 
 def test_room_passwords_are_stored_hashed():
     create_user('owner')
@@ -174,6 +187,7 @@ def test_legacy_plaintext_room_password_is_upgraded_on_first_correct_entry():
 
 # ── invites ───────────────────────────────────────────────────
 
+
 def test_invite_lets_someone_into_a_password_room_once():
     create_user('owner')
     create_user('friend')
@@ -186,8 +200,8 @@ def test_invite_lets_someone_into_a_password_room_once():
     code = query("SELECT code FROM rooms WHERE name = 'vault'")[0]['code']
     friend.emit('find_room', {'code': code})
     assert events(friend, 'find_room_result')[0]['needs_password'] is False
-    assert join(friend, 'vault')['success']            # no password needed
-    assert query('SELECT * FROM room_invites') == []   # the pass is used up
+    assert join(friend, 'vault')['success']  # no password needed
+    assert query('SELECT * FROM room_invites') == []  # the pass is used up
 
 
 def test_cannot_invite_someone_who_blocked_you():
@@ -207,6 +221,7 @@ def test_cannot_invite_someone_who_blocked_you():
 
 def test_rename_carries_push_tokens_and_restrictions():
     import moderation
+
     create_user('admin')
     with get_db() as conn:
         cur = conn.cursor()

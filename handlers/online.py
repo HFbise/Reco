@@ -1,9 +1,11 @@
 import logging
+
 from flask import request
 from flask_socketio import emit
+
+from auth_session import authenticated, bind, unbind, verify_token
 from extensions import socketio
-from state import sid_to_voice, rooms_voice
-from auth_session import verify_token, bind, unbind, authenticated
+from state import rooms_voice, sid_to_voice
 
 log = logging.getLogger(__name__)
 

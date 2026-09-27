@@ -7,7 +7,8 @@ from psycopg2.extras import RealDictCursor
 POOL_MAX = int(os.environ.get('DB_POOL_MAX', '10'))
 
 _pool = pg_pool.ThreadedConnectionPool(
-    1, POOL_MAX,
+    1,
+    POOL_MAX,
     os.environ.get('DATABASE_URL'),
     cursor_factory=RealDictCursor,
 )
@@ -18,6 +19,7 @@ _slots = threading.BoundedSemaphore(POOL_MAX)
 
 class _Conn:
     """Wraps a pooled connection so conn.close() returns it to the pool."""
+
     def __init__(self, conn):
         self._c = conn
 

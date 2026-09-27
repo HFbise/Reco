@@ -3,6 +3,7 @@
 Run by CI on Linux (gunicorn does not run on Windows):
     DATABASE_URL=... python tests/smoke_gunicorn.py
 """
+
 import os
 import socket
 import subprocess
@@ -50,10 +51,18 @@ def main():
 
         anon = socketio.Client()
         anon.connect(URL, transports=['websocket'])
-        assert call(anon, 'register', {
-            'username': 'smoke_user', 'screenname': 'Smoke', 'password': 'secret123',
-            'security_question': 'birth_city', 'security_answer': 'a',
-        }, 'register_result')['success']
+        assert call(
+            anon,
+            'register',
+            {
+                'username': 'smoke_user',
+                'screenname': 'Smoke',
+                'password': 'secret123',
+                'security_question': 'birth_city',
+                'security_answer': 'a',
+            },
+            'register_result',
+        )['success']
         login = call(anon, 'login', {'username': 'smoke_user', 'password': 'secret123'}, 'login_result')
         assert login['success'] and login['token']
         anon.disconnect()

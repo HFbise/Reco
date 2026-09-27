@@ -1,4 +1,5 @@
 """Every code the server can send has a translation in both client languages."""
+
 import glob
 import os
 import re
@@ -7,7 +8,14 @@ import state
 import utils
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-I18N = open(os.path.join(ROOT, 'app', 'src', 'lib', 'i18n.ts'), encoding='utf-8').read()
+
+
+def read(*parts):
+    with open(os.path.join(ROOT, *parts), encoding='utf-8') as f:
+        return f.read()
+
+
+I18N = read('app', 'src', 'lib', 'i18n.ts')
 ZH, EN = I18N.split('const en: Record<keyof typeof zh, string> = {')
 
 
@@ -18,7 +26,7 @@ def keys(block):
 def server_error_codes():
     codes = set()
     for path in glob.glob(os.path.join(ROOT, 'handlers', '*.py')) + [os.path.join(ROOT, 'moderation.py')]:
-        codes |= set(re.findall(r"fail\('\w+', '(\w+)'", open(path, encoding='utf-8').read()))
+        codes |= set(re.findall(r"fail\('\w+', '(\w+)'", read(path)))
     return codes
 
 
@@ -39,6 +47,6 @@ def test_system_message_codes_are_translated():
 def test_security_questions_are_translated_and_match_the_client_list():
     for lang, block in (('zh', ZH), ('en', EN)):
         assert {f'secq-{q}' for q in utils.SECURITY_QUESTIONS} <= keys(block), lang
-    client = open(os.path.join(ROOT, 'app', 'app', '(auth)', 'index.tsx'), encoding='utf-8').read()
-    client_ids = re.search(r"const SECURITY_QUESTIONS = \[([^\]]+)\]", client).group(1)
+    client = read('app', 'app', '(auth)', 'index.tsx')
+    client_ids = re.search(r'const SECURITY_QUESTIONS = \[([^\]]+)\]', client).group(1)
     assert re.findall(r"'(\w+)'", client_ids) == utils.SECURITY_QUESTIONS

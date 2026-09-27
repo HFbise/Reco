@@ -1,11 +1,13 @@
 import logging
+
 from flask import request
 from flask_socketio import emit
-from extensions import socketio
-from db import get_db
-from state import rooms_voice, rooms_stream, sid_to_voice, get_level
-from auth_session import authenticated, in_room
+
 import moderation
+from auth_session import authenticated, in_room
+from db import get_db
+from extensions import socketio
+from state import get_level, rooms_stream, rooms_voice, sid_to_voice
 
 log = logging.getLogger(__name__)
 
@@ -40,8 +42,9 @@ def handle_voice_join(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT screenname, avatar_expression, avatar_color FROM users WHERE username = %s',
-                        (username,))
+            cur.execute(
+                'SELECT screenname, avatar_expression, avatar_color FROM users WHERE username = %s', (username,)
+            )
             row = cur.fetchone()
         if row:
             screenname = row['screenname']
@@ -56,16 +59,26 @@ def handle_voice_join(username, data):
     rooms_voice.setdefault(room, {'voice_members': []})
 
     if not any(m['username'] == username for m in rooms_voice[room]['voice_members']):
-        rooms_voice[room]['voice_members'].append({
-            'username': username, 'screenname': screenname,
-            'avatar_expression': avatar_expression, 'avatar_color': avatar_color,
-        })
+        rooms_voice[room]['voice_members'].append(
+            {
+                'username': username,
+                'screenname': screenname,
+                'avatar_expression': avatar_expression,
+                'avatar_color': avatar_color,
+            }
+        )
     sid_to_voice[request.sid] = (username, room)
-    emit('voice_user_joined', {
-        'username': username, 'screenname': screenname,
-        'avatar_expression': avatar_expression, 'avatar_color': avatar_color,
-        'room': room,
-    }, to=room)
+    emit(
+        'voice_user_joined',
+        {
+            'username': username,
+            'screenname': screenname,
+            'avatar_expression': avatar_expression,
+            'avatar_color': avatar_color,
+            'room': room,
+        },
+        to=room,
+    )
     emit('voice_current_members', {'members': rooms_voice[room]['voice_members']})
 
 
