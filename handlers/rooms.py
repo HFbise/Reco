@@ -133,7 +133,7 @@ def handle_create_room(username, data):
 def handle_join(username, data):
     room = (data.get('room') or '').strip()
     if is_guest(username) and room != DEMO_ROOM:
-        fail('join_result', 'guest_read_only')
+        fail('join_result', 'guest_read_only', room=room)
         return
     try:
         with get_db() as conn:
@@ -141,12 +141,12 @@ def handle_join(username, data):
             cur.execute('SELECT * FROM rooms WHERE name = %s', (room,))
             room_data = cur.fetchone()
             if not room_data:
-                fail('join_result', 'room_not_found')
+                fail('join_result', 'room_not_found', room=room)
                 return
 
             kicked = list(room_data.get('kicked') or [])
             if username in kicked:
-                fail('join_result', 'kicked_from_room')
+                fail('join_result', 'kicked_from_room', room=room)
                 return
 
             if _needs_password(username, room_data):
@@ -155,7 +155,7 @@ def handle_join(username, data):
                 else:
                     ok, needs_migrate = verify_password(room_data['password'], data.get('password') or '')
                     if not ok:
-                        fail('join_result', 'wrong_password', wrong_password=True)
+                        fail('join_result', 'wrong_password', room=room, wrong_password=True)
                         return
                     if needs_migrate:  # legacy plaintext room password
                         cur.execute(
@@ -183,6 +183,10 @@ def handle_join(username, data):
                     emit('history_reset', {'room': room})
                 for msg in messages:
                     emit('message', msg)
+                client_oldest = None if reset else data.get('oldest_id')
+                has_older = history.has_older(cur, room, history.oldest_shown(messages, client_oldest))
+            else:
+                has_older = False
 
             # Get joiner screenname for system message
             joiner_screen = username
@@ -202,6 +206,7 @@ def handle_join(username, data):
                 'members': members_data,
                 'code': room_code,
                 'is_first_join': is_first_join,
+                'has_older': has_older,
                 'has_password': bool(room_data.get('password')),
             },
         )
@@ -224,7 +229,7 @@ def handle_join(username, data):
 
     except Exception as e:
         log.exception('join error: %s', e)
-        fail('join_result', 'server_error')
+        fail('join_result', 'server_error', room=room)
 
 
 @socketio.on('leave_room')

@@ -9,7 +9,7 @@ import { AvatarView } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { IconMic, IconMicOff, IconSpeaker } from './Icon';
-import type { ExternalVoice } from './ChatPanel';
+import type { ExternalVoice } from './chat/types';
 import { Fonts, Radius, Spacing } from '../theme';
 
 interface Member {

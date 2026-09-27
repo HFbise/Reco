@@ -128,3 +128,10 @@ def connect_as(username, password='secret123'):
     client = socketio.test_client(app, auth={'token': token})
     client.get_received()
     return client
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """Expose each phase's result on the test item (used to keep e2e screenshots on failure)."""
+    outcome = yield
+    setattr(item, f'rep_{call.when}', outcome.get_result())

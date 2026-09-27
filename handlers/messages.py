@@ -47,10 +47,14 @@ def handle_message(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
+            cur.execute(
+                'SELECT screenname, avatar_expression, avatar_color FROM users WHERE username = %s', (username,)
+            )
             row = cur.fetchone()
             if row:
                 msg['screenname'] = row['screenname']
+                msg['avatar_expression'] = row.get('avatar_expression')
+                msg['avatar_color'] = row.get('avatar_color')
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time)'
                 ' VALUES (%s, %s, %s, %s, %s) RETURNING id',

@@ -81,14 +81,17 @@ def handle_join_dm(username, data):
         emit('join_dm_result', {'success': False})
         return
     join_room(dm_room)
+    has_older = False
     try:
         with get_db() as conn:
             cur = conn.cursor()
             messages, reset = history.recent(cur, dm_room, data.get('since'))
+            client_oldest = None if reset else data.get('oldest_id')
+            has_older = history.has_older(cur, dm_room, history.oldest_shown(messages, client_oldest))
         if reset:
             emit('history_reset', {'room': dm_room})
         for msg in messages:
             emit('message', msg)
     except Exception as e:
         log.exception('join_dm history error: %s', e)
-    emit('join_dm_result', {'success': True, 'dm_room': dm_room})
+    emit('join_dm_result', {'success': True, 'dm_room': dm_room, 'has_older': has_older})
