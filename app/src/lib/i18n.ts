@@ -143,6 +143,7 @@ const zh = {
   'kicked-title': '被踢出房间',
   'kicked-msg': '管理员将你踢出了该房间',
   'you-are-muted': '你已被禁言',
+  'dm-blocked': '无法发送：你们之间有一方拉黑了对方',
 
   // Admin controls
   'kick-member': '踢出成员',
@@ -323,6 +324,7 @@ const en: Record<keyof typeof zh, string> = {
   'kicked-title': 'Kicked from Room',
   'kicked-msg': 'An admin removed you from this room',
   'you-are-muted': 'You are muted',
+  'dm-blocked': "Can't send: one of you has blocked the other",
 
   // Admin controls
   'kick-member': 'Kick Member',

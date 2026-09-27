@@ -206,7 +206,12 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       if (room) loadingHistoryRef.current.delete(room);
       // Now a member — the password is never asked again
       if (data.success && data.room) {
-        setEntries(prev => prev.map(e => e.key === data.room ? { ...e, needsPassword: false } : e));
+        setEntries(prev => prev.some(e => e.key === data.room)
+          ? prev.map(e => e.key === data.room ? { ...e, needsPassword: false } : e)
+          : [...prev, {
+              type: 'room', key: data.room, displayName: data.room, hasPassword: !!data.has_password,
+              needsPassword: false, unread: 0, lastActivity: Date.now(),
+            }]);
       }
     };
     const onJoinDmResult = (data: any) => {

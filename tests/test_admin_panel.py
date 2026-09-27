@@ -117,13 +117,13 @@ def test_admin_mute_blocks_messages_until_unmuted():
     join(troll, '大厅')
     web = admin_client()
 
-    web.post('/admin/rooms/大厅/mute', data={'username': 'troll', 'duration': '0'})
+    web.post('/admin/rooms/大厅/restrict', data={'username': 'troll', 'kind': 'text', 'duration': '0'})
     assert events(troll, 'text_muted') == [{'target': 'troll', 'duration': 0, 'room': '大厅'}]
     troll.emit('message', {'room': '大厅', 'text': 'spam'})
     assert events(troll, 'text_muted_notify')
     assert query("SELECT * FROM messages WHERE text = 'spam'") == []
 
-    web.post('/admin/rooms/大厅/unmute', data={'username': 'troll'})
+    web.post('/admin/rooms/大厅/lift', data={'username': 'troll', 'kind': 'text'})
     troll.emit('message', {'room': '大厅', 'text': 'sorry'})
     assert query("SELECT text FROM messages WHERE text = 'sorry'") == [{'text': 'sorry'}]
 

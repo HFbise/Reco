@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { router } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
+import { unregisterPushToken } from '../../src/hooks/usePushNotifications';
 import { disconnectSocket, getSocket } from '../../src/lib/socket';
 import { AvatarView, EXPRESSIONS, AVATAR_COLORS_LIST } from '../../src/components/AvatarView';
 import { useColors } from '../../src/hooks/useColors';
@@ -41,6 +42,7 @@ export default function MeScreen() {
   const [feedbackSending, setFeedbackSending] = useState(false);
 
   async function logout() {
+    unregisterPushToken();
     getSocket().emit('user_offline', { username: currentUser?.username });
     disconnectSocket();
     await clearUser();

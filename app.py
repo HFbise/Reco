@@ -166,6 +166,18 @@ def _migrate():
             cur.execute('''CREATE TABLE IF NOT EXISTS feedback (
                 id SERIAL PRIMARY KEY, username TEXT NOT NULL, text TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW())''')
+            cur.execute('''CREATE TABLE IF NOT EXISTS push_tokens (
+                token TEXT PRIMARY KEY, username TEXT NOT NULL, platform TEXT,
+                updated_at TIMESTAMPTZ DEFAULT NOW())''')
+            cur.execute("CREATE INDEX IF NOT EXISTS push_tokens_username_idx ON push_tokens(username)")
+            # Text mutes ('text') and voice bans ('voice'); NULL expires_at = until lifted
+            cur.execute('''CREATE TABLE IF NOT EXISTS room_restrictions (
+                room TEXT NOT NULL, username TEXT NOT NULL, kind TEXT NOT NULL,
+                expires_at TIMESTAMPTZ, PRIMARY KEY (room, username, kind))''')
+            # One-time passes into password-protected rooms
+            cur.execute('''CREATE TABLE IF NOT EXISTS room_invites (
+                room TEXT NOT NULL, username TEXT NOT NULL, invited_by TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (room, username))''')
             cur.execute('''CREATE TABLE IF NOT EXISTS deleted_usernames (
                 username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())''')
             cur.execute('''CREATE TABLE IF NOT EXISTS dm_closed (

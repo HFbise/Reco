@@ -1,11 +1,11 @@
 import logging
-import time
 from flask import request
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
 from state import rooms_voice, rooms_stream, sid_to_voice, get_level
 from auth_session import authenticated, in_room
+import moderation
 
 log = logging.getLogger(__name__)
 
@@ -50,15 +50,10 @@ def handle_voice_join(username, data):
     except Exception as e:
         log.error('voice_join profile error: %s', e)
 
-    if room not in rooms_voice:
-        rooms_voice[room] = {'voice_members': [], 'voice_banned': {}}
-    banned = rooms_voice[room]['voice_banned']
-    if username in banned:
-        expiry = banned[username]
-        if expiry is None or expiry > time.time():
-            emit('voice_banned', {'target': username})
-            return
-        del banned[username]
+    if moderation.is_restricted(room, username, moderation.VOICE):
+        emit('voice_banned', {'target': username, 'room': room})
+        return
+    rooms_voice.setdefault(room, {'voice_members': []})
 
     if not any(m['username'] == username for m in rooms_voice[room]['voice_members']):
         rooms_voice[room]['voice_members'].append({
@@ -133,18 +128,7 @@ def handle_voice_ban(requester, data):
         return
     if not levels or levels[0] < 1 or levels[0] <= levels[1]:
         return
-    duration = int(data.get('duration_seconds', 0))
-    rooms_voice.setdefault(room, {'voice_members': [], 'voice_banned': {}})
-    expiry = None if duration == 0 else time.time() + duration
-    rooms_voice[room]['voice_banned'][target] = expiry
-    emit('voice_banned', {'target': target}, to=room)
-    if duration > 0:
-        def auto_unban(r=room, t=target, e=expiry):
-            socketio.sleep(duration)
-            if r in rooms_voice and rooms_voice[r]['voice_banned'].get(t) == e:
-                del rooms_voice[r]['voice_banned'][t]
-                socketio.emit('voice_unbanned', {'target': t}, to=r)
-        socketio.start_background_task(auto_unban)
+    moderation.restrict(room, target, moderation.VOICE, int(data.get('duration_seconds', 0)))
 
 
 @socketio.on('voice_unban')
@@ -158,9 +142,7 @@ def handle_voice_unban(requester, data):
         return
     if not levels or levels[0] < 1 or levels[0] <= levels[1]:
         return
-    if room in rooms_voice:
-        rooms_voice[room]['voice_banned'].pop(target, None)
-    emit('voice_unbanned', {'target': target}, to=room)
+    moderation.lift(room, target, moderation.VOICE)
 
 
 @socketio.on('stream_start')

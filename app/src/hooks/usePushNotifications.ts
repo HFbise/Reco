@@ -16,13 +16,23 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// This device's Expo token, remembered so logout can unregister it
+let deviceToken: string | null = null;
+
+/** Stop this device receiving the signed-in account's notifications (call before logout). */
+export function unregisterPushToken() {
+  if (deviceToken) getSocket().emit('unregister_push_token', { token: deviceToken });
+}
+
 export function usePushNotifications(onNotificationTap?: (roomName: string) => void) {
-  const { currentUser } = useAuthStore();
+  const username = useAuthStore(s => s.currentUser?.username);
   const responseListenerRef = useRef<Notifications.Subscription | null>(null);
 
   useEffect(() => {
-    registerForPushAsync();
+    if (username) registerForPushAsync();
+  }, [username]);
 
+  useEffect(() => {
     responseListenerRef.current = Notifications.addNotificationResponseReceivedListener(response => {
       const room = response.notification.request.content.data?.room as string | undefined;
       if (room && onNotificationTap) onNotificationTap(room);
@@ -56,14 +66,9 @@ export function usePushNotifications(onNotificationTap?: (roomName: string) => v
 
     try {
       const tokenData = await Notifications.getExpoPushTokenAsync();
-      const token = tokenData.data;
-      if (token && currentUser?.username) {
-        getSocket().emit('register_push_token', {
-          username: currentUser.username,
-          token,
-          platform: Platform.OS,
-        });
-      }
+      deviceToken = tokenData.data;
+      // Identity comes from the authenticated socket, not from this payload
+      if (deviceToken) getSocket().emit('register_push_token', { token: deviceToken, platform: Platform.OS });
     } catch (e) {
       console.warn('Push token error:', e);
     }

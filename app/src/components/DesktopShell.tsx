@@ -6,6 +6,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
+import { unregisterPushToken } from '../hooks/usePushNotifications';
 import { useThemeStore } from '../store/themeStore';
 import { useLangStore } from '../store/langStore';
 import { useColors } from '../hooks/useColors';
@@ -176,6 +177,7 @@ export function DesktopShell() {
   }
 
   async function logout() {
+    unregisterPushToken();
     getSocket().emit('user_offline', { username: currentUser?.username });
     disconnectSocket();
     await clearUser();
@@ -297,6 +299,7 @@ export function DesktopShell() {
               hideVoiceBar
               externalVoice={null}
               onClose={() => { setSelectedRoom(null); setActiveView('welcome'); }}
+              onNavigateToRoom={(room) => selectRoom(room)}
             />
           )}
 

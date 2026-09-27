@@ -5,11 +5,10 @@ Callers are responsible for permission checks; these functions do the work
 """
 import logging
 import re
-import time
 
 from extensions import socketio
 from db import get_db
-from state import online_users, rooms_text_muted, push_tokens, emit_system_msg
+from state import online_users, rooms_voice, emit_system_msg
 from auth_session import unbind
 
 log = logging.getLogger(__name__)
@@ -66,33 +65,90 @@ def unkick(room: str, target: str):
         conn.commit()
 
 
-def mute(room: str, target: str, duration: int = 0):
-    """Stop `target` from sending text in `room`; duration 0 = until unmuted."""
-    expiry = None if duration <= 0 else time.time() + duration
-    rooms_text_muted.setdefault(room, {})[target] = expiry
-    socketio.emit('text_muted', {'target': target, 'duration': duration, 'room': room}, to=room)
-    if expiry is not None:
-        def auto_unmute():
+# Mutes and voice bans are rows in room_restrictions so they survive restarts.
+# Expiry is checked on read; the timer below only pushes the live "lifted" event.
+TEXT, VOICE = 'text', 'voice'
+_LIFTED_EVENT = {TEXT: 'text_unmuted', VOICE: 'voice_unbanned'}
+
+
+def restrict(room: str, target: str, kind: str, duration: int = 0):
+    """Mute (kind='text') or voice-ban (kind='voice'); duration 0 = until lifted."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO room_restrictions (room, username, kind, expires_at)"
+            " VALUES (%s, %s, %s, CASE WHEN %s > 0 THEN NOW() + make_interval(secs => %s) END)"
+            " ON CONFLICT (room, username, kind) DO UPDATE SET expires_at = EXCLUDED.expires_at"
+            " RETURNING expires_at",
+            (room, target, kind, duration, duration),
+        )
+        expires_at = cur.fetchone()['expires_at']
+        conn.commit()
+    if kind == TEXT:
+        socketio.emit('text_muted', {'target': target, 'duration': duration, 'room': room}, to=room)
+    else:
+        members = rooms_voice.get(room, {}).get('voice_members', [])
+        rooms_voice.get(room, {})['voice_members'] = [m for m in members if m['username'] != target]
+        socketio.emit('voice_banned', {'target': target, 'room': room}, to=room)
+        socketio.emit('voice_user_left', {'username': target, 'room': room}, to=room)
+    if expires_at is not None:
+        def lift_when_expired():
             socketio.sleep(duration)
-            if rooms_text_muted.get(room, {}).get(target) == expiry:
-                unmute(room, target)
-        socketio.start_background_task(auto_unmute)
+            # Only if it wasn't replaced by a newer restriction meanwhile
+            with get_db() as conn:
+                cur = conn.cursor()
+                cur.execute('DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
+                            ' AND expires_at = %s RETURNING 1', (room, target, kind, expires_at))
+                lifted = cur.fetchone()
+                conn.commit()
+            if lifted:
+                socketio.emit(_LIFTED_EVENT[kind], {'target': target, 'room': room}, to=room)
+        socketio.start_background_task(lift_when_expired)
+
+
+def lift(room: str, target: str, kind: str):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s',
+                    (room, target, kind))
+        conn.commit()
+    socketio.emit(_LIFTED_EVENT[kind], {'target': target, 'room': room}, to=room)
+
+
+def is_restricted(room: str, username: str, kind: str) -> bool:
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT 1 FROM room_restrictions WHERE room = %s AND username = %s AND kind = %s'
+                    ' AND (expires_at IS NULL OR expires_at > NOW())', (room, username, kind))
+        return cur.fetchone() is not None
+
+
+def restricted_users(room: str, kind: str) -> list:
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT username FROM room_restrictions WHERE room = %s AND kind = %s'
+                    ' AND (expires_at IS NULL OR expires_at > NOW())', (room, kind))
+        return [r['username'] for r in cur.fetchall()]
+
+
+def mute(room: str, target: str, duration: int = 0):
+    restrict(room, target, TEXT, duration)
 
 
 def unmute(room: str, target: str):
-    rooms_text_muted.get(room, {}).pop(target, None)
-    socketio.emit('text_unmuted', {'target': target, 'room': room}, to=room)
+    lift(room, target, TEXT)
 
 
 def is_muted(room: str, username: str) -> bool:
-    muted = rooms_text_muted.get(room, {})
-    if username not in muted:
-        return False
-    expiry = muted[username]
-    if expiry is None or expiry > time.time():
-        return True
-    del muted[username]
-    return False
+    return is_restricted(room, username, TEXT)
+
+
+# ── Blocks ────────────────────────────────────────────────────
+
+def blocked_either_way(cur, a: str, b: str) -> bool:
+    cur.execute('SELECT 1 FROM blocks WHERE (blocker = %s AND blocked = %s) OR (blocker = %s AND blocked = %s)',
+                (a, b, b, a))
+    return cur.fetchone() is not None
 
 
 # ── Messages ──────────────────────────────────────────────────
@@ -127,6 +183,9 @@ def delete_account(cur, username: str):
                 ' admins = array_remove(admins, %s)', (username, username))
     cur.execute('DELETE FROM blocks WHERE blocker = %s OR blocked = %s', (username, username))
     cur.execute('DELETE FROM dm_closed WHERE username = %s', (username,))
+    cur.execute('DELETE FROM push_tokens WHERE username = %s', (username,))
+    cur.execute('DELETE FROM room_restrictions WHERE username = %s', (username,))
+    cur.execute('DELETE FROM room_invites WHERE username = %s', (username,))
     cur.execute('DELETE FROM users WHERE username = %s', (username,))
     cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
@@ -170,14 +229,13 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE reports SET reporter = %s WHERE reporter = %s', (new, old))
         cur.execute('UPDATE reports SET reported = %s WHERE reported = %s', (new, old))
         cur.execute('UPDATE feedback SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE push_tokens SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE room_restrictions SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE room_invites SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE room_invites SET invited_by = %s WHERE invited_by = %s', (new, old))
         cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (old,))
         conn.commit()
 
-    if old in push_tokens:
-        push_tokens[new] = push_tokens.pop(old)
-    for muted in rooms_text_muted.values():
-        if old in muted:
-            muted[new] = muted.pop(old)
     for sid in list(online_users.get(old, [])):
         socketio.emit('session_expired', {}, to=sid)
         unbind(sid)

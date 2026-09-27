@@ -513,14 +513,18 @@ def room_detail(room_name):
                 f'<input type="hidden" name="next" value="{_esc(here)}">'
                 f'<button class="btn {cls}">{label}</button></form>')
 
-    def mute_control(u):
-        if moderation.is_muted(room_name, u):
-            return action(f'{base}/unmute', '解除禁言', {'username': u})
-        options = ''.join(f'<option value="{secs}">{label}</option>' for secs, label in MUTE_OPTIONS)
-        return (f'<form class="inline" method="post" action="{base}/mute">'
+    text_muted = set(moderation.restricted_users(room_name, moderation.TEXT))
+    voice_banned = set(moderation.restricted_users(room_name, moderation.VOICE))
+
+    def restrict_control(u, kind, active, label):
+        if active:
+            return action(f'{base}/lift', f'解除{label}', {'username': u, 'kind': kind})
+        options = ''.join(f'<option value="{secs}">{text}</option>' for secs, text in MUTE_OPTIONS)
+        return (f'<form class="inline" method="post" action="{base}/restrict">'
                 f'<input type="hidden" name="username" value="{_esc(u)}">'
+                f'<input type="hidden" name="kind" value="{kind}">'
                 f'<input type="hidden" name="next" value="{_esc(here)}">'
-                f'<select name="duration">{options}</select> <button class="btn btn-ghost">禁言</button></form>')
+                f'<select name="duration">{options}</select> <button class="btn btn-ghost">{label}</button></form>')
 
     members_html = ''
     for u in members:
@@ -528,12 +532,14 @@ def room_detail(room_name):
         role = '房主' if u == owner else ('管理员' if u in admins_set else '')
         online_dot = '🟢' if u in online_users else '⚪'
         role_html = f'<span class="tag tag-blue">{role}</span>' if role else ''
-        muted_html = ' <span class="tag">禁言中</span>' if moderation.is_muted(room_name, u) else ''
+        muted_html = ((' <span class="tag">禁言中</span>' if u in text_muted else '')
+                      + (' <span class="tag">语音禁言中</span>' if u in voice_banned else ''))
         members_html += (
             f'<tr><td>{online_dot} <span class="mono">{_esc(u)}</span></td>'
             f'<td>{_esc(info.get("screenname", ""))}</td>'
             f'<td>{role_html}{muted_html}</td>'
-            f'<td style="white-space:nowrap">{mute_control(u)} '
+            f'<td style="white-space:nowrap">{restrict_control(u, moderation.TEXT, u in text_muted, "禁言")}<br>'
+            f'{restrict_control(u, moderation.VOICE, u in voice_banned, "语音禁言")} '
             f'{action(f"{base}/kick", "踢出", {"username": u}, danger=True, confirm=f"把 {u} 踢出房间？踢出后无法再加入，直到解封。")}'
             f'</td></tr>'
         )
@@ -618,20 +624,28 @@ def unkick_member(room_name):
     return _back(ok=f'{u} 可以重新加入 {room_name} 了')
 
 
-@admin_bp.route('/rooms/<path:room_name>/mute', methods=['POST'])
-@login_required
-def mute_member(room_name):
-    u = _form_user()
-    moderation.mute(room_name, u, int(request.form.get('duration', 0)))
-    return _back(ok=f'已禁言 {u}')
+RESTRICTION_LABELS = {moderation.TEXT: '禁言', moderation.VOICE: '语音禁言'}
 
 
-@admin_bp.route('/rooms/<path:room_name>/unmute', methods=['POST'])
+def _form_kind():
+    kind = request.form.get('kind')
+    return kind if kind in RESTRICTION_LABELS else moderation.TEXT
+
+
+@admin_bp.route('/rooms/<path:room_name>/restrict', methods=['POST'])
 @login_required
-def unmute_member(room_name):
-    u = _form_user()
-    moderation.unmute(room_name, u)
-    return _back(ok=f'已解除 {u} 的禁言')
+def restrict_member(room_name):
+    u, kind = _form_user(), _form_kind()
+    moderation.restrict(room_name, u, kind, int(request.form.get('duration', 0)))
+    return _back(ok=f'已对 {u} {RESTRICTION_LABELS[kind]}')
+
+
+@admin_bp.route('/rooms/<path:room_name>/lift', methods=['POST'])
+@login_required
+def lift_restriction(room_name):
+    u, kind = _form_user(), _form_kind()
+    moderation.lift(room_name, u, kind)
+    return _back(ok=f'已解除 {u} 的{RESTRICTION_LABELS[kind]}')
 
 
 @admin_bp.route('/messages/<int:msg_id>/recall', methods=['POST'])

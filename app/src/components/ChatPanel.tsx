@@ -183,7 +183,10 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     }
 
     // ── 当前房间的语音成员（独立追踪，不依赖 externalVoice） ──
-    const onRoomVoiceView = (data: any) => setRoomVoiceMembers(data.members || []);
+    const onRoomVoiceView = (data: any) => {
+      if (data.room && data.room !== name) return;
+      setRoomVoiceMembers(data.members || []);
+    };
     const onRoomVoiceJoined = (data: any) => {
       if (data.room && data.room !== name) return;
       setRoomVoiceMembers(prev => prev.some((m: any) => m.username === data.username) ? prev : [...prev, data]);
@@ -222,6 +225,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     socket.on('voice_mute_status', onRoomVoiceMute);
 
     const onTextMutedNotify = () => { showToast(t('you-are-muted')); setIsTextMuted(true); };
+    const onDmBlocked = (data: any) => { if (data.room === name) showToast(t('dm-blocked')); };
     const onTextMuted = (data: any) => { if (data.room === name && data.target === currentUser.username) setIsTextMuted(true); };
     const onTextUnmuted = (data: any) => { if (data.room === name && data.target === currentUser.username) setIsTextMuted(false); };
     const onRoomPasswordChanged = (data: { room: string; has_password: boolean }) => {
@@ -267,6 +271,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     };
 
     socket.on('text_muted_notify', onTextMutedNotify);
+    socket.on('dm_blocked', onDmBlocked);
     socket.on('text_muted', onTextMuted);
     socket.on('text_unmuted', onTextUnmuted);
     socket.on('room_password_changed', onRoomPasswordChanged);
@@ -280,6 +285,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
     return () => {
       socket.off('connect', onConnect);
       socket.off('text_muted_notify', onTextMutedNotify);
+      socket.off('dm_blocked', onDmBlocked);
       socket.off('text_muted', onTextMuted);
       socket.off('text_unmuted', onTextUnmuted);
       socket.off('room_password_changed', onRoomPasswordChanged);
@@ -529,7 +535,7 @@ export function ChatPanel({ name, password, onClose, showBackBtn = false, hideVo
                   <TouchableOpacity
                     style={[s.inviteBtn, { backgroundColor: c.accent }]}
                     onPress={() => {
-                      if (onClose) onClose();
+                      if (onNavigateToRoom) onNavigateToRoom(inv.room);
                       else router.push({ pathname: '/(main)/room/[name]', params: { name: inv.room } });
                     }}
                     activeOpacity={0.85}

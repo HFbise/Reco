@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from flask_socketio import emit
 from extensions import socketio
 from db import get_db
-from state import check_msg_rate, get_level, online_users, push_tokens
-from handlers.push import send_push
-from auth_session import authenticated, in_room
+from state import check_msg_rate, get_level, online_users
+from handlers.push import send_push, tokens_for
+from auth_session import authenticated, in_room, dm_participants
 import moderation
 
 log = logging.getLogger(__name__)
@@ -29,6 +29,14 @@ def handle_message(username, data):
     if moderation.is_muted(room, username):
         emit('text_muted_notify', {})
         return
+    participants = dm_participants(room)
+    recipient = None
+    if participants:
+        recipient = participants[1] if participants[0] == username else participants[0]
+        with get_db() as conn:
+            if moderation.blocked_either_way(conn.cursor(), username, recipient):
+                emit('dm_blocked', {'room': room})
+                return
 
     # Built server-side: clients can't spoof the sender, display name or `system` flag.
     msg = {'username': username, 'screenname': username, 'room': room, 'text': text}
@@ -52,39 +60,32 @@ def handle_message(username, data):
 
     emit('message', msg, to=room)
 
-    sender = username
-    sender_screen = msg['screenname']
-    text = text[:100]
+    preview = text[:100]
+    if recipient:
+        if recipient in online_users:
+            for sid in list(online_users[recipient]):
+                socketio.emit('new_dm_notification', {
+                    'dm_room': room,
+                    'from_username': username,
+                    'from_screenname': msg['screenname'],
+                }, to=sid)
+        else:
+            send_push(tokens_for([recipient]), msg['screenname'], preview, {'room': room})
+        return
 
-    if room.startswith('dm:'):
-        parts = room.split(':')
-        if len(parts) == 3:
-            recipient = parts[2] if parts[1] == sender else parts[1]
-            if recipient in online_users:
-                for sid in list(online_users[recipient]):
-                    socketio.emit('new_dm_notification', {
-                        'dm_room': room,
-                        'from_username': sender,
-                        'from_screenname': sender_screen,
-                    }, to=sid)
-            else:
-                tokens = push_tokens.get(recipient, [])
-                if tokens:
-                    send_push(tokens, sender_screen, text, {'room': room})
-    else:
-        try:
-            with get_db() as conn:
-                cur = conn.cursor()
-                cur.execute('SELECT members FROM rooms WHERE name = %s', (room,))
-                row = cur.fetchone()
-            if row:
-                for member in (row['members'] or []):
-                    if member != sender and member not in online_users:
-                        tokens = push_tokens.get(member, [])
-                        if tokens:
-                            send_push(tokens, f'{sender_screen} in {room}', text, {'room': room})
-        except Exception as e:
-            log.error('push notify error: %s', e)
+    # Room message: push to offline members, except anyone who has blocked the sender
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                'SELECT m FROM rooms, unnest(members) AS m WHERE name = %s AND m <> %s'
+                ' AND m NOT IN (SELECT blocker FROM blocks WHERE blocked = %s)',
+                (room, username, username),
+            )
+            offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users]
+        send_push(tokens_for(offline), f"{msg['screenname']} in {room}", preview, {'room': room})
+    except Exception as e:
+        log.error('push notify error: %s', e)
 
 
 @socketio.on('recall_message')

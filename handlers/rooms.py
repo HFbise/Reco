@@ -8,9 +8,10 @@ from extensions import socketio
 from db import get_db
 from state import (
     get_level,
-    online_users, pending_invites, rooms_voice, rooms_stream,
+    online_users, rooms_voice, rooms_stream,
     emit_system_msg,
 )
+from utils import hash_password, verify_password
 from auth_session import authenticated, in_room, dm_participants
 import moderation
 
@@ -67,11 +68,16 @@ def _levels(room: str, requester: str, target: str):
     return get_level(requester, room_data), get_level(target, room_data)
 
 
-def _needs_password(username: str, room_data: dict) -> bool:
-    """Owner, room admins and existing members never need the room password."""
-    if not room_data.get('password'):
+def _needs_password(username: str, room_data: dict, invited: bool = False) -> bool:
+    """Owner, room admins, existing members and invited users never need the room password."""
+    if not room_data.get('password') or invited:
         return False
     return username not in (room_data.get('members') or []) and get_level(username, room_data) == 0
+
+
+def _is_invited(cur, room: str, username: str) -> bool:
+    cur.execute('SELECT 1 FROM room_invites WHERE room = %s AND username = %s', (room, username))
+    return cur.fetchone() is not None
 
 
 @socketio.on('create_room')
@@ -94,7 +100,7 @@ def handle_create_room(username, data):
             cur.execute(
                 'INSERT INTO rooms (name, admins, members, password, owner, code)'
                 ' VALUES (%s, %s, %s, %s, %s, %s)',
-                (room, [], [], password, username, code)
+                (room, [], [], hash_password(password) if password else None, username, code)
             )
             conn.commit()
         emit('create_room_result', {
@@ -128,14 +134,18 @@ def handle_join(username, data):
                 emit('join_result', {'success': False, 'msg': '你已被踢出该房间'})
                 return
 
-            room_pw = room_data.get('password')
             if _needs_password(username, room_data):
-                invited = username in pending_invites.get(room, set())
-                if invited:
-                    pending_invites[room].discard(username)
-                elif data.get('password', '') != room_pw:
-                    emit('join_result', {'success': False, 'msg': '密码错误', 'wrong_password': True})
-                    return
+                if _is_invited(cur, room, username):
+                    cur.execute('DELETE FROM room_invites WHERE room = %s AND username = %s', (room, username))
+                else:
+                    ok, needs_migrate = verify_password(room_data['password'], data.get('password') or '')
+                    if not ok:
+                        emit('join_result', {'success': False, 'msg': '密码错误', 'wrong_password': True})
+                        return
+                    if needs_migrate:  # legacy plaintext room password
+                        cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
+                                    (hash_password(data['password']), room))
+                conn.commit()
 
             join_room(room)
             members = list(room_data['members'] or [])
@@ -198,6 +208,7 @@ def handle_join(username, data):
             'members': members_data,
             'code': room_code,
             'is_first_join': is_first_join,
+            'has_password': bool(room_data.get('password')),
         })
         emit('members_list', {'room': room, 'members': members_data}, to=room)
 
@@ -207,7 +218,8 @@ def handle_join(username, data):
         if room in rooms_voice and rooms_voice[room].get('voice_members'):
             emit('voice_members_view', {
                 'members': rooms_voice[room]['voice_members'],
-                'banned': list(rooms_voice[room].get('voice_banned', {}).keys()),
+                'banned': moderation.restricted_users(room, moderation.VOICE),
+                'room': room,
             })
         for uname, sname in rooms_stream.get(room, {}).items():
             emit('stream_start', {'username': uname, 'screenname': sname, 'room': room})
@@ -375,7 +387,8 @@ def handle_set_room_password(requester, data):
             if not row or get_level(requester, row) < 2:
                 emit('set_room_password_result', {'success': False, 'msg': '无权限'})
                 return
-            cur.execute('UPDATE rooms SET password = %s WHERE name = %s', (password, room))
+            cur.execute('UPDATE rooms SET password = %s WHERE name = %s',
+                        (hash_password(password) if password else None, room))
             conn.commit()
         emit('set_room_password_result', {'success': True})
         socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
@@ -402,6 +415,8 @@ def handle_close_room(requester, data):
             emit('room_closed', {}, to=data['room'])
             cur.execute('DELETE FROM rooms WHERE name = %s', (data['room'],))
             cur.execute('DELETE FROM messages WHERE room = %s', (data['room'],))
+            cur.execute('DELETE FROM room_invites WHERE room = %s', (data['room'],))
+            cur.execute('DELETE FROM room_restrictions WHERE room = %s', (data['room'],))
             conn.commit()
         close_room(data['room'])
     except Exception as e:
@@ -417,13 +432,14 @@ def handle_find_room(username, data):
             cur = conn.cursor()
             cur.execute('SELECT name, password, code, owner, admins, members FROM rooms WHERE code = %s', (code,))
             room = cur.fetchone()
+            invited = bool(room) and _is_invited(cur, room['name'], username)
         if not room:
             emit('find_room_result', {'success': False, 'msg': '找不到该房间号'})
             return
         emit('find_room_result', {
             'success': True, 'room': room['name'],
             'has_password': bool(room['password']),
-            'needs_password': _needs_password(username, room), 'code': room['code'],
+            'needs_password': _needs_password(username, room, invited), 'code': room['code'],
         })
     except Exception as e:
         log.error('find_room error: %s', e)
@@ -485,11 +501,19 @@ def handle_invite_to_room(inviter, data):
             if target not in users:
                 emit('invite_sent', {'success': False, 'msg': '用户不存在'})
                 return
+            if moderation.blocked_either_way(cur, inviter, target):
+                emit('invite_sent', {'success': False, 'msg': '无法邀请该用户'})
+                return
             inviter_screen = users.get(inviter, inviter)
+            cur.execute(
+                'INSERT INTO room_invites (room, username, invited_by) VALUES (%s, %s, %s)'
+                ' ON CONFLICT (room, username) DO UPDATE SET invited_by = EXCLUDED.invited_by, created_at = NOW()',
+                (room, target, inviter),
+            )
             cur.execute('SELECT code FROM rooms WHERE name = %s', (room,))
             row = cur.fetchone()
             room_code = row['code'] if row else ''
-            dm_room = 'dm:' + ':'.join(sorted([inviter, target]))
+            dm_room = moderation.dm_room_id(inviter, target)
             meta = json.dumps({'invite': {'room': room, 'code': room_code}})
             text = f'{inviter_screen} 邀请你加入房间 {room}'
             cur.execute(

@@ -4,7 +4,7 @@ import threading
 import urllib.request as _req
 from flask_socketio import emit
 from extensions import socketio
-from state import push_tokens
+from db import get_db
 from auth_session import authenticated
 
 log = logging.getLogger(__name__)
@@ -13,12 +13,40 @@ log = logging.getLogger(__name__)
 @socketio.on('register_push_token')
 @authenticated
 def handle_register_push_token(username, data):
-    token = data.get('token', '')
-    if not token:
+    token = (data.get('token') or '').strip()
+    if not token.startswith('ExponentPushToken['):
         return
-    tokens = push_tokens.setdefault(username, [])
-    if token not in tokens:
-        tokens.append(token)
+    # A device token belongs to whoever is signed in on that device right now
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO push_tokens (token, username, platform, updated_at) VALUES (%s, %s, %s, NOW())'
+            ' ON CONFLICT (token) DO UPDATE SET username = EXCLUDED.username,'
+            ' platform = EXCLUDED.platform, updated_at = NOW()',
+            (token, username, (data.get('platform') or '')[:16]),
+        )
+        conn.commit()
+
+
+@socketio.on('unregister_push_token')
+@authenticated
+def handle_unregister_push_token(username, data):
+    """Called on logout so the device stops receiving this account's notifications."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM push_tokens WHERE token = %s AND username = %s',
+                    ((data.get('token') or ''), username))
+        conn.commit()
+
+
+def tokens_for(usernames) -> list:
+    usernames = list(usernames)
+    if not usernames:
+        return []
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT token FROM push_tokens WHERE username = ANY(%s)', (usernames,))
+        return [r['token'] for r in cur.fetchall()]
 
 
 def send_push(tokens: list, title: str, body: str, data: dict = None):

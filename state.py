@@ -7,15 +7,14 @@ from db import get_db
 log = logging.getLogger(__name__)
 
 # ── In-memory state ───────────────────────────────────────────
-rooms_voice: dict = {}       # { room: { voice_members, voice_banned } }
+# Only live, per-process state lives here. Anything that must survive a restart
+# (mutes, voice bans, invites, push tokens) is in the database.
+rooms_voice: dict = {}       # { room: { voice_members } }
 rooms_stream: dict = {}      # { room: { username: screenname } }
-rooms_text_muted: dict = {}  # { room: { username: expiry_or_None } }
 online_users: dict = {}      # { username: set of sids }
 sid_to_voice: dict = {}      # { sid: (username, room) }
-pending_invites: dict = {}   # { room: set(usernames) }
 message_rate: dict = {}      # { username: [timestamps] }
 login_attempts: dict = {}    # { username: {'count': N, 'until': float} }
-push_tokens: dict = {}       # { username: [expo_push_token, ...] }
 
 def get_level(username: str, room_data: dict) -> int:
     """2=owner, 1=room admin, 0=member"""

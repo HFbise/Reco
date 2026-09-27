@@ -32,7 +32,8 @@ import auth_session  # noqa: E402
 
 app_module._migrate()
 
-TABLES = ['messages', 'rooms', 'users', 'blocks', 'reports', 'feedback', 'dm_closed', 'deleted_usernames']
+TABLES = ['messages', 'rooms', 'users', 'blocks', 'reports', 'feedback', 'dm_closed', 'deleted_usernames',
+          'push_tokens', 'room_restrictions', 'room_invites']
 
 
 @pytest.fixture(autouse=True)
@@ -43,7 +44,7 @@ def clean_state():
         cur.execute("INSERT INTO rooms (name, admins, members, owner) VALUES ('大厅', '{}', '{}', NULL)")
         conn.commit()
     for d in (state.online_users, state.login_attempts, state.message_rate,
-              state.rooms_voice, state.rooms_text_muted, auth_session.sid_users):
+              state.rooms_voice, auth_session.sid_users):
         d.clear()
     yield
 

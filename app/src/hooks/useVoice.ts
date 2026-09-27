@@ -190,6 +190,7 @@ export function useVoice(room: string) {
     const socket = getSocket();
 
     const onVoiceMembersView = (data: any) => {
+      if (data.room && data.room !== roomRef.current) return;
       setVoiceMembers(data.members || []);
     };
 
@@ -256,7 +257,8 @@ export function useVoice(room: string) {
       );
     };
 
-    const onVoiceBanned = (data: { target: string }) => {
+    const onVoiceBanned = (data: { target: string; room?: string }) => {
+      if (data.room && data.room !== roomRef.current) return;
       if (data.target === userRef.current?.username && inVoiceRef.current) {
         stopLocalStream();
         inVoiceRef.current = false;
