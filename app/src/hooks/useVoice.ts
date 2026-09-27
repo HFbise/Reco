@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { showAlert } from '../lib/alert';
 import { getSocket } from '../lib/socket';
-import { SERVER_URL } from '../lib/config';
+import { STUN_ONLY, fetchIceConfig } from '../lib/ice';
 import { useAuthStore } from '../store/authStore';
 import { useLangStore } from '../store/langStore';
 import { t as _t } from '../lib/i18n';
@@ -30,25 +30,6 @@ export interface VoiceMember {
   isStreamingAudio?: boolean;
 }
 
-// Fallback when TURN credentials can't be fetched: STUN only (fails behind strict NATs)
-const STUN_ONLY = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-  ],
-};
-
-/** Short-lived TURN credentials from our server, so voice works across restrictive networks. */
-async function fetchIceConfig(token?: string) {
-  if (!token) return STUN_ONLY;
-  try {
-    const res = await fetch(`${SERVER_URL}/api/ice-servers`, { headers: { Authorization: `Bearer ${token}` } });
-    const servers = await res.json();
-    return Array.isArray(servers) && servers.length ? { iceServers: servers } : STUN_ONLY;
-  } catch {
-    return STUN_ONLY;
-  }
-}
 
 export function useVoice(room: string) {
   const { currentUser } = useAuthStore();

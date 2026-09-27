@@ -252,6 +252,8 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE reports SET reporter = %s WHERE reporter = %s', (new, old))
         cur.execute('UPDATE reports SET reported = %s WHERE reported = %s', (new, old))
         cur.execute('UPDATE feedback SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE matches SET user_a = %s WHERE user_a = %s', (new, old))
+        cur.execute('UPDATE matches SET user_b = %s WHERE user_b = %s', (new, old))
         cur.execute('UPDATE push_tokens SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE room_restrictions SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE room_invites SET username = %s WHERE username = %s', (new, old))

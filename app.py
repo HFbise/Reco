@@ -25,6 +25,7 @@ from admin import admin_bp
 from auth_session import verify_token
 from db import get_db
 from extensions import app, socketio
+from handlers import match as match_handlers
 from state import LOBBY, online_users, rooms_voice
 
 app.register_blueprint(admin_bp)
@@ -104,6 +105,8 @@ def privacy_policy():
 <p>我们仅将收集的信息用于运营 Reco 服务，包括：显示消息、发送推送通知、账号管理。我们不会将你的信息出售给第三方。</p>
 <h2>数据存储</h2>
 <p>数据存储于 Supabase（PostgreSQL）云数据库，位于美国。</p>
+<h2>随机匹配</h2>
+<p>随机匹配中，对方看不到你的用户名和资料。匹配聊天的内容会保存 7 天，仅在有人举报时供管理员核查，之后自动删除。语音匹配经由我们的中转服务器传输，双方不会获知彼此的 IP 地址。</p>
 <h2>账号删除</h2>
 <p>你可以随时在 App 内「我的资料 → 删除账号」永久删除账号及相关数据。</p>
 <h2>联系我们</h2>
@@ -215,6 +218,13 @@ def _migrate():
             cur.execute("""CREATE TABLE IF NOT EXISTS room_invites (
                 room TEXT NOT NULL, username TEXT NOT NULL, invited_by TEXT NOT NULL,
                 created_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (room, username))""")
+            # Random matches (see handlers/match.py); transcripts live in messages as room 'match:<id>'
+            cur.execute("""CREATE TABLE IF NOT EXISTS matches (
+                id SERIAL PRIMARY KEY, mode TEXT NOT NULL, user_a TEXT NOT NULL, user_b TEXT NOT NULL,
+                tags TEXT[] DEFAULT '{}', started_at TIMESTAMPTZ DEFAULT NOW(), ended_at TIMESTAMPTZ,
+                ended_by TEXT, end_reason TEXT, a_keeps BOOLEAN DEFAULT FALSE, b_keeps BOOLEAN DEFAULT FALSE,
+                dm_room TEXT)""")
+            cur.execute('ALTER TABLE reports ADD COLUMN IF NOT EXISTS match_id INTEGER')
             cur.execute("""CREATE TABLE IF NOT EXISTS deleted_usernames (
                 username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())""")
             cur.execute("""CREATE TABLE IF NOT EXISTS dm_closed (
@@ -248,6 +258,8 @@ def _migrate():
                     log.info('converted %d legacy "%s" system messages', cur.rowcount, code)
 
             demo.seed(cur)
+            conn.commit()
+            match_handlers.purge_expired()  # 7-day retention for match transcripts
 
             # The lobby belongs to nobody: it is moderated only from the admin panel
             cur.execute(

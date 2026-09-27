@@ -53,8 +53,11 @@ def handle_user_offline(username, data):
 
 @socketio.on('disconnect')
 def handle_disconnect(*_args):
+    from handlers import match  # imported lazily: both modules load via handlers/__init__
+
     sid = request.sid
-    unbind(sid)
+    username = unbind(sid)
+    match.on_disconnect(username, sid)
     if sid in sid_to_voice:
         username, room = sid_to_voice.pop(sid)
         if room in rooms_voice:

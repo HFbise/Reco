@@ -11,6 +11,7 @@ import { MembersPanel } from './MembersPanel';
 import { StreamPanel } from './StreamPanel';
 import { ConnectionBanner } from './ConnectionBanner';
 import { ProfileView } from './account/ProfileView';
+import { MatchView } from './match/MatchView';
 import { SettingsModal, useSavedAudioDevices } from './SettingsModal';
 import type { DmMeta } from './chat/types';
 import { Fonts, Spacing } from '../theme';
@@ -53,7 +54,7 @@ export function DesktopShell() {
     <SafeAreaView style={[s.root, { backgroundColor: c.bg }]}>
       <ConnectionBanner />
       <View style={s.shell}>
-        <NavRail active={section} onSelect={setSection} onOpenSettings={() => setShowSettings(true)} />
+        <NavRail active={section} onSelect={setSection} onOpenSettings={() => setShowSettings(true)} showMatch />
 
         {section === 'chats' && (
           <View style={[s.sidebar, { backgroundColor: c.surface, borderRightColor: c.border }]}>
@@ -80,6 +81,15 @@ export function DesktopShell() {
               </View>
               <ProfileView />
             </View>
+          )}
+
+          {section === 'match' && (
+            <MatchView onOpenDm={(r) => openDm(r.dm_room, {
+              screenname: r.screenname,
+              username: r.username,
+              avatarExpression: r.avatar_expression,
+              avatarColor: r.avatar_color,
+            })} />
           )}
 
           {section === 'chats' && !room && (

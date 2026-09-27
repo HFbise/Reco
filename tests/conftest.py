@@ -30,10 +30,12 @@ os.environ.setdefault('TURN_HOST', 'turn.test')
 
 import app as app_module  # noqa: E402  (registers every socket handler)
 import auth_session  # noqa: E402
+import handlers.match as match_handlers  # noqa: E402
 import state  # noqa: E402
 import utils  # noqa: E402
 from db import get_db  # noqa: E402
 from extensions import app, socketio  # noqa: E402
+from matching import MatchQueue  # noqa: E402
 from utils import hash_password  # noqa: E402
 
 # Same algorithm as production (scrypt), far lower cost: hashing dominates test time otherwise
@@ -53,6 +55,7 @@ TABLES = [
     'push_tokens',
     'room_restrictions',
     'room_invites',
+    'matches',
 ]
 
 
@@ -65,6 +68,10 @@ def clean_state():
         conn.commit()
     for d in (state.online_users, state.login_attempts, state.message_rate, state.rooms_voice, auth_session.sid_users):
         d.clear()
+    # Matching keeps live state in memory (queue, active matches)
+    match_handlers._live.clear()
+    match_handlers._last_partner.clear()
+    match_handlers.queue = MatchQueue(blocked=match_handlers._blocked)
     yield
 
 

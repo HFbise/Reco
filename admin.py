@@ -259,7 +259,9 @@ def delete_feedback(fid):
 def reports():
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('SELECT id, reporter, reported, reason, created_at FROM reports ORDER BY created_at DESC LIMIT 300')
+        cur.execute(
+            'SELECT id, reporter, reported, reason, created_at, match_id FROM reports ORDER BY created_at DESC LIMIT 300'
+        )
         rows = cur.fetchall()
 
     rows_html = ''
@@ -270,6 +272,7 @@ def reports():
           <td class="mono"><a href="/admin/users?q={_url(r['reported'])}">{_esc(r['reported'])}</a></td>
           <td>{_esc(r['reason'] or '')}</td>
           <td class="mono">{ts}</td>
+          <td>{f'<a href="/admin/matches/{r["match_id"]}" class="btn btn-ghost">匹配记录</a>' if r['match_id'] else ''}</td>
           <td>
             <form class="inline" method="post" action="/admin/reports/{r['id']}/delete"
                   onsubmit="return confirm('删除这条举报？')">
@@ -281,10 +284,47 @@ def reports():
     <h2>举报记录 <span style="font-size:14px;font-weight:400;color:#888">共 {len(rows)} 条</span></h2>
     <div class="card">
       <table>
-        <tr><th>举报人</th><th>被举报</th><th>原因</th><th>时间</th><th></th></tr>
-        {rows_html or "<tr><td colspan='5' style='color:#aaa;text-align:center;padding:30px'>暂无举报</td></tr>"}
+        <tr><th>举报人</th><th>被举报</th><th>原因</th><th>时间</th><th></th><th></th></tr>
+        {rows_html or "<tr><td colspan='6' style='color:#aaa;text-align:center;padding:30px'>暂无举报</td></tr>"}
       </table>
     </div>"""
+    return page(body, 'rp')
+
+
+@admin_bp.route('/matches/<int:match_id>')
+@login_required
+def match_transcript(match_id):
+    """A random match's transcript with real identities (kept 7 days, for reports)."""
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT * FROM matches WHERE id = %s', (match_id,))
+        match = cur.fetchone()
+        cur.execute(
+            'SELECT username, screenname, text, created_at FROM messages WHERE room = %s ORDER BY id',
+            (f'match:{match_id}',),
+        )
+        msgs = cur.fetchall()
+    if not match:
+        body = (
+            f'<p><a href="/admin/reports">← 返回举报</a></p><h2>匹配 #{match_id}</h2>'
+            '<div class="card" style="padding:20px;color:#888">记录已超过 7 天，已自动删除。</div>'
+        )
+        return page(body, 'rp')
+    rows = ''.join(
+        f'<tr><td class="mono">{m["created_at"].strftime("%m-%d %H:%M:%S") if m.get("created_at") else ""}</td>'
+        f'<td class="mono">{_esc(m["username"])}</td><td>{_esc(m["text"])}</td></tr>'
+        for m in msgs
+    )
+    started = match['started_at'].strftime('%Y-%m-%d %H:%M') if match.get('started_at') else ''
+    body = f"""
+    <p style="margin-bottom:16px"><a href="/admin/reports">← 返回举报</a></p>
+    <h2>匹配 #{match_id} <span style="font-size:14px;font-weight:400;color:#888">
+      {_esc(match['mode'])} · {started} · {_esc(match['user_a'])} ↔ {_esc(match['user_b'])}
+      · 结束原因：{_esc(match.get('end_reason') or '进行中')}</span></h2>
+    <div class="card"><table>
+      <tr><th>时间</th><th>发送者</th><th>内容</th></tr>
+      {rows or "<tr><td colspan='3' style='color:#aaa;padding:20px;text-align:center'>没有消息</td></tr>"}
+    </table></div>"""
     return page(body, 'rp')
 
 

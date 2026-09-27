@@ -124,3 +124,39 @@ def test_chinese_browser_gets_chinese_ui(server, browser, shots):
     page.get_by_placeholder('密码').fill('secret123')
     page.get_by_placeholder('密码').press('Enter')
     page.get_by_text('大厅').first.wait_for()
+
+
+def test_random_match_text_chat_then_both_keep_in_touch(server, browser, shots):
+    create_user('dave', screenname='Dave')
+    create_user('erin', screenname='Erin')
+    dave, erin = new_page(browser), new_page(browser)
+    shots.extend([dave, erin])
+    for page, name in ((dave, 'dave'), (erin, 'erin')):
+        log_in(page, name)
+        page.get_by_role('tab', name='Match').click()
+        page.get_by_placeholder('Type and press Enter, e.g. music').fill('music')
+        page.get_by_placeholder('Type and press Enter, e.g. music').press('Enter')
+        page.get_by_text('Start', exact=True).click()
+
+    for page in (dave, erin):
+        page.get_by_text('You both like: #music').wait_for(timeout=10000)
+    assert dave.get_by_text('Erin').count() == 0  # anonymous until both agree
+
+    dave.get_by_placeholder('Type a message...').fill('hi stranger')
+    dave.get_by_placeholder('Type a message...').press('Enter')
+    erin.get_by_text('hi stranger').wait_for(timeout=10000)
+
+    dave.get_by_text('Keep in touch').click()
+    dave.get_by_text('Waiting for them to agree').wait_for()
+    erin.get_by_text('Keep in touch').click()
+    dave.get_by_text("You're now connected with Erin", exact=False).wait_for(timeout=10000)
+    erin.get_by_text("You're now connected with Dave", exact=False).wait_for(timeout=10000)
+
+
+def test_guest_cannot_see_random_match(server, browser, demo_room, shots):
+    page = new_page(browser)
+    shots.append(page)
+    page.goto(URL)
+    page.get_by_text('Take a look first').click()
+    page.get_by_text('Reco Demo', exact=True).first.wait_for()
+    assert page.get_by_role('tab', name='Match').count() == 0
