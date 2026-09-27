@@ -182,15 +182,6 @@ def _migrate():
                         break
                 cur.execute("UPDATE rooms SET code = %s WHERE name = %s", (code, row['name']))
 
-            # Remove site admins from room member lists
-            cur.execute("SELECT username FROM users WHERE is_admin = TRUE")
-            for admin_row in cur.fetchall():
-                cur.execute(
-                    "UPDATE rooms SET members = array_remove(members, %s),"
-                    " admins = array_remove(admins, %s)",
-                    (admin_row['username'], admin_row['username'])
-                )
-
             # Ensure lobby exists
             cur.execute("SELECT name FROM rooms WHERE name = '大厅'")
             if not cur.fetchone():

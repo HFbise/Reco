@@ -1,5 +1,5 @@
 """Room passwords and closing DMs."""
-from conftest import create_user, create_room, events, connect_as, query
+from conftest import create_user, create_room, events, connect_as, query, get_db
 
 
 def join(client, room, password=''):
@@ -59,3 +59,20 @@ def test_closed_dm_is_hidden_until_a_new_message_arrives():
     alice.get_received()
     alice.emit('get_dms', {})
     assert [d['dm_room'] for d in events(alice, 'dms_list')[0]['dms']] == ['dm:alice:bob']
+
+
+def test_restart_keeps_site_admins_in_their_rooms():
+    # Regression: _migrate() used to strip is_admin users from every room on startup
+    import app as app_module
+    create_user('admin')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET is_admin = TRUE WHERE username = 'admin'")
+        conn.commit()
+    create_room('club', owner='someone', members=['admin'], admins=['admin'])
+    app_module._migrate()
+    room = query("SELECT members, admins FROM rooms WHERE name = 'club'")[0]
+    assert room['members'] == ['admin'] and room['admins'] == ['admin']
+    admin = connect_as('admin')
+    admin.emit('get_rooms', {})
+    assert [r['name'] for r in events(admin, 'rooms_list')[0]['rooms']] == ['大厅', 'club']
