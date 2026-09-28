@@ -86,6 +86,10 @@ def handle_message(username, data):
                         'from_screenname': msg['screenname'],
                         'avatar_expression': msg.get('avatar_expression'),
                         'avatar_color': msg.get('avatar_color'),
+                        # For the list's preview line: a brand-new DM isn't subscribed yet,
+                        # so this is the only copy of the first message the list gets
+                        'message_id': msg['id'],
+                        'text': text[:120],
                     },
                     to=sid,
                 )

@@ -62,6 +62,43 @@ def test_closed_dm_is_hidden_until_a_new_message_arrives():
     assert [d['dm_room'] for d in events(alice, 'dms_list')[0]['dms']] == ['dm:alice:bob']
 
 
+def test_dm_list_shows_the_last_message_and_whether_they_are_online():
+    create_user('alice')
+    create_user('bob')
+    alice, bob = connect_as('alice'), connect_as('bob')
+    for c in (alice, bob):
+        c.emit('join_dm', {'dm_room': 'dm:alice:bob'})
+    alice.emit('message', {'room': 'dm:alice:bob', 'text': 'first'})
+    bob.emit('message', {'room': 'dm:alice:bob', 'text': 'x' * 500})
+    alice.get_received()
+
+    alice.emit('get_dms', {})
+    dm = events(alice, 'dms_list')[0]['dms'][0]
+    assert dm['online'] is True
+    assert dm['last']['username'] == 'bob'
+    assert dm['last']['text'] == 'x' * 120  # a preview, not the whole message
+    assert not dm['last']['recalled'] and not dm['last']['system']
+
+    # A recalled message's text never reaches the list
+    bob.emit('recall_message', {'id': dm['last']['id']})
+    bob.disconnect()
+    alice.get_received()
+    alice.emit('get_dms', {})
+    dm = events(alice, 'dms_list')[0]['dms'][0]
+    assert dm['online'] is False
+    assert dm['last']['recalled'] and dm['last']['text'] == ''
+
+
+def test_first_dm_notification_carries_the_message_for_the_preview():
+    create_user('alice')
+    create_user('bob')
+    alice, bob = connect_as('alice'), connect_as('bob')
+    alice.emit('join_dm', {'dm_room': 'dm:alice:bob'})
+    alice.emit('message', {'room': 'dm:alice:bob', 'text': 'hi bob'})
+    note = events(bob, 'new_dm_notification')[0]
+    assert note['text'] == 'hi bob' and isinstance(note['message_id'], int)
+
+
 def test_restart_keeps_members_and_room_admins():
     # Regression: _migrate() used to strip some users from every room on startup
     import app as app_module

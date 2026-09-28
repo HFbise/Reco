@@ -6,8 +6,23 @@ import history
 from auth_session import authenticated, dm_participants, readable
 from db import get_db
 from extensions import socketio
+from state import online_users
 
 log = logging.getLogger(__name__)
+
+PREVIEW_LEN = 120  # the list shows one line; no need to send whole messages
+
+
+def last_message_preview(row) -> dict:
+    """The newest message of a DM as the chat list shows it. A recalled message's text is never sent."""
+    return {
+        'id': row['last_id'],
+        'username': row['last_from'],
+        'text': '' if row['last_recalled'] else (row['last_text'] or '')[:PREVIEW_LEN],
+        'recalled': bool(row['last_recalled']),
+        'system': bool(row['last_system']),
+        'meta': row['last_meta'] if row['last_system'] else None,
+    }
 
 
 @socketio.on('get_dms')
@@ -20,7 +35,9 @@ def handle_get_dms(username, data):
             # prefix pattern would also match other people's DMs). A closed DM
             # stays hidden until a newer message arrives.
             cur.execute(
-                'SELECT d.room, u.username, u.screenname, u.avatar_expression, u.avatar_color FROM ('
+                'SELECT d.room, u.username, u.screenname, u.avatar_expression, u.avatar_color,'
+                ' last.id AS last_id, last.username AS last_from, last.text AS last_text,'
+                ' last.recalled AS last_recalled, last.system AS last_system, last.meta AS last_meta FROM ('
                 '   SELECT m.room, MAX(m.created_at) AS last_at FROM messages m'
                 "   WHERE m.room LIKE 'dm:%%' AND %s IN (split_part(m.room, ':', 2), split_part(m.room, ':', 3))"
                 '   GROUP BY m.room'
@@ -28,6 +45,11 @@ def handle_get_dms(username, data):
                 " JOIN users u ON u.username = CASE WHEN split_part(d.room, ':', 2) = %s"
                 "   THEN split_part(d.room, ':', 3) ELSE split_part(d.room, ':', 2) END"
                 ' LEFT JOIN dm_closed c ON c.username = %s AND c.dm_room = d.room'
+                # The newest message, for the preview line under the name
+                ' CROSS JOIN LATERAL ('
+                '   SELECT id, username, text, recalled, system, meta FROM messages'
+                '   WHERE room = d.room ORDER BY created_at DESC, id DESC LIMIT 1'
+                ' ) last'
                 " WHERE d.last_at > COALESCE(c.closed_at, '-infinity'::timestamptz)"
                 ' ORDER BY d.last_at DESC',
                 (username, username, username),
@@ -45,6 +67,8 @@ def handle_get_dms(username, data):
                     'other_screenname': r['screenname'],
                     'avatar_expression': r.get('avatar_expression') or 'Smile',
                     'avatar_color': r.get('avatar_color') or '#5865F2',
+                    'online': r['username'] in online_users,
+                    'last': last_message_preview(r),
                 }
             )
         emit('dms_list', {'dms': dms})

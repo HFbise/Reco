@@ -115,6 +115,34 @@ def test_send_a_message_and_another_user_sees_it_live(server, browser, shots):
     bob.get_by_text('hello from the browser').wait_for(timeout=10000)
 
 
+def test_dm_list_shows_last_message_and_online_dot_live(server, browser, shots):
+    create_user('ivy', screenname='Ivy')
+    create_user('jack', screenname='Jack')
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:ivy:jack', 'ivy', 'Ivy', 'see you at 8')"
+        )
+        conn.commit()
+    ivy, jack = new_page(browser), new_page(browser)
+    shots.extend([ivy, jack])
+    log_in(jack, 'jack')
+    jack.get_by_text('see you at 8').wait_for()
+    assert jack.get_by_label('Online').count() == 0  # Ivy isn't here yet
+
+    log_in(ivy, 'ivy')
+    jack.get_by_label('Online').wait_for(timeout=10000)
+    ivy.get_by_text('You: see you at 8').wait_for()
+
+    open_room(ivy, 'Jack')
+    ivy.get_by_placeholder('Type a message...').fill('on my way')
+    ivy.get_by_placeholder('Type a message...').press('Enter')
+    jack.get_by_text('on my way').wait_for(timeout=10000)
+    ivy.get_by_text('You: on my way').wait_for()
+
+    ivy.context.close()
+    jack.get_by_label('Online').wait_for(state='detached', timeout=10000)
+
+
 def test_chinese_browser_gets_chinese_ui(server, browser, shots):
     create_user('carol')
     page = new_page(browser, locale='zh-CN')

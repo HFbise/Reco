@@ -32,6 +32,19 @@ interface Entry {
   avatarColor?: string;
   unread: number;
   lastActivity: number;  // Date.now() when last message arrived; 0 = never
+  /** DMs: whether the other person is online, and the newest message for the preview line */
+  online?: boolean;
+  last?: DmPreview;
+}
+
+/** The newest message of a DM, as the server sends it in dms_list */
+export interface DmPreview {
+  id: number;
+  username: string;
+  text: string;
+  recalled: boolean;
+  system: boolean;
+  meta?: any;
 }
 
 // Keep DmEntry export for callers
@@ -42,6 +55,8 @@ export interface DmEntry {
   avatar_expression: string;
   avatar_color: string;
   unread?: number;
+  online?: boolean;
+  last?: DmPreview;
 }
 
 interface Props {
@@ -180,18 +195,26 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           avatarColor: d.avatar_color,
           unread: existing.get(d.dm_room)?.unread ?? 0,
           lastActivity: existing.get(d.dm_room)?.lastActivity ?? 0,
+          online: d.online,
+          last: d.last,
         }));
         const roomEntries = prev.filter(e => e.type === 'room');
         return [...roomEntries, ...dmEntries];
       });
     };
 
-    const onNewDmNotification = (data: { dm_room: string; from_username: string; from_screenname: string; avatar_expression?: string; avatar_color?: string }) => {
+    const onNewDmNotification = (data: {
+      dm_room: string; from_username: string; from_screenname: string; avatar_expression?: string; avatar_color?: string;
+      message_id?: number; text?: string;
+    }) => {
+      const last: DmPreview | undefined = data.message_id ? {
+        id: data.message_id, username: data.from_username, text: data.text ?? '', recalled: false, system: false,
+      } : undefined;
       setEntries(prev => {
         const existing = prev.find(e => e.key === data.dm_room);
         if (existing) {
           return prev.map(e => e.key === data.dm_room
-            ? { ...e, lastActivity: Date.now(), unread: e.unread + 1 }
+            ? { ...e, lastActivity: Date.now(), unread: e.unread + 1, online: true, last: last ?? e.last }
             : e
           );
         }
@@ -204,6 +227,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           avatarColor: data.avatar_color || '#5865F2',
           unread: 1,
           lastActivity: Date.now(),
+          online: true,
+          last,
         }];
       });
       socket.emit('room_subscribe', { room: data.dm_room });
@@ -238,13 +263,27 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       setEntries(prev => {
         const idx = prev.findIndex(e => e.key === msgRoom);
         if (idx === -1) return prev;
-        const updated = { ...prev[idx], unread: isActive ? 0 : prev[idx].unread + 1 };
+        const updated = {
+          ...prev[idx],
+          unread: isActive ? 0 : prev[idx].unread + 1,
+          last: prev[idx].type === 'dm'
+            ? { id: data.id, username: data.username, text: String(data.text ?? '').slice(0, 120), recalled: false, system: false }
+            : prev[idx].last,
+        };
         if (idx === 0) return prev.map((e, i) => i === 0 ? updated : e);
         return [updated, ...prev.slice(0, idx), ...prev.slice(idx + 1)];
       });
     };
 
     const onBlockedList = (data: { users: string[] }) => setBlocked(data.users);
+
+    // Keep DM previews and online dots current
+    const patchLast = (id: number, patch: Partial<DmPreview>) => setEntries(prev => prev.map(e =>
+      e.last?.id === id ? { ...e, last: { ...e.last, ...patch } } : e));
+    const onMessageEdited = (data: { id: number; text: string }) => patchLast(data.id, { text: data.text.slice(0, 120) });
+    const onMessageRecalled = (data: { id: number }) => patchLast(data.id, { recalled: true, text: '' });
+    const onOnlineStatus = (data: { username: string; online: boolean }) => setEntries(prev => prev.map(e =>
+      e.type === 'dm' && e.otherUsername === data.username ? { ...e, online: data.online } : e));
 
     socket.on('connect', load);
     socket.on('blocked_users_list', onBlockedList);
@@ -267,6 +306,9 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     socket.on('kicked_from_room', onKickedFromRoom);
     socket.on('room_closed', onKickedFromRoom);
     socket.on('message', onMessage);
+    socket.on('message_edited', onMessageEdited);
+    socket.on('message_recalled', onMessageRecalled);
+    socket.on('online_status_changed', onOnlineStatus);
 
     return () => {
       socket.off('connect', load);
@@ -283,6 +325,9 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       socket.off('kicked_from_room', onKickedFromRoom);
       socket.off('room_closed', onKickedFromRoom);
       socket.off('message', onMessage);
+      socket.off('message_edited', onMessageEdited);
+      socket.off('message_recalled', onMessageRecalled);
+      socket.off('online_status_changed', onOnlineStatus);
     };
   }, [currentUser, setBlocked, t]);
 
@@ -425,9 +470,19 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     </TouchableOpacity>
   );
 
+  /** One line under a DM's name: "You: …", "Message recalled", or their text */
+  function previewText(last?: DmPreview): string {
+    if (!last) return '';
+    if (last.recalled) return t('msg-recalled');
+    if (last.system) return t.system({ text: last.text, meta: last.meta });
+    const text = last.text.replace(/\s+/g, ' ');
+    return last.username === currentUser?.username ? t('preview-you', { text }) : text;
+  }
+
   const row = (entry: Entry) => {
     const isActive = entry.key === selectedRoom;
     const showClose = entry.type === 'dm' && hoveredKey === entry.key;
+    const preview = entry.type === 'dm' ? previewText(entry.last) : '';
     return (
       <Pressable
         key={entry.key}
@@ -444,17 +499,31 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
             <IconHash size={18} color={isActive ? c.onAccent : c.accent} />
           </View>
         ) : (
-          <AvatarView
-            expression={entry.avatarExpression}
-            color={entry.avatarColor}
-            username={entry.otherUsername}
-            screenname={entry.displayName}
-            size={36}
-          />
+          <View>
+            <AvatarView
+              expression={entry.avatarExpression}
+              color={entry.avatarColor}
+              username={entry.otherUsername}
+              screenname={entry.displayName}
+              size={40}
+            />
+            {entry.online && (
+              <View style={[s.onlineDot, { backgroundColor: c.success, borderColor: isActive ? c.accentBg : c.surface }]}
+                accessibilityLabel={t('online')} />
+            )}
+          </View>
         )}
-        <Text style={[s.roomName, { color: isActive ? c.accentText : c.text }, isActive && s.roomNameActive]} numberOfLines={1}>
-          {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
-        </Text>
+        <View style={s.rowText}>
+          <Text style={[s.roomName, { color: isActive ? c.accentText : c.text }, isActive && s.roomNameActive]} numberOfLines={1}>
+            {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
+          </Text>
+          {preview && (
+            <Text style={[s.preview, { color: entry.unread > 0 ? c.text : c.textSub }, entry.unread > 0 && s.previewUnread]}
+              numberOfLines={1}>
+              {preview}
+            </Text>
+          )}
+        </View>
         {entry.type === 'room' && entry.hasPassword && <IconLock size={13} color={c.textMuted} />}
         {showClose ? (
           <Pressable
@@ -620,7 +689,11 @@ const s = StyleSheet.create({
     paddingVertical: 8, paddingHorizontal: 10, borderRadius: 14,
   },
   roomIcon: { width: 36, height: 36, borderRadius: 12, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
-  roomName: { flex: 1, fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  rowText: { flex: 1, minWidth: 0, gap: 1 },
+  roomName: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  preview: { fontSize: 13 },
+  previewUnread: { fontWeight: String(Fonts.bold) as any },
+  onlineDot: { position: 'absolute', right: -1, bottom: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2.5 },
   roomNameActive: { fontWeight: String(Fonts.heavy) as any },
   badge: {
     minWidth: 22, height: 22, borderRadius: Radius.full,
