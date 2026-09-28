@@ -83,11 +83,23 @@ export function MessageBubble({
     if (added) popEmoji(added);
   }, [mine]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function handleTap() {
+  // Double tap, read from the raw touches rather than two presses: browsers turn quick
+  // tap pairs into clicks (or not) in their own ways, which made press-based detection flaky.
+  // A tap = a short touch that barely moves (so scrolling and long-presses don't count).
+  const touchStart = useRef({ x: 0, y: 0, at: 0 });
+  function onTouchStart(e: any) {
+    const tch = e.nativeEvent.touches?.[0] ?? e.nativeEvent;
+    touchStart.current = { x: tch.pageX, y: tch.pageY, at: Date.now() };
+  }
+  function onTouchEnd(e: any) {
+    const tch = e.nativeEvent.changedTouches?.[0] ?? e.nativeEvent;
+    const start = touchStart.current;
     const now = Date.now();
-    if (onDoubleTap && now - lastTap.current < DOUBLE_TAP_MS) {
+    const isTap = now - start.at < 250 && Math.hypot(tch.pageX - start.x, tch.pageY - start.y) < 10;
+    if (!isTap) { lastTap.current = 0; return; }
+    if (now - lastTap.current < DOUBLE_TAP_MS) {
       lastTap.current = 0;
-      onDoubleTap();
+      onDoubleTap?.();
       popEmoji('👍'); // right away, without waiting for the server
       return;
     }
@@ -160,8 +172,8 @@ export function MessageBubble({
 
         <View style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}>
           <TouchableOpacity
-            onPress={onDoubleTap ? handleTap : undefined}
             onLongPress={onLongPress}
+            {...(onDoubleTap ? { onTouchStart, onTouchEnd } : null)}
             delayLongPress={350}
             activeOpacity={0.85}
             disabled={!onLongPress && !onDoubleTap}
