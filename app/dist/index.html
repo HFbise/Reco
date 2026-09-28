@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>Reco</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
     <style id="expo-reset">
       html,
       body {
@@ -27,6 +30,15 @@
         height: 100%;
         flex: 1;
       }
+      /* App typeface. react-native-web sets a system font on every Text and
+         TextInput through a class; these selectors outrank that class, while a
+         component's own fontFamily (headings use Fredoka) still wins. Chinese
+         falls back to the platform's CJK font. */
+      body [dir],
+      body input[class],
+      body textarea[class] {
+        font-family: Nunito, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+      }
       /* iOS zooms into any focused input under 16px and never zooms back out,
          which leaves the page cropped. Touch screens get 16px inputs instead. */
       @media (pointer: coarse) {
@@ -43,6 +55,6 @@
       You need to enable JavaScript to run this app.
     </noscript>
     <div id="root"></div>
-  <script src="/_expo/static/js/web/entry-fd7701af3bb3700e65cb19100179960e.js" defer></script>
+  <script src="/_expo/static/js/web/entry-c89f782c2c16c324546cd6a250891f35.js" defer></script>
 </body>
 </html>

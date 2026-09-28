@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
+import { IconEmoji } from './Icon';
 import { Fonts, Radius, Spacing } from '../theme';
 import { getAvatarColor } from '../lib/avatar';
 export { getAvatarColor } from '../lib/avatar';
@@ -31,7 +32,7 @@ interface Props {
   isDesktop?: boolean;
   onEdit?: () => void;
   onRecall?: () => void;
-  // Desktop: called when 😊 is pressed, provides button's page position for popup placement
+  // Desktop: called when the react button is pressed, provides button's page position for popup placement
   onReactionBtnPress?: (pageX: number, pageY: number, btnH: number) => void;
 }
 
@@ -67,7 +68,7 @@ export function MessageBubble({ msg, currentUsername, onLongPress, onReactionPre
     <Text style={[s.recalled, { color: isOwn ? 'rgba(255,255,255,0.65)' : c.textMuted }]}>{t('msg-recalled')}</Text>
   ) : (
     <>
-      <Text style={[s.text, { color: isOwn ? '#fff' : c.text }]}>{msg.text}</Text>
+      <Text style={[s.text, { color: isOwn ? c.onAccent : c.text }]}>{msg.text}</Text>
       {msg.edited && <Text style={[s.editedLabel, { color: isOwn ? 'rgba(255,255,255,0.55)' : 'rgba(150,150,150,0.8)' }]}>{t('msg-edited')}</Text>}
     </>
   );
@@ -82,12 +83,13 @@ export function MessageBubble({ msg, currentUsername, onLongPress, onReactionPre
     />
   );
 
-  // Desktop hover actions — static row: [😊] [edit?] [recall?]
-  // Clicking 😊 measures its position and hands off to ChatPanel for the popup
+  // Desktop hover actions: [react] [edit?] [recall?]
+  // Clicking react measures its position and hands off to ChatPanel for the popup
   const hoverActions = showHoverActions ? (
     <View style={s.hoverActions}>
-      <TouchableOpacity ref={reactBtnRef} style={s.hoverBtn} onPress={handleReactBtnPress} activeOpacity={0.7}>
-        <Text style={s.hoverBtnText}>😊</Text>
+      <TouchableOpacity ref={reactBtnRef} style={s.hoverBtn} onPress={handleReactBtnPress} activeOpacity={0.7}
+        accessibilityLabel={t('emoji')}>
+        <IconEmoji size={17} color={c.textMuted} />
       </TouchableOpacity>
       {onEdit && (
         <TouchableOpacity style={s.hoverBtn} onPress={onEdit} activeOpacity={0.7}>
@@ -121,7 +123,7 @@ export function MessageBubble({ msg, currentUsername, onLongPress, onReactionPre
             disabled={!onLongPress}
             style={s.bubbleTouch}
           >
-            <View style={[s.bubble, isOwn ? s.bubbleOwn : { backgroundColor: c.bubbleOther }]}>
+            <View style={[s.bubble, { backgroundColor: isOwn ? c.bubbleOwn : c.bubbleOther }]}>
               {bubbleContent}
             </View>
           </TouchableOpacity>
@@ -173,7 +175,6 @@ const s = StyleSheet.create({
   // Without shrink the bubble grows to the text's full length instead of wrapping
   bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%' },
   bubble: { borderRadius: Radius.lg, paddingHorizontal: 14, paddingVertical: 10, maxWidth: '100%' },
-  bubbleOwn: { backgroundColor: '#4f8ef7' },
 
   // web: long URLs / unbroken strings wrap instead of widening the bubble
   text: { fontSize: 15, lineHeight: 22, ...(Platform.OS === 'web' ? { wordBreak: 'break-word' } : {}) } as any,

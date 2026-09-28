@@ -1,6 +1,7 @@
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
 import type { Message } from '../MessageBubble';
 import { useColors } from '../../hooks/useColors';
+import { IconPencil, IconPlus, IconTrash } from '../Icon';
 import { useT } from '../../hooks/useT';
 import { Fonts, Spacing } from '../../theme';
 
@@ -36,17 +37,17 @@ export function MessageActionsSheet(p: Props) {
             </TouchableOpacity>
           ))}
           <TouchableOpacity style={s.btn} onPress={p.onMoreEmojis} activeOpacity={0.7}>
-            <Text style={s.icon}>＋</Text>
+            <IconPlus size={20} color={c.textMuted} />
           </TouchableOpacity>
           {p.canEdit && (
             <TouchableOpacity style={s.btn} onPress={p.onEdit} activeOpacity={0.7}>
-              <Text style={s.icon}>✏️</Text>
+              <IconPencil size={20} color={c.textMuted} />
               <Text style={[s.label, { color: c.textMuted }]}>{t('edit')}</Text>
             </TouchableOpacity>
           )}
           {p.canRecall && (
             <TouchableOpacity style={s.btn} onPress={p.onRecall} activeOpacity={0.7}>
-              <Text style={s.icon}>🗑</Text>
+              <IconTrash size={20} color={c.danger} />
               <Text style={[s.label, { color: c.danger }]}>{t('recall')}</Text>
             </TouchableOpacity>
           )}

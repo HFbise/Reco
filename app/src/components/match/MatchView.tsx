@@ -302,7 +302,7 @@ function MatchComposer({ onSend, onTyping, keepLabel, keepDisabled, onKeep }: {
       )}
       <View style={s.inputRow}>
         <TextInput
-          style={[s.input, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.08)' : '#e4e4e8', color: c.text }]}
+          style={[s.input, { backgroundColor: c.surface2, color: c.text }]}
           placeholder={t('ph-message')} placeholderTextColor={c.textMuted} value={text} onChangeText={change}
           onSubmitEditing={send} returnKeyType="send" multiline
           onKeyPress={(e: any) => {

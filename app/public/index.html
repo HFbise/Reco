@@ -6,6 +6,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>%WEB_TITLE%</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
     <style id="expo-reset">
       html,
       body {
@@ -26,6 +29,15 @@
         display: flex;
         height: 100%;
         flex: 1;
+      }
+      /* App typeface. react-native-web sets a system font on every Text and
+         TextInput through a class; these selectors outrank that class, while a
+         component's own fontFamily (headings use Fredoka) still wins. Chinese
+         falls back to the platform's CJK font. */
+      body [dir],
+      body input[class],
+      body textarea[class] {
+        font-family: Nunito, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
       }
       /* iOS zooms into any focused input under 16px and never zooms back out,
          which leaves the page cropped. Touch screens get 16px inputs instead. */

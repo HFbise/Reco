@@ -1,24 +1,15 @@
 import { useThemeStore } from '../store/themeStore';
-import { Colors, getTheme } from '../theme';
+import { getTheme } from '../theme';
 
+/** The active palette (see theme.ts), plus `isDark`. */
 export function useColors() {
-  const { isDark } = useThemeStore();
-  const t = getTheme(isDark);
+  const isDark = useThemeStore((s) => s.isDark);
+  const palette = getTheme(isDark);
   return {
     isDark,
-    bg: t.bg,
-    surface: t.surface,
-    surface2: t.surface2,
-    text: t.text,
-    textSub: t.textSub,
-    border: t.border,
-    bubbleOther: t.bubbleOther,
-    accentBg: t.accentBg,
-    // Fixed across themes
-    accent: Colors.accent,
-    textMuted: Colors.textMuted,
-    danger: Colors.danger,
-    unread: Colors.unread,
-    success: Colors.success,
+    ...palette,
+    /** Unread badges use the sunny accent (with dark text on it) */
+    unread: palette.sunny,
+    unreadText: palette.sunnyText,
   };
 }

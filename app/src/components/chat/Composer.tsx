@@ -1,6 +1,6 @@
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
-import { IconEmoji, IconSend } from '../Icon';
+import { IconBan, IconEmoji, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
@@ -53,7 +53,10 @@ export function Composer(p: Props) {
   if (p.isMuted) {
     return (
       <View style={[s.mutedArea, { backgroundColor: c.bg, borderTopColor: c.border }]}>
-        <Text style={[s.mutedText, { color: c.danger }]}>🔇 {t('you-are-muted')}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <IconBan size={15} color={c.danger} />
+          <Text style={[s.mutedText, { color: c.danger }]}>{t('you-are-muted')}</Text>
+        </View>
       </View>
     );
   }
@@ -63,7 +66,7 @@ export function Composer(p: Props) {
         <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textMuted} />
       </TouchableOpacity>
       <TextInput
-        style={[s.input, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.08)' : '#e4e4e8', color: c.text }]}
+        style={[s.input, { backgroundColor: c.surface2, color: c.text }]}
         placeholder={t('ph-message')}
         placeholderTextColor={c.textMuted}
         value={p.input}

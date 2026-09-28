@@ -1,6 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AvatarView } from '../AvatarView';
-import { IconMic, IconMicOff, IconPhoneOff } from '../Icon';
+import { IconMic, IconMicOff, IconPhoneOff, IconSpeaker } from '../Icon';
 import { useT } from '../../hooks/useT';
 import type { useColors } from '../../hooks/useColors';
 import type { VoiceMember } from '../../hooks/useVoice';
@@ -25,7 +25,8 @@ export function VoiceBar({ inVoice, inVoiceElsewhere, activeVoiceRoom, voiceMemb
   const barBg = c.isDark ? 'rgba(79,142,247,0.12)' : 'rgba(79,142,247,0.08)';
   return (
     <View style={[vs.bar, { backgroundColor: barBg, borderBottomColor: c.border }]}>
-      <Text style={[vs.label, { color: c.accent }]}>🔊 {t('voice-chat')}{voiceMembers.length > 0 ? ` (${voiceMembers.length})` : ''}</Text>
+      <IconSpeaker size={15} color={c.accent} />
+      <Text style={[vs.label, { color: c.accent }]}>{t('voice-chat')}{voiceMembers.length > 0 ? ` (${voiceMembers.length})` : ''}</Text>
       <View style={vs.avatars}>
         {voiceMembers.slice(0, 5).map(m => (
           <AvatarView

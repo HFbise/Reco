@@ -1,40 +1,84 @@
-// Design tokens
-export const Colors = {
-  // Accent
-  accent: '#4f8ef7',
-  accentDark: '#3a7be0',
-  accentBg: 'rgba(79,142,247,0.12)',
-  accentBgDark: 'rgba(79,142,247,0.2)',
+// Design tokens. Two palettes with the same keys; components read the active one
+// through useColors(). Dark mode is deliberately quiet: warm greys, off-white text,
+// and the blue and yellow toned down, so long evening sessions are easy on the eyes.
 
-  // Backgrounds
-  bgLight: '#f0f0f3',
-  bgDark: '#2a2b2f',
-  surfaceLight: '#ffffff',
-  surfaceDark: '#252528',
-  surface2Light: '#383940',
-  surface2Dark: '#1e1f23',
+const light = {
+  // Surfaces
+  bg: '#F3F5FA', // app ground
+  surface: '#FFFFFF', // panels, cards, others' message bubbles
+  surface2: '#EEF1F7', // inputs, quiet buttons, voice card
+  border: '#E1E6EF',
+  overlay: 'rgba(22, 26, 35, 0.45)',
 
   // Text
-  textLight: '#2e3338',
-  textDark: '#e0e0e5',
-  textMuted: '#87888c',
-  textSub: '#5c5e66',
-  textSubDark: '#949ba4',
+  text: '#161A23',
+  textSub: '#4B5366',
+  textMuted: '#6B7385', // captions; still 4.5:1 on white
 
-  // Borders
-  borderLight: 'rgba(0,0,0,0.08)',
-  borderDark: 'rgba(255,255,255,0.08)',
+  // Brand blue
+  accent: '#1A70D4', // fills, icons, links
+  accentText: '#0F4C99', // text on accentBg
+  accentBg: '#E6F0FB', // selected rows, secondary buttons
+  onAccent: '#FFFFFF',
 
-  // Message bubbles
-  bubbleOwn: '#4f8ef7',
-  bubbleOther: '#ffffff',
-  bubbleOtherDark: '#383940',
+  // Sunny: unread counts and "keep in touch", used sparingly
+  sunny: '#FFB020',
+  sunnyText: '#3D2800',
+  sunnyBg: '#FFF4DC',
 
-  // Status colors
-  danger: '#ed4245',
-  success: '#3ba55c',
-  warning: '#FAA61A',
-  unread: '#da0909',
+  // Messages
+  bubbleOwn: '#1A70D4',
+  bubbleOther: '#FFFFFF',
+
+  // Status
+  danger: '#D93A3A',
+  dangerBg: '#FDE8E8',
+  success: '#2F9E5B',
+  successBg: '#E3F4EA',
+  live: '#A63A06', // "LIVE" text on liveBg
+  liveBg: '#FFE9DA',
+};
+
+type Palette = typeof light;
+
+const dark: Palette = {
+  bg: '#17191E',
+  surface: '#1F2228',
+  surface2: '#282C34',
+  border: '#30343D',
+  overlay: 'rgba(0, 0, 0, 0.6)',
+
+  text: '#E4E6EB', // off-white, never pure white
+  textSub: '#AAB1BF',
+  textMuted: '#8C94A3',
+
+  accent: '#4A86D6', // quieter than the light blue
+  accentText: '#A9C8F2',
+  accentBg: '#1F2D42',
+  onAccent: '#FFFFFF',
+
+  sunny: '#D9A441',
+  sunnyText: '#2A1D00',
+  sunnyBg: '#3A3020',
+
+  bubbleOwn: '#2F5E9E', // own messages: a dim blue, not a bright block
+  bubbleOther: '#282C34',
+
+  danger: '#E0625D',
+  dangerBg: '#3D2426',
+  success: '#4DB37A',
+  successBg: '#1E3328',
+  live: '#F3A77D',
+  liveBg: '#3D2A1E',
+};
+
+export function getTheme(isDark: boolean): Palette {
+  return isDark ? dark : light;
+}
+
+/** Brand values that don't change with the theme (logo, splash, notification tint) */
+export const Colors = {
+  brand: '#1A70D4',
 };
 
 export const Fonts = {
@@ -43,13 +87,16 @@ export const Fonts = {
   semibold: 600,
   bold: 700,
   heavy: 800,
+  /** Headings and big buttons (web loads it; native falls back to the system font) */
+  display: 'Fredoka, Nunito, system-ui, sans-serif',
 };
 
 export const Radius = {
-  sm: 5,
-  md: 8,
-  lg: 12,
-  xl: 14,
+  sm: 8,
+  md: 12,
+  lg: 16, // buttons, inputs
+  xl: 20, // cards
+  xxl: 28, // dialogs
   full: 999,
 };
 
@@ -61,17 +108,3 @@ export const Spacing = {
   xl: 20,
   xxl: 24,
 };
-
-// Light / dark palette, used by useColors()
-export function getTheme(dark: boolean) {
-  return {
-    bg: dark ? Colors.bgDark : Colors.bgLight,
-    surface: dark ? Colors.surfaceDark : Colors.surfaceLight,
-    surface2: dark ? Colors.surface2Dark : Colors.surface2Light,
-    text: dark ? Colors.textDark : Colors.textLight,
-    textSub: dark ? Colors.textSubDark : Colors.textSub,
-    border: dark ? Colors.borderDark : Colors.borderLight,
-    bubbleOther: dark ? Colors.bubbleOtherDark : Colors.bubbleOther,
-    accentBg: dark ? Colors.accentBgDark : Colors.accentBg,
-  };
-}

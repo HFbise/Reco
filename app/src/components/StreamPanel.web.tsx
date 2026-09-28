@@ -113,7 +113,7 @@ function RewatchCard({ screenname, onRewatch }: { screenname: string; onRewatch:
   const t = useT();
   return (
     <div style={{ flex: 1, minWidth: 200, minHeight: 80, background: '#1a1a1a', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-      <span style={{ color: '#bbb', fontSize: 13 }}>🔴 {t('stream-live', { name: screenname })}</span>
+      <span style={{ color: '#bbb', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#E0625D' }} />{t('stream-live', { name: screenname })}</span>
       <button
         onClick={onRewatch}
         style={{ background: '#4f8ef7', border: 'none', color: 'white', borderRadius: 5, padding: '5px 16px', cursor: 'pointer', fontSize: 13 }}

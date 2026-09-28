@@ -1,4 +1,5 @@
-import Svg, { Path, Circle } from 'react-native-svg';
+import type { ReactNode } from 'react';
+import Svg, { Path, Circle, Line, Rect, Polygon } from 'react-native-svg';
 
 interface Props { size?: number; color?: string; }
 
@@ -168,4 +169,103 @@ export function IconShuffle({ size = 20, color = 'currentColor' }: Props) {
       <Path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
+}
+
+// ── Line icons (24px grid, 2px round strokes) ────────────────
+
+function Stroke({ size, color, width = 2, children }: { size: number; color: string; width?: number; children: ReactNode }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={width}
+      strokeLinecap="round" strokeLinejoin="round">
+      {children}
+    </Svg>
+  );
+}
+
+export function IconHeadphones({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" /></Stroke>;
+}
+
+export function IconScreenShare({ size = 18, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="m9 10 3-3 3 3" /><Path d="M12 13V7" /><Rect width="20" height="14" x="2" y="3" rx="2" /><Path d="M12 17v4" /><Path d="M8 21h8" />
+    </Stroke>
+  );
+}
+
+export function IconMusic({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M9 18V5l12-2v13" /><Circle cx="6" cy="18" r="3" /><Circle cx="18" cy="16" r="3" /></Stroke>;
+}
+
+export function IconCrown({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="m2 4 3 12h14l3-12-6 7-4-7-4 7-6-7zm3 16h14" /></Stroke>;
+}
+
+export function IconShield({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /></Stroke>;
+}
+
+export function IconPencil({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z" /><Path d="m15 5 4 4" /></Stroke>;
+}
+
+export function IconTrash({ size = 18, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M3 6h18" /><Path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><Path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
+    </Stroke>
+  );
+}
+
+export function IconVolume({ size = 18, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><Path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><Path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </Stroke>
+  );
+}
+
+export function IconFlag({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" /><Line x1="4" x2="4" y1="22" y2="15" /></Stroke>;
+}
+
+export function IconBan({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Circle cx="12" cy="12" r="10" /><Path d="m4.9 4.9 14.2 14.2" /></Stroke>;
+}
+
+export function IconUserPlus({ size = 18, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><Circle cx="9" cy="7" r="4" /><Line x1="19" x2="19" y1="8" y2="14" /><Line x1="22" x2="16" y1="11" y2="11" />
+    </Stroke>
+  );
+}
+
+export function IconHash({ size = 18, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Line x1="4" x2="20" y1="9" y2="9" /><Line x1="4" x2="20" y1="15" y2="15" /><Line x1="10" x2="8" y1="3" y2="21" /><Line x1="16" x2="14" y1="3" y2="21" />
+    </Stroke>
+  );
+}
+
+export function IconUnlock({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><Path d="M7 11V7a5 5 0 0 1 9.9-1" /></Stroke>;
+}
+
+export function IconStop({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Rect width="14" height="14" x="5" y="5" rx="2" /></Stroke>;
+}
+
+export function IconNext({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Polygon points="5 4 15 12 5 20 5 4" /><Line x1="19" x2="19" y1="5" y2="19" /></Stroke>;
+}
+
+export function IconMore({ size = 20, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color} width={2.4}><Circle cx="12" cy="12" r="1" /><Circle cx="19" cy="12" r="1" /><Circle cx="5" cy="12" r="1" /></Stroke>;
+}
+
+export function IconCheck({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color} width={3}><Path d="M20 6 9 17l-5-5" /></Stroke>;
 }

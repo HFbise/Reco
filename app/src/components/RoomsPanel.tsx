@@ -483,7 +483,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
                 </Pressable>
               ) : entry.unread > 0 && (
                 <View style={[s.badge, { backgroundColor: c.unread }]}>
-                  <Text style={s.badgeText}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
+                  <Text style={[s.badgeText, { color: c.unreadText }]}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
                 </View>
               )}
             </Pressable>
@@ -635,7 +635,7 @@ const s = StyleSheet.create({
     minWidth: 18, height: 18, borderRadius: Radius.full,
     alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
   },
-  badgeText: { color: '#fff', fontSize: 11, fontWeight: String(Fonts.bold) as any },
+  badgeText: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
   closeBtn: { width: 20, height: 20, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xxl },

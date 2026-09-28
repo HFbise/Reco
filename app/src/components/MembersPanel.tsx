@@ -10,7 +10,7 @@ import { MAX_VOLUME } from '../lib/webrtc';
 import { AvatarView } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
-import { IconMic, IconMicOff, IconSpeaker } from './Icon';
+import { IconCrown, IconMic, IconMicOff, IconPhoneOff, IconShield, IconSpeaker } from './Icon';
 import type { ExternalVoice } from './chat/types';
 import { Fonts, Radius, Spacing } from '../theme';
 
@@ -189,8 +189,9 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                   onSlider={voice.setSpeakerVolume}
                   c={c}
                 />
-                <TouchableOpacity style={[s.voiceLeaveBtn, { backgroundColor: '#ed4245' }]} onPress={voice.leaveVoice} activeOpacity={0.85}>
-                  <Text style={s.voiceLeaveText}>📵 {t('leave-voice')}</Text>
+                <TouchableOpacity style={[s.voiceLeaveBtn, { backgroundColor: c.danger, flexDirection: 'row', gap: 6 }]} onPress={voice.leaveVoice} activeOpacity={0.85}>
+                  <IconPhoneOff size={15} color="#fff" />
+                  <Text style={s.voiceLeaveText}>{t('leave-voice')}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -239,9 +240,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                       screenname={m.screenname}
                       size={24}
                     />
-                    <Text style={[s.voiceMemberIcon, { color: muted ? c.danger : c.textMuted }]}>
-                      {muted ? '🔇' : '🎤'}
-                    </Text>
+                    {muted ? <IconMicOff size={14} color={c.danger} /> : <IconMic size={14} color={c.textMuted} />}
                     <Text style={[s.voiceMemberName, { color: c.text }]} numberOfLines={1}>
                       {m.screenname || m.username}
                     </Text>
@@ -285,10 +284,10 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                 <Text style={[s.cardName, { color: c.text }]}>{selectedMember.screenname}</Text>
                 <Text style={[s.cardHandle, { color: c.textMuted }]}>@{selectedMember.username}</Text>
                 {selectedMember.is_owner && (
-                  <Text style={[s.cardBadge, { color: c.accent }]}>👑 {t('owner')}</Text>
+                  <View style={s.cardBadgeRow}><IconCrown size={14} color={c.accent} /><Text style={[s.cardBadge, { color: c.accent }]}>{t('owner')}</Text></View>
                 )}
                 {selectedMember.is_admin && !selectedMember.is_owner && (
-                  <Text style={[s.cardBadge, { color: c.accent }]}>🛡 {t('admin')}</Text>
+                  <View style={s.cardBadgeRow}><IconShield size={14} color={c.accent} /><Text style={[s.cardBadge, { color: c.accent }]}>{t('admin')}</Text></View>
                 )}
                 {!!selectedMember.bio && (
                   <Text style={[s.cardBio, { color: c.textMuted }]}>{selectedMember.bio}</Text>
@@ -546,6 +545,7 @@ function MemberRow({ member, c, offline = false, onPress }: { member: Member; c:
 }
 
 const s = StyleSheet.create({
+  cardBadgeRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   userVol: { width: '100%', marginTop: 4, marginBottom: 8 },
   userVolHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   userVolLabel: { flex: 1, fontSize: 12, fontWeight: '600' as any },
