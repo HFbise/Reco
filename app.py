@@ -4,6 +4,7 @@ import hmac
 import html
 import json
 import logging
+import mimetypes
 import os
 import time
 
@@ -33,6 +34,8 @@ app.register_blueprint(admin_bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
+# Not in every system's MIME table; browsers want it right to install the app
+mimetypes.add_type('application/manifest+json', '.webmanifest')
 
 
 @app.route('/')

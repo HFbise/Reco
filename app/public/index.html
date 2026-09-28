@@ -7,6 +7,16 @@
     <title>%WEB_TITLE%</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- Installed to the home screen: phones don't use SVG icons, so these are PNGs -->
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Reco" />
+    <!-- Status bar color (iOS 15+, Android). Matches the app ground; the app
+         replaces these with one tag that follows its own light/dark switch. -->
+    <meta name="theme-color" content="#F3F5FA" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#17191E" media="(prefers-color-scheme: dark)" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
@@ -14,6 +24,13 @@
       html,
       body {
         height: 100%;
+        background-color: #f3f5fa;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #17191e;
+        }
       }
       /* In-app browsers (and mobile Safari) can report a 100% height that runs
          under their toolbars; the dynamic viewport height is what's visible. */

@@ -150,7 +150,8 @@ export default function RoomsScreen() {
   // The chat list's top bar: logo, voice pill, "+". An open chat has its own
   // header (ChatPanel's), which slides in with it.
   const topbar = (
-    <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
+    // The app ground, like every other screen's top: it continues the phone's status bar (theme-color)
+    <View style={[s.topbar, { backgroundColor: c.bg, borderBottomColor: c.border }]}>
       <View style={s.logo}>
         <BrandMark size={28} />
         <DisplayText style={[s.wordmark, { color: c.isDark ? c.accentText : c.accent }]}>Reco</DisplayText>

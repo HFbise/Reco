@@ -8,6 +8,8 @@ import { useSoundStore } from '../src/store/soundStore';
 import { useVolumeStore } from '../src/store/volumeStore';
 import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
+import { useColors } from '../src/hooks/useColors';
+import { getTheme } from '../src/theme';
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
@@ -35,6 +37,21 @@ export default function RootLayout() {
     return () => { el.remove(); };
   }, []);
 
+  // Installed to the home screen, the phone's status bar takes theme-color (iOS 15+, Android).
+  // Follow the app's own light/dark switch, not just the system's, so the bar and the
+  // top of the screen are one solid color instead of a white strip.
+  const ground = useColors().bg;
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => m.remove());
+    const meta = document.createElement('meta');
+    meta.name = 'theme-color';
+    meta.content = ground;
+    document.head.appendChild(meta);
+    document.documentElement.style.backgroundColor = ground;
+    document.body.style.backgroundColor = ground;
+  }, [ground]);
+
   usePushNotifications((room) => {
     if (room) {
       router.push({ pathname: '/(main)/room/[name]', params: { name: room } });
@@ -51,7 +68,7 @@ export default function RootLayout() {
     ]).then(() => setReady(true));
   }, [loadUser, loadTheme, loadLang, loadSound, loadVolumes]);
 
-  if (!ready) return <View style={{ flex: 1, backgroundColor: scheme === 'dark' ? '#2a2b2f' : '#f0f0f3' }} />;
+  if (!ready) return <View style={{ flex: 1, backgroundColor: getTheme(scheme === 'dark').bg }} />;
 
   return (
     <Stack screenOptions={{ headerShown: false }}>
