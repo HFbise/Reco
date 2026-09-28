@@ -4,12 +4,14 @@ import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { GuestBanner } from '../../src/components/GuestBanner';
 import { ProfileView } from '../../src/components/account/ProfileView';
 import { IconSun, IconMoon } from '../../src/components/Icon';
+import { IconButton } from '../../src/components/ui/Button';
+import { PageHeader } from '../../src/components/ui/PageHeader';
 import { useAuthStore } from '../../src/store/authStore';
 import { useThemeStore } from '../../src/store/themeStore';
 import { useLangStore } from '../../src/store/langStore';
 import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
-import { Fonts } from '../../src/theme';
+import { Fonts, Radius } from '../../src/theme';
 
 /** Mobile "Me" tab. */
 export default function MeScreen() {
@@ -21,17 +23,14 @@ export default function MeScreen() {
 
   return (
     <SafeAreaView style={[s.container, { backgroundColor: c.bg }]} edges={['top', 'left', 'right']}>
-      <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-        <Text style={[s.title, { color: c.text }]}>{t('my-profile')}</Text>
-        <View style={{ flex: 1 }} />
-        <TouchableOpacity onPress={() => setLang(lang === 'zh' ? 'en' : 'zh')} style={s.btn} activeOpacity={0.7}
-          accessibilityLabel={t('language')}>
-          <Text style={[s.langText, { color: c.textMuted }]}>{lang === 'zh' ? 'EN' : '中文'}</Text>
+      <PageHeader title={t('my-profile')}>
+        <TouchableOpacity onPress={() => setLang(lang === 'zh' ? 'en' : 'zh')} activeOpacity={0.7}
+          style={[s.lang, { backgroundColor: c.surface, borderColor: c.border }]} accessibilityLabel={t('language')}>
+          <Text style={[s.langText, { color: c.textSub }]}>{lang === 'zh' ? 'EN' : '中文'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={toggle} style={s.btn} activeOpacity={0.7} accessibilityLabel={t('dark-mode')}>
-          {isDark ? <IconSun size={19} color={c.textMuted} /> : <IconMoon size={19} color={c.textMuted} />}
-        </TouchableOpacity>
-      </View>
+        <IconButton label={t('dark-mode')} onPress={toggle}
+          icon={(color) => (isDark ? <IconSun size={20} color={color} /> : <IconMoon size={20} color={color} />)} />
+      </PageHeader>
       {currentUser?.guest ? (
         <>
           <View style={{ flex: 1 }} />
@@ -49,8 +48,6 @@ export default function MeScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  topbar: { height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, borderBottomWidth: 1 },
-  title: { fontSize: 17, fontWeight: String(Fonts.semibold) as any },
-  btn: { padding: 6, marginLeft: 4 },
-  langText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
+  lang: { height: 36, paddingHorizontal: 12, borderRadius: Radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  langText: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
 });

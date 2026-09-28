@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView } from 'react-native';
+import { useRef, useState } from 'react';
+import { View, StyleSheet, SafeAreaView } from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { useVoice } from '../hooks/useVoice';
 import { NavRail, type Section } from './NavRail';
-import { RoomsPanel, type DmEntry } from './RoomsPanel';
+import { RoomsPanel, type DmEntry, type RoomsPanelHandle } from './RoomsPanel';
+import { Welcome } from './Welcome';
 import { ChatPanel } from './ChatPanel';
 import { MembersPanel } from './MembersPanel';
 import { StreamPanel } from './StreamPanel';
@@ -31,6 +32,8 @@ export function DesktopShell() {
   const [roomPassword, setRoomPassword] = useState<string | undefined>();
   const [dmMeta, setDmMeta] = useState<DmMeta | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const roomsPanel = useRef<RoomsPanelHandle>(null);
+  const isGuest = !!currentUser?.guest;
 
   // Voice follows the open room; DMs have no voice
   const voice = useVoice(room && !room.startsWith('dm:') ? room : '');
@@ -61,6 +64,7 @@ export function DesktopShell() {
         {section === 'chats' && (
           <View style={[s.sidebar, { backgroundColor: c.surface, borderRightColor: c.border }]}>
             <RoomsPanel
+              ref={roomsPanel}
               onRoomSelect={openRoom}
               onDmSelect={(dm: DmEntry) => openDm(dm.dm_room, {
                 screenname: dm.other_screenname,
@@ -95,9 +99,10 @@ export function DesktopShell() {
           )}
 
           {section === 'chats' && !room && (
-            <View style={[s.welcome, { backgroundColor: c.bg }]}>
-              <Text style={[s.welcomeHint, { color: c.textMuted }]}>{t('select-room')}</Text>
-            </View>
+            <Welcome
+              onJoin={isGuest ? undefined : () => roomsPanel.current?.openDropdown()}
+              onMatch={isGuest ? undefined : () => setSection('match')}
+            />
           )}
 
           {showChat && Object.keys(voice.remoteVideoStreams).length > 0 && (
@@ -137,8 +142,6 @@ const s = StyleSheet.create({
   shell: { flex: 1, flexDirection: 'row' },
   sidebar: { width: 300, borderRightWidth: StyleSheet.hairlineWidth },
   main: { flex: 1 },
-  welcome: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  welcomeHint: { fontSize: 15 },
   page: { flex: 1 },
   pageHeader: { height: HEADER_HEIGHT, justifyContent: 'center', paddingHorizontal: Spacing.xl, borderBottomWidth: 1 },
   pageTitle: { fontSize: 20 },

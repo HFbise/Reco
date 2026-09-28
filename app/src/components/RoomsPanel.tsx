@@ -12,6 +12,8 @@ import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
 import { IconSearch, IconPlus, IconLock, IconHash, IconClose } from './Icon';
 import { DisplayText } from './ui/DisplayText';
+import { TextField } from './ui/TextField';
+import { ModalFrame } from './account/ModalFrame';
 import { HEADER_HEIGHT } from './chat/ChatHeader';
 import { Fonts, Radius, Spacing } from '../theme';
 import { playNotifSound } from '../lib/sounds';
@@ -51,7 +53,8 @@ interface Props {
 }
 
 export interface RoomsPanelHandle {
-  openDropdown: (pos: { top: number; right: number }) => void;
+  /** Opens the create / join menu, under `pos` or, without one, under the + button */
+  openDropdown: (pos?: { top: number; right: number }) => void;
 }
 
 export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPanel({ onRoomSelect, onDmSelect, onDmClose, selectedRoom, showSidebarHeader = false }: Props, ref) {
@@ -387,13 +390,13 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   const plusDropdown = (
     <Modal visible={showDropdown} transparent animationType="none" onRequestClose={() => setShowDropdown(false)}>
       <TouchableOpacity style={{ flex: 1 }} onPress={() => setShowDropdown(false)} activeOpacity={1}>
-        <View style={[s.dropdown, { position: 'absolute', top: dropdownPos.top, right: dropdownPos.right, backgroundColor: c.surface }]}>
+        <View style={[s.dropdown, { position: 'absolute', top: dropdownPos.top, right: dropdownPos.right, backgroundColor: c.surface, borderColor: c.border }]}>
           <TouchableOpacity style={s.dropdownItem} onPress={() => { setShowDropdown(false); setNewRoomName(''); setNewRoomPw(''); setCreateError(''); setShowCreate(true); }} activeOpacity={0.8}>
-            <IconPlus size={14} color={c.text} />
+            <View style={[s.dropdownIcon, { backgroundColor: c.accentBg }]}><IconPlus size={16} color={c.accent} /></View>
             <Text style={[s.dropdownText, { color: c.text }]}>{t('create-room')}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={s.dropdownItem} onPress={() => { setShowDropdown(false); setFindCode(''); setFindError(''); setShowFind(true); }} activeOpacity={0.8}>
-            <IconSearch size={14} color={c.text} />
+            <View style={[s.dropdownIcon, { backgroundColor: c.accentBg }]}><IconSearch size={16} color={c.accent} /></View>
             <Text style={[s.dropdownText, { color: c.text }]}>{t('find-room')}</Text>
           </TouchableOpacity>
         </View>
@@ -509,98 +512,69 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       </ScrollView>
 
       {/* Create room */}
-      <Modal visible={showCreate} transparent animationType="fade" onRequestClose={() => setShowCreate(false)}>
-        <TouchableOpacity style={s.overlay} onPress={() => setShowCreate(false)} activeOpacity={1}>
-          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.modalTitle, { color: c.text }]}>{t('create-room')}</Text>
-            {!!createError && <Text style={[s.errorText, { color: c.danger }]}>{createError}</Text>}
-            <TextInput
-              style={[s.modalInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-room-name')}
-              placeholderTextColor={c.textMuted}
-              value={newRoomName}
-              onChangeText={setNewRoomName}
-              autoFocus
-              onSubmitEditing={doCreate}
-            />
-            <TextInput
-              style={[s.modalInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-room-password')}
-              placeholderTextColor={c.textMuted}
-              value={newRoomPw}
-              onChangeText={setNewRoomPw}
-              secureTextEntry
-              autoComplete="new-password" textContentType="newPassword"
-              onSubmitEditing={doCreate}
-            />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowCreate(false)}>
-                <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.confirmBtn, { backgroundColor: c.accent }]} onPress={doCreate} activeOpacity={0.86}>
-                <Text style={s.confirmText}>{t('create-room')}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <ModalFrame
+        visible={showCreate}
+        title={t('create-room')}
+        onClose={() => setShowCreate(false)}
+        error={createError}
+        confirmLabel={t('create-room')}
+        onConfirm={doCreate}
+      >
+        <TextField
+          placeholder={t('ph-room-name')}
+          value={newRoomName}
+          onChangeText={setNewRoomName}
+          autoFocus
+          onSubmitEditing={doCreate}
+        />
+        <TextField
+          placeholder={t('ph-room-password')}
+          value={newRoomPw}
+          onChangeText={setNewRoomPw}
+          secureTextEntry
+          autoComplete="new-password" textContentType="newPassword"
+          onSubmitEditing={doCreate}
+        />
+      </ModalFrame>
 
       {/* Find room by code */}
-      <Modal visible={showFind} transparent animationType="fade" onRequestClose={() => setShowFind(false)}>
-        <TouchableOpacity style={s.overlay} onPress={() => setShowFind(false)} activeOpacity={1}>
-          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.modalTitle, { color: c.text }]}>{t('find-room')}</Text>
-            {!!findError && <Text style={[s.errorText, { color: c.danger }]}>{findError}</Text>}
-            <TextInput
-              style={[s.modalInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-find-code')}
-              placeholderTextColor={c.textMuted}
-              value={findCode}
-              onChangeText={setFindCode}
-              keyboardType="number-pad"
-              autoFocus
-              onSubmitEditing={doFind}
-            />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowFind(false)}>
-                <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.confirmBtn, { backgroundColor: c.accent }]} onPress={doFind} activeOpacity={0.86}>
-                <Text style={s.confirmText}>{t('find-room')}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <ModalFrame
+        visible={showFind}
+        title={t('find-room')}
+        onClose={() => setShowFind(false)}
+        error={findError}
+        confirmLabel={t('find-room')}
+        onConfirm={doFind}
+      >
+        <TextField
+          placeholder={t('ph-find-code')}
+          value={findCode}
+          onChangeText={setFindCode}
+          keyboardType="number-pad"
+          autoFocus
+          onSubmitEditing={doFind}
+        />
+      </ModalFrame>
 
       {/* Password for a protected room */}
-      <Modal visible={showPwModal} transparent animationType="fade" onRequestClose={() => setShowPwModal(false)}>
-        <TouchableOpacity style={s.overlay} onPress={() => setShowPwModal(false)} activeOpacity={1}>
-          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.modalTitle, { color: c.text }]}>{t('enter-room-pw')}</Text>
-            {!!roomPwError && <Text style={[s.errorText, { color: c.danger }]}>{roomPwError}</Text>}
-            <TextInput
-              style={[s.modalInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-room-password')}
-              placeholderTextColor={c.textMuted}
-              value={roomPwInput}
-              onChangeText={setRoomPwInput}
-              secureTextEntry
-              autoComplete="current-password" textContentType="password"
-              autoFocus
-              onSubmitEditing={doJoinWithPw}
-            />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowPwModal(false)}>
-                <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.confirmBtn, { backgroundColor: c.accent }]} onPress={doJoinWithPw} activeOpacity={0.86}>
-                <Text style={s.confirmText}>{t('ok')}</Text>
-              </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      <ModalFrame
+        visible={showPwModal}
+        title={t('enter-room-pw')}
+        onClose={() => setShowPwModal(false)}
+        error={roomPwError}
+        confirmLabel={t('ok')}
+        onConfirm={doJoinWithPw}
+      >
+        <TextField
+          placeholder={t('ph-room-password')}
+          value={roomPwInput}
+          onChangeText={setRoomPwInput}
+          secureTextEntry
+          autoComplete="current-password" textContentType="password"
+          autoFocus
+          onSubmitEditing={doJoinWithPw}
+        />
+      </ModalFrame>
     </View>
   );
 });
@@ -626,12 +600,13 @@ const s = StyleSheet.create({
 
   plusBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   dropdown: {
-    minWidth: 180, borderRadius: 10, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12,
+    minWidth: 220, borderRadius: Radius.lg, borderWidth: 1, padding: 6,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.16, shadowRadius: 16,
     elevation: 10,
   },
-  dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, paddingHorizontal: 16 },
-  dropdownText: { fontSize: 14 },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 48, paddingHorizontal: 10, borderRadius: Radius.md },
+  dropdownIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  dropdownText: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
 
   scrollContent: { paddingHorizontal: 10, paddingBottom: Spacing.lg },
 
@@ -654,15 +629,5 @@ const s = StyleSheet.create({
   badgeText: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
   closeBtn: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xxl },
-  modalBox: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, width: '100%', maxWidth: 400 },
-  modalTitle: { fontSize: 17, fontWeight: String(Fonts.bold) as any },
-  errorText: { fontSize: 13 },
-  modalInput: { borderRadius: Radius.md, padding: 12, fontSize: 15, borderWidth: 1 },
-  modalBtns: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'flex-end', marginTop: Spacing.xs },
-  cancelBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.md, borderWidth: 1 },
-  cancelText: { fontSize: 14 },
-  confirmBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.md },
-  confirmText: { color: '#fff', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
 
 });

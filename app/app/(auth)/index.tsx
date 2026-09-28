@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator,
+  StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
 } from 'react-native';
 import { showAlert } from '../../src/lib/alert';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -12,7 +12,11 @@ import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
 import { useLangStore } from '../../src/store/langStore';
 import { useThemeStore } from '../../src/store/themeStore';
-import { IconMoon, IconSun } from '../../src/components/Icon';
+import { IconArrowRight, IconCheck, IconChevronDown, IconMoon, IconSun } from '../../src/components/Icon';
+import { ExprSvg } from '../../src/components/AvatarView';
+import { Button } from '../../src/components/ui/Button';
+import { TextField } from '../../src/components/ui/TextField';
+import { ModalFrame } from '../../src/components/account/ModalFrame';
 import { BrandMark } from '../../src/components/BrandMark';
 import { DisplayText } from '../../src/components/ui/DisplayText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -155,46 +159,59 @@ export default function AuthScreen() {
     showAlert(t('password-changed'), t('please-login'));
   }
 
+  const brand = c.isDark ? c.accentText : c.accent;
+
   return (
     <KeyboardAvoidingView style={[s.container, { backgroundColor: c.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {/* scattered faces, decoration only */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {DECO.map((d) => (
+          <View key={d.expression} style={[s.deco, d.pos, { transform: [{ rotate: d.rotate }] }]}>
+            <ExprSvg expression={d.expression} width={d.size} height={Math.round(d.size * 15 / 14)} color={brand} />
+          </View>
+        ))}
+      </View>
+
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.column}>
           <View style={s.brand}>
-            <BrandMark size={68} />
-            <DisplayText style={[s.logo, { color: c.accent }]}>Reco</DisplayText>
+            <BrandMark size={76} />
+            <DisplayText style={[s.logo, { color: brand }]}>Reco</DisplayText>
+            <Text style={[s.tagline, { color: c.textSub }]}>{t('tagline')}</Text>
           </View>
 
-          <View style={[s.tabs, { borderColor: c.border, backgroundColor: c.surface }]}>
-            <TouchableOpacity style={[s.tab, tab === 'login' && { backgroundColor: c.accent }]} onPress={() => { setTab('login'); setError(''); }}>
-              <Text style={[s.tabText, { color: tab === 'login' ? '#fff' : c.textSub }]}>{t('login')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.tab, tab === 'register' && { backgroundColor: c.accent }]} onPress={() => { setTab('register'); setError(''); }}>
-              <Text style={[s.tabText, { color: tab === 'register' ? '#fff' : c.textSub }]}>{t('register')}</Text>
-            </TouchableOpacity>
+          <View style={[s.tabs, { backgroundColor: c.surface2 }]} accessibilityRole="tablist">
+            {(['login', 'register'] as const).map((value) => {
+              const on = tab === value;
+              return (
+                <TouchableOpacity key={value} onPress={() => { setTab(value); setError(''); }} activeOpacity={0.8}
+                  accessibilityRole="tab" accessibilityState={{ selected: on }}
+                  style={[s.tab, on && s.tabOn, on && { backgroundColor: c.surface }]}>
+                  <Text style={[s.tabText, { color: on ? c.text : c.textSub }, on && s.tabTextOn]}>{t(value)}</Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <View style={s.form}>
-            <TextInput
-              style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-username')} placeholderTextColor={c.textMuted}
+            <TextField
+              placeholder={t('ph-username')}
               value={username} onChangeText={setUsername} autoCapitalize="none" autoCorrect={false}
               autoComplete="username" textContentType="username"
               returnKeyType="next" blurOnSubmit={false}
               onSubmitEditing={() => (tab === 'register' ? screennameRef : passwordRef).current?.focus()}
             />
             {tab === 'register' && (
-              <TextInput
-                style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-                placeholder={t('ph-screenname')} placeholderTextColor={c.textMuted}
+              <TextField
+                placeholder={t('ph-screenname')}
                 value={screenname} onChangeText={setScreenname}
                 autoComplete="name" textContentType="name"
                 ref={screennameRef} returnKeyType="next" blurOnSubmit={false}
                 onSubmitEditing={() => passwordRef.current?.focus()}
               />
             )}
-            <TextInput
-              style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
-              placeholder={t('ph-password')} placeholderTextColor={c.textMuted}
+            <TextField
+              placeholder={t('ph-password')}
               value={password} onChangeText={setPassword} secureTextEntry
               autoComplete={tab === 'login' ? 'current-password' : 'new-password'}
               textContentType={tab === 'login' ? 'password' : 'newPassword'}
@@ -205,16 +222,20 @@ export default function AuthScreen() {
             {tab === 'register' && (
               <>
                 <TouchableOpacity
-                  style={[s.input, s.qPicker, { backgroundColor: c.surface, borderColor: c.border }]}
+                  style={[s.qPicker, { backgroundColor: c.surface, borderColor: c.border }]}
                   onPress={() => setShowQPicker(true)}
                   activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('security-question')}: ${t.question(secQuestion)}`}
                 >
-                  <Text style={[s.qPickerText, { color: c.text }]} numberOfLines={2}>{t.question(secQuestion)}</Text>
+                  <View style={s.qPickerText}>
+                    <Text style={[s.qLabel, { color: c.textMuted }]}>{t('security-question')}</Text>
+                    <Text style={[s.qValue, { color: c.text }]} numberOfLines={2}>{t.question(secQuestion)}</Text>
+                  </View>
+                  <IconChevronDown size={18} color={c.textSub} />
                 </TouchableOpacity>
-                <TextInput
-                  style={[s.input, { backgroundColor: c.surface, color: c.text, borderColor: c.border }]}
+                <TextField
                   placeholder={t('ph-security-answer')}
-                  placeholderTextColor={c.textMuted}
                   value={secAnswer}
                   onChangeText={setSecAnswer}
                   autoComplete="off"
@@ -223,166 +244,169 @@ export default function AuthScreen() {
                 />
               </>
             )}
-            {!!error && <Text style={[s.error, { color: c.danger }]}>{error}</Text>}
-            <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }, busy && { opacity: 0.7 }]}
-              onPress={tab === 'login' ? doLogin : doRegister} activeOpacity={0.86} disabled={busy}>
-              {busy ? <ActivityIndicator color="#fff" /> : <Text style={s.btnText}>{tab === 'login' ? t('login') : t('register')}</Text>}
-            </TouchableOpacity>
-            {slow && <Text style={[s.slowNote, { color: c.textMuted }]}>{t('server-waking')}</Text>}
+            {!!error && (
+              <View style={[s.error, { backgroundColor: c.dangerBg }]}>
+                <Text style={[s.errorText, { color: c.danger }]}>{error}</Text>
+              </View>
+            )}
+            <Button size="lg" label={tab === 'login' ? t('login') : t('register')} busy={busy}
+              onPress={tab === 'login' ? doLogin : doRegister} style={s.primary} />
+            {slow && <Text style={[s.slowNote, { color: c.textSub }]}>{t('server-waking')}</Text>}
             {tab === 'login' && (
-              <TouchableOpacity onPress={openForgot} activeOpacity={0.7}>
-                <Text style={[s.forgotLink, { color: c.textMuted }]}>{t('forgot-password')}</Text>
+              <TouchableOpacity onPress={openForgot} activeOpacity={0.7} style={s.forgot}>
+                <Text style={[s.forgotText, { color: brand }]}>{t('forgot-password')}</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={[s.demoBtn, { borderColor: c.border }]} onPress={viewDemo} activeOpacity={0.8} disabled={busy}>
-              <Text style={[s.demoBtnText, { color: c.accent }]}>{t('demo-view')} →</Text>
+
+            <View style={s.divider}>
+              <View style={[s.rule, { backgroundColor: c.border }]} />
+              <Text style={[s.or, { color: c.textMuted }]}>{t('or')}</Text>
+              <View style={[s.rule, { backgroundColor: c.border }]} />
+            </View>
+
+            <TouchableOpacity style={[s.demo, { borderColor: brand, backgroundColor: c.surface }]} onPress={viewDemo}
+              activeOpacity={0.8} disabled={busy} accessibilityRole="button">
+              <Text style={[s.demoText, { color: brand }]}>{t('demo-view')}</Text>
+              <IconArrowRight size={18} color={brand} />
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
 
       {/* language + theme, available before signing in */}
-      <View style={[s.corner, { top: insets.top + Spacing.md }]}>
-        <TouchableOpacity onPress={() => setLang(lang === 'zh' ? 'en' : 'zh')} style={[s.cornerBtn, { backgroundColor: c.surface, borderColor: c.border }]}
+      <View style={[s.corner, { top: insets.top + Spacing.lg }]}>
+        <TouchableOpacity onPress={() => setLang(lang === 'zh' ? 'en' : 'zh')} style={[s.langBtn, { backgroundColor: c.surface, borderColor: c.border }]}
           activeOpacity={0.7} accessibilityLabel={t('language')}>
           <Text style={[s.cornerText, { color: c.textSub }]}>{lang === 'zh' ? 'EN' : '中文'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={toggleTheme} style={[s.cornerBtn, { backgroundColor: c.surface, borderColor: c.border }]}
+        <TouchableOpacity onPress={toggleTheme} style={[s.themeBtn, { backgroundColor: c.surface, borderColor: c.border }]}
           activeOpacity={0.7} accessibilityLabel={t('dark-mode')}>
-          {isDark ? <IconSun size={17} color={c.textSub} /> : <IconMoon size={17} color={c.textSub} />}
+          {isDark ? <IconSun size={18} color={c.textSub} /> : <IconMoon size={18} color={c.textSub} />}
         </TouchableOpacity>
       </View>
 
       {/* Security question picker */}
       <Modal visible={showQPicker} transparent animationType="fade" onRequestClose={() => setShowQPicker(false)}>
-        <TouchableOpacity style={s.overlay} onPress={() => setShowQPicker(false)} activeOpacity={1}>
-          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.modalTitle, { color: c.text }]}>{t('security-question')}</Text>
-            {SECURITY_QUESTIONS.map(q => (
-              <TouchableOpacity
-                key={q}
-                style={[s.qOption, { borderBottomColor: c.border }, secQuestion === q && { backgroundColor: c.accentBg }]}
-                onPress={() => { setSecQuestion(q); setShowQPicker(false); }}
-                activeOpacity={0.7}
-              >
-                <Text style={[s.qOptionText, { color: secQuestion === q ? c.accent : c.text }]}>{t.question(q)}</Text>
-              </TouchableOpacity>
-            ))}
+        <TouchableOpacity style={[s.overlay, { backgroundColor: c.overlay }]} onPress={() => setShowQPicker(false)} activeOpacity={1}>
+          <TouchableOpacity style={[s.sheet, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
+            <DisplayText style={[s.sheetTitle, { color: c.text }]}>{t('security-question')}</DisplayText>
+            {SECURITY_QUESTIONS.map(q => {
+              const on = secQuestion === q;
+              return (
+                <TouchableOpacity
+                  key={q}
+                  style={[s.qOption, on && { backgroundColor: c.accentBg }]}
+                  onPress={() => { setSecQuestion(q); setShowQPicker(false); }}
+                  activeOpacity={0.7}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on }}
+                >
+                  <Text style={[s.qOptionText, { color: on ? c.accentText : c.text }]}>{t.question(q)}</Text>
+                  {on && <IconCheck size={16} color={c.accent} />}
+                </TouchableOpacity>
+              );
+            })}
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
 
-      {/* Forgot password */}
-      <Modal visible={showForgot} transparent animationType="fade" onRequestClose={() => setShowForgot(false)}>
-        <TouchableOpacity style={s.overlay} onPress={() => setShowForgot(false)} activeOpacity={1}>
-          <TouchableOpacity style={[s.modalBox, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-            <Text style={[s.modalTitle, { color: c.text }]}>{t('forgot-password')}</Text>
-            {!!forgotError && <Text style={[s.error, { color: c.danger }]}>{forgotError}</Text>}
-
-            {forgotStep === 'username' ? (
-              <>
-                <TextInput
-                  style={[s.input, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-                  placeholder={t('ph-username')}
-                  placeholderTextColor={c.textMuted}
-                  value={forgotUsername}
-                  onChangeText={setForgotUsername}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  returnKeyType="go"
-                  onSubmitEditing={() => { if (!forgotLoading) getForgotQuestion(); }}
-                />
-                <View style={s.modalBtns}>
-                  <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setShowForgot(false)}>
-                    <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.confirmBtn, { backgroundColor: c.accent }, forgotLoading && { opacity: 0.6 }]}
-                    onPress={getForgotQuestion}
-                    disabled={forgotLoading}
-                    activeOpacity={0.86}
-                  >
-                    <Text style={s.confirmText}>{t('ok')}</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={[s.questionText, { color: c.text }]}>{t.question(forgotQuestion)}</Text>
-                <TextInput
-                  style={[s.input, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-                  placeholder={t('ph-security-answer')}
-                  placeholderTextColor={c.textMuted}
-                  value={forgotAnswer}
-                  onChangeText={setForgotAnswer}
-                  returnKeyType="next" blurOnSubmit={false}
-                  onSubmitEditing={() => forgotNewPwRef.current?.focus()}
-                />
-                <TextInput
-                  style={[s.input, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-                  placeholder={t('ph-new-password')}
-                  placeholderTextColor={c.textMuted}
-                  value={forgotNewPw}
-                  onChangeText={setForgotNewPw}
-                  secureTextEntry
-                  autoComplete="new-password" textContentType="newPassword"
-                  ref={forgotNewPwRef} returnKeyType="go"
-                  onSubmitEditing={() => { if (!forgotLoading) doResetPassword(); }}
-                />
-                <View style={s.modalBtns}>
-                  <TouchableOpacity style={[s.cancelBtn, { borderColor: c.border }]} onPress={() => setForgotStep('username')}>
-                    <Text style={[s.cancelText, { color: c.textMuted }]}>{t('cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[s.confirmBtn, { backgroundColor: c.accent }, forgotLoading && { opacity: 0.6 }]}
-                    onPress={doResetPassword}
-                    disabled={forgotLoading}
-                    activeOpacity={0.86}
-                  >
-                    <Text style={s.confirmText}>{t('reset-password')}</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
+      {/* Forgot password: username first, then their question and a new password */}
+      <ModalFrame
+        visible={showForgot}
+        title={t('forgot-password')}
+        onClose={() => setShowForgot(false)}
+        error={forgotError}
+        confirmLabel={forgotStep === 'username' ? t('ok') : t('reset-password')}
+        onConfirm={() => { if (!forgotLoading) { if (forgotStep === 'username') getForgotQuestion(); else doResetPassword(); } }}
+        busy={forgotLoading}
+      >
+        {forgotStep === 'username' ? (
+          <TextField
+            placeholder={t('ph-username')}
+            value={forgotUsername}
+            onChangeText={setForgotUsername}
+            autoCapitalize="none"
+            autoCorrect={false}
+            returnKeyType="go"
+            onSubmitEditing={() => { if (!forgotLoading) getForgotQuestion(); }}
+          />
+        ) : (
+          <>
+            <Text style={[s.questionText, { color: c.text }]}>{t.question(forgotQuestion)}</Text>
+            <TextField
+              placeholder={t('ph-security-answer')}
+              value={forgotAnswer}
+              onChangeText={setForgotAnswer}
+              returnKeyType="next" blurOnSubmit={false}
+              onSubmitEditing={() => forgotNewPwRef.current?.focus()}
+            />
+            <TextField
+              placeholder={t('ph-new-password')}
+              value={forgotNewPw}
+              onChangeText={setForgotNewPw}
+              secureTextEntry
+              autoComplete="new-password" textContentType="newPassword"
+              ref={forgotNewPwRef} returnKeyType="go"
+              onSubmitEditing={() => { if (!forgotLoading) doResetPassword(); }}
+            />
+          </>
+        )}
+      </ModalFrame>
     </KeyboardAvoidingView>
   );
 }
 
+// Faces scattered around the login screen: expression, size, tilt, position
+const DECO = [
+  { expression: 'Laugh', size: 64, rotate: '-14deg', pos: { left: -14, top: '14%' } },
+  { expression: 'BigLaugh', size: 54, rotate: '12deg', pos: { right: -10, top: '38%' } },
+  { expression: 'Em', size: 48, rotate: '8deg', pos: { left: 22, bottom: 36 } },
+  { expression: 'Smile', size: 40, rotate: '-10deg', pos: { right: 30, bottom: 90 } },
+] as const;
+
 const s = StyleSheet.create({
   container: { flex: 1 },
+  deco: { position: 'absolute', opacity: 0.14 },
   corner: { position: 'absolute', right: Spacing.lg, flexDirection: 'row', gap: Spacing.sm },
-  cornerBtn: { minWidth: 38, height: 34, paddingHorizontal: 10, borderRadius: Radius.md, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  cornerText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.xxl + 8 },
-  column: { width: '100%', maxWidth: 360, alignSelf: 'center' },
-  brand: { alignItems: 'center', gap: 10, marginBottom: 36 },
-  logo: { fontSize: 42, textAlign: 'center' },
-  tabs: { flexDirection: 'row', marginBottom: Spacing.xl, borderRadius: Radius.md, overflow: 'hidden', borderWidth: 1 },
-  tab: { flex: 1, paddingVertical: 9, alignItems: 'center' },
-  tabText: { fontWeight: String(Fonts.semibold) as any, fontSize: 14 },
-  form: { gap: Spacing.md },
-  input: { borderRadius: Radius.md, padding: 13, fontSize: 15, borderWidth: 1 },
-  error: { fontSize: 13 },
-  btn: { borderRadius: Radius.md, padding: 13, alignItems: 'center', marginTop: Spacing.xs, minHeight: 46, justifyContent: 'center' },
-  slowNote: { fontSize: 12, textAlign: 'center', lineHeight: 18 },
-  btnText: { color: '#fff', fontWeight: String(Fonts.bold) as any, fontSize: 15 },
-  forgotLink: { textAlign: 'center', fontSize: 13 },
-  demoBtn: { borderRadius: Radius.md, borderWidth: 1, padding: 11, alignItems: 'center', marginTop: Spacing.lg },
-  demoBtnText: { fontWeight: String(Fonts.semibold) as any, fontSize: 14 },
-  qPicker: { justifyContent: 'center', minHeight: 48 },
-  qPickerText: { fontSize: 15 },
-  qOption: { paddingVertical: 13, paddingHorizontal: 4, borderBottomWidth: StyleSheet.hairlineWidth },
-  qOptionText: { fontSize: 14 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', padding: Spacing.xxl },
-  modalBox: { width: '100%', maxWidth: 400, borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md },
-  modalTitle: { fontSize: 17, fontWeight: String(Fonts.bold) as any },
-  questionText: { fontSize: 14, fontWeight: String(Fonts.semibold) as any },
-  modalBtns: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'flex-end', marginTop: Spacing.xs },
-  cancelBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.md, borderWidth: 1 },
-  cancelText: { fontSize: 14 },
-  confirmBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.md },
-  confirmText: { color: '#fff', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
+  langBtn: { height: 40, paddingHorizontal: 14, borderRadius: Radius.full, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  themeBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  cornerText: { fontSize: 14, fontWeight: String(Fonts.heavy) as any },
+  scroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 28, paddingTop: 76, paddingBottom: 40 },
+  column: { width: '100%', maxWidth: 380, alignSelf: 'center', gap: 22 },
+  brand: { alignItems: 'center', gap: 8 },
+  logo: { fontSize: 44, lineHeight: 50, textAlign: 'center' },
+  tagline: { fontSize: 15, textAlign: 'center' },
+  tabs: { flexDirection: 'row', padding: 4, borderRadius: Radius.full },
+  tab: { flex: 1, height: 40, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  tabOn: { shadowColor: '#161A23', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  tabText: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  tabTextOn: { fontWeight: String(Fonts.heavy) as any },
+  form: { gap: 14 },
+  error: { borderRadius: Radius.md, paddingHorizontal: 14, paddingVertical: 10 },
+  errorText: { fontSize: 14, fontWeight: String(Fonts.semibold) as any },
+  primary: { marginTop: 2 },
+  slowNote: { fontSize: 13, textAlign: 'center', lineHeight: 19 },
+  forgot: { alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 8 },
+  forgotText: { fontSize: 14, fontWeight: String(Fonts.bold) as any },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginVertical: 2 },
+  rule: { flex: 1, height: 1 },
+  or: { fontSize: 13, fontWeight: String(Fonts.bold) as any },
+  demo: {
+    height: 52, borderRadius: 18, borderWidth: 2,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+  },
+  demoText: { fontSize: 16, fontWeight: String(Fonts.heavy) as any },
+  qPicker: {
+    minHeight: 60, borderRadius: Radius.lg, borderWidth: 1.5, paddingHorizontal: 16, paddingVertical: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+  },
+  qPickerText: { flex: 1, gap: 2 },
+  qLabel: { fontSize: 12, fontWeight: String(Fonts.bold) as any },
+  qValue: { fontSize: 16 },
+  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: Spacing.xxl },
+  sheet: { width: '100%', maxWidth: 420, borderRadius: Radius.xxl, padding: Spacing.xl, gap: 4 },
+  sheetTitle: { fontSize: 22, marginBottom: Spacing.sm, paddingHorizontal: 8 },
+  qOption: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 13, paddingHorizontal: 12, borderRadius: Radius.md },
+  qOptionText: { flex: 1, fontSize: 15, fontWeight: String(Fonts.semibold) as any },
+  questionText: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
 });

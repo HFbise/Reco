@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import { ModalFrame, modalInputStyle } from './ModalFrame';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { TextField } from '../ui/TextField';
+import { ModalFrame } from './ModalFrame';
 import { AvatarView, EXPRESSIONS, AVATAR_COLORS_LIST } from '../AvatarView';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
@@ -23,7 +24,6 @@ function useOnOpen(visible: boolean, reset: () => void) {
 }
 
 export function ChangePasswordModal({ visible, onClose }: DialogProps) {
-  const c = useColors();
   const t = useT();
   const [oldPw, setOldPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -43,15 +43,14 @@ export function ChangePasswordModal({ visible, onClose }: DialogProps) {
     showAlert(t('password-changed'));
   }
 
-  const input = modalInputStyle(c);
   return (
     <ModalFrame visible={visible} onClose={onClose} title={t('change-password')} error={error}
       confirmLabel={t('save')} onConfirm={save} busy={busy}>
-      <TextInput style={input} placeholder={t('ph-old-password')} placeholderTextColor={c.textMuted} value={oldPw}
+      <TextField placeholder={t('ph-old-password')} value={oldPw}
         onChangeText={setOldPw} secureTextEntry autoComplete="current-password" textContentType="password" />
-      <TextInput style={input} placeholder={t('ph-new-password')} placeholderTextColor={c.textMuted} value={newPw}
+      <TextField placeholder={t('ph-new-password')} value={newPw}
         onChangeText={setNewPw} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
-      <TextInput style={input} placeholder={t('ph-confirm-password')} placeholderTextColor={c.textMuted} value={confirmPw}
+      <TextField placeholder={t('ph-confirm-password')} value={confirmPw}
         onChangeText={setConfirmPw} secureTextEntry autoComplete="new-password" textContentType="newPassword"
         onSubmitEditing={save} />
     </ModalFrame>
@@ -88,7 +87,6 @@ export function EditProfileModal({ visible, onClose }: DialogProps) {
     onClose();
   }
 
-  const input = modalInputStyle(c);
   return (
     <ModalFrame visible={visible} onClose={onClose} title={t('edit-profile')} error={error}
       confirmLabel={t('save')} onConfirm={save} busy={busy}>
@@ -97,7 +95,7 @@ export function EditProfileModal({ visible, onClose }: DialogProps) {
           screenname={currentUser?.screenname} size={56} />
         <View style={s.grid}>
           {EXPRESSIONS.map((key) => (
-            <TouchableOpacity key={key} style={[s.exprOpt, expression === key && s.exprSelected]}
+            <TouchableOpacity key={key} style={[s.exprOpt, expression === key && { borderColor: c.accent, backgroundColor: c.accentBg }]}
               onPress={() => setExpression(key)} activeOpacity={0.7}>
               <AvatarView expression={key} color={color} size={38} />
             </TouchableOpacity>
@@ -105,23 +103,22 @@ export function EditProfileModal({ visible, onClose }: DialogProps) {
         </View>
         <View style={s.grid}>
           {AVATAR_COLORS_LIST.map((col) => (
-            <TouchableOpacity key={col} style={[s.colorDot, { backgroundColor: col }, color === col && s.colorSelected]}
+            <TouchableOpacity key={col} style={[s.colorDot, { backgroundColor: col, borderColor: color === col ? c.text : 'transparent' }, color === col && s.colorSelected]}
               onPress={() => setColor(col)} activeOpacity={0.7} />
           ))}
         </View>
       </View>
       <Text style={[s.label, { color: c.textMuted }]}>{t('display-name')}</Text>
-      <TextInput style={input} value={screenname} onChangeText={setScreenname} placeholder={t('display-name')}
-        placeholderTextColor={c.textMuted} maxLength={32} />
+      <TextField value={screenname} onChangeText={setScreenname} placeholder={t('display-name')}
+        maxLength={32} />
       <Text style={[s.label, { color: c.textMuted }]}>{t('bio-label')}</Text>
-      <TextInput style={[input, s.multiline]} value={bio} onChangeText={setBio} placeholder={t('ph-bio')}
-        placeholderTextColor={c.textMuted} multiline numberOfLines={3} textAlignVertical="top" maxLength={200} />
+      <TextField style={s.multiline} value={bio} onChangeText={setBio} placeholder={t('ph-bio')}
+        multiline numberOfLines={3} textAlignVertical="top" maxLength={200} />
     </ModalFrame>
   );
 }
 
 export function FeedbackModal({ visible, onClose }: DialogProps) {
-  const c = useColors();
   const t = useT();
   const [text, setText] = useState('');
   const [error, setError] = useState('');
@@ -140,8 +137,8 @@ export function FeedbackModal({ visible, onClose }: DialogProps) {
   return (
     <ModalFrame visible={visible} onClose={onClose} title={t('feedback-title')} error={error}
       confirmLabel={t('feedback-submit')} onConfirm={send} busy={busy} confirmDisabled={!text.trim()}>
-      <TextInput style={[modalInputStyle(c), s.multiline, { minHeight: 100 }]} placeholder={t('feedback-ph')}
-        placeholderTextColor={c.textMuted} value={text} onChangeText={setText} multiline maxLength={2000}
+      <TextField style={[s.multiline, { minHeight: 110 }]} placeholder={t('feedback-ph')}
+        value={text} onChangeText={setText} multiline maxLength={2000}
         textAlignVertical="top" />
     </ModalFrame>
   );
@@ -166,8 +163,8 @@ export function DeleteAccountModal({ visible, onClose }: DialogProps) {
   return (
     <ModalFrame visible={visible} onClose={onClose} title={t('confirm-delete-title')} titleColor={c.danger}
       error={error} confirmLabel={t('delete-account')} onConfirm={confirm} busy={busy} danger>
-      <Text style={{ color: c.textMuted, fontSize: 13, lineHeight: 18 }}>{t('confirm-delete-msg')}</Text>
-      <TextInput style={modalInputStyle(c)} placeholder={t('ph-password')} placeholderTextColor={c.textMuted}
+      <Text style={{ color: c.textSub, fontSize: 14, lineHeight: 20 }}>{t('confirm-delete-msg')}</Text>
+      <TextField placeholder={t('ph-password')}
         value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password"
         textContentType="password" onSubmitEditing={confirm} />
     </ModalFrame>
@@ -177,10 +174,9 @@ export function DeleteAccountModal({ visible, onClose }: DialogProps) {
 const s = StyleSheet.create({
   avatarPicker: { alignItems: 'center', gap: 10 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
-  exprOpt: { padding: 2, borderRadius: 22, borderWidth: 2, borderColor: 'transparent' },
-  exprSelected: { borderColor: '#4f8ef7' },
-  colorDot: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: 'transparent' },
-  colorSelected: { borderColor: '#fff', transform: [{ scale: 1.15 }] },
-  label: { fontSize: 12, marginBottom: -6 },
-  multiline: { minHeight: 70 },
+  exprOpt: { padding: 3, borderRadius: 26, borderWidth: 2, borderColor: 'transparent' },
+  colorDot: { width: 30, height: 30, borderRadius: 15, borderWidth: 3 },
+  colorSelected: { transform: [{ scale: 1.1 }] },
+  label: { fontSize: 13, fontWeight: '800', marginBottom: -6 },
+  multiline: { minHeight: 80, textAlignVertical: 'top' },
 });

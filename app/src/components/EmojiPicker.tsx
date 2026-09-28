@@ -105,7 +105,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
     <View style={[s.box, { backgroundColor: c.surface }, style]}>
       <View style={[s.searchRow, { borderBottomColor: c.border }]}>
         <TextInput
-          style={[s.searchInput, { color: c.text, backgroundColor: c.isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
+          style={[s.searchInput, { color: c.text, backgroundColor: c.surface2 }]}
           placeholder={t('emoji-search')}
           placeholderTextColor={c.textMuted}
           value={search}
@@ -118,7 +118,7 @@ export function EmojiPicker({ onSelect, style }: Props) {
           {categories.map((cat, i) => (
             <TouchableOpacity
               key={cat.group}
-              style={[s.catTab, i === catIdx && { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)' }]}
+              style={[s.catTab, i === catIdx && { backgroundColor: c.accentBg }]}
               onPress={() => setCatIdx(i)}
               activeOpacity={0.7}
             >
@@ -153,14 +153,14 @@ export function EmojiPicker({ onSelect, style }: Props) {
 const s = StyleSheet.create({
   box: {
     width: 344, maxWidth: '94%' as any, maxHeight: 440,
-    borderRadius: Radius.lg, overflow: 'hidden',
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2, shadowRadius: 16, elevation: 12,
+    borderRadius: Radius.xl, overflow: 'hidden',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16, shadowRadius: 18, elevation: 12,
   },
-  searchRow: { paddingHorizontal: Spacing.sm, paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth },
-  searchInput: { height: 34, borderRadius: 8, paddingHorizontal: 12, fontSize: 14 },
-  catBar: { flexDirection: 'row', borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: 4, paddingVertical: 3 },
-  catTab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 5, borderRadius: 6 },
+  searchRow: { paddingHorizontal: 10, paddingTop: 10, paddingBottom: 8 },
+  searchInput: { height: 40, borderRadius: Radius.md, paddingHorizontal: 14, fontSize: 15, outlineStyle: 'none' } as any,
+  catBar: { flexDirection: 'row', borderBottomWidth: 1, paddingHorizontal: 6, paddingBottom: 6 },
+  catTab: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6, borderRadius: 10 },
   catTabText: { fontSize: 18 },
   grid: { flex: 1 },
   gridContent: { paddingBottom: 8 },

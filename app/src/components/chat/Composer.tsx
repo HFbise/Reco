@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
-import { IconBan, IconEmoji, IconSend } from '../Icon';
+import { IconBan, IconEmoji, IconPencil, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
@@ -34,23 +34,27 @@ export function Composer(p: Props) {
 
   if (p.editText !== null) {
     return (
-      <View style={[s.editBar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
-        <Text style={[s.editLabel, { color: c.accent }]}>{t('edit-message')}</Text>
-        <TextInput
-          style={[s.editInput, { backgroundColor: c.bg, color: c.text, borderColor: c.border }]}
-          value={p.editText}
-          onChangeText={p.onChangeEdit}
-          autoFocus
-          multiline
-        />
-        <View style={s.editActions}>
-          <TouchableOpacity onPress={p.onCancelEdit}
-            style={[s.editBtn, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.1)' }]}>
-            <Text style={[s.editBtnText, { color: c.text }]}>{t('cancel')}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={p.onSaveEdit} style={[s.editBtn, { backgroundColor: c.accent }]}>
-            <Text style={[s.editBtnText, { color: '#fff' }]}>{t('save')}</Text>
-          </TouchableOpacity>
+      <View style={[s.inputArea, { backgroundColor: c.bg }]}>
+        <View style={[s.editCard, { backgroundColor: c.surface, borderColor: c.accent }]}>
+          <View style={s.editHead}>
+            <IconPencil size={14} color={c.accent} />
+            <Text style={[s.editLabel, { color: c.accentText }]}>{t('edit-message')}</Text>
+          </View>
+          <TextInput
+            style={[s.editInput, { color: c.text }]}
+            value={p.editText}
+            onChangeText={p.onChangeEdit}
+            autoFocus
+            multiline
+          />
+          <View style={s.editActions}>
+            <TouchableOpacity onPress={p.onCancelEdit} style={[s.editBtn, { backgroundColor: c.surface2 }]} accessibilityRole="button">
+              <Text style={[s.editBtnText, { color: c.text }]}>{t('cancel')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={p.onSaveEdit} style={[s.editBtn, { backgroundColor: c.accent }]} accessibilityRole="button">
+              <Text style={[s.editBtnText, { color: c.onAccent }]}>{t('save')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
@@ -58,9 +62,9 @@ export function Composer(p: Props) {
   if (p.isGuest) return <GuestBanner />;
   if (p.isMuted) {
     return (
-      <View style={[s.mutedArea, { backgroundColor: c.bg, borderTopColor: c.border }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <IconBan size={15} color={c.danger} />
+      <View style={[s.inputArea, { backgroundColor: c.bg }]}>
+        <View style={[s.muted, { backgroundColor: c.dangerBg }]}>
+          <IconBan size={16} color={c.danger} />
           <Text style={[s.mutedText, { color: c.danger }]}>{t('you-are-muted')}</Text>
         </View>
       </View>
@@ -111,12 +115,13 @@ const s = StyleSheet.create({
   input: { flex: 1, paddingHorizontal: 6, paddingVertical: 10, fontSize: 15, lineHeight: 20, outlineStyle: 'none' } as any,
   sendBtn: { borderRadius: 14, width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { opacity: 0.45 },
-  editBar: { borderTopWidth: 1, padding: Spacing.md, gap: Spacing.sm },
-  editLabel: { fontSize: 12, fontWeight: String(Fonts.semibold) as any },
-  editInput: { borderRadius: Radius.md, padding: 10, fontSize: 15, borderWidth: 1, maxHeight: 120 },
+  editCard: { borderRadius: 20, borderWidth: 2, padding: 12, gap: 8 },
+  editHead: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  editLabel: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
+  editInput: { fontSize: 15, lineHeight: 20, paddingHorizontal: 4, paddingVertical: 4, maxHeight: 120, outlineStyle: 'none' } as any,
   editActions: { flexDirection: 'row', gap: Spacing.sm, justifyContent: 'flex-end' },
-  editBtn: { paddingHorizontal: Spacing.lg, paddingVertical: 8, borderRadius: 5 },
-  editBtnText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
-  mutedArea: { paddingHorizontal: Spacing.lg, paddingVertical: 16, paddingBottom: 20, borderTopWidth: StyleSheet.hairlineWidth, alignItems: 'center' },
-  mutedText: { fontSize: 14, fontWeight: String(Fonts.medium) as any },
+  editBtn: { height: 36, paddingHorizontal: Spacing.lg, borderRadius: Radius.md, justifyContent: 'center' },
+  editBtnText: { fontSize: 14, fontWeight: String(Fonts.heavy) as any },
+  muted: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 54, borderRadius: 20 },
+  mutedText: { fontSize: 14, fontWeight: String(Fonts.bold) as any },
 });

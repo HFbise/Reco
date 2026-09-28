@@ -301,8 +301,8 @@ export function ChatPanel({
         </RightDrawer>
       )}
 
-      <Animated.View pointerEvents="none" style={[s.toast, { opacity: toastOpacity }]}>
-        <Text style={s.toastText}>{toast}</Text>
+      <Animated.View pointerEvents="none" style={[s.toast, { opacity: toastOpacity, backgroundColor: c.text }]}>
+        <Text style={[s.toastText, { color: c.bg }]}>{toast}</Text>
       </Animated.View>
     </View>
   );
@@ -311,8 +311,8 @@ export function ChatPanel({
 const s = StyleSheet.create({
   container: { flex: 1 },
   toast: {
-    position: 'absolute', alignSelf: 'center', bottom: 80,
-    backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8,
+    position: 'absolute', alignSelf: 'center', bottom: 90,
+    borderRadius: 999, paddingHorizontal: 18, paddingVertical: 10,
   },
-  toastText: { color: '#fff', fontSize: 14 },
+  toastText: { fontSize: 14, fontWeight: '700' },
 });

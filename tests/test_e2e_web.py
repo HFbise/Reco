@@ -136,19 +136,19 @@ def test_random_match_text_chat_then_both_keep_in_touch(server, browser, shots):
         page.get_by_role('tab', name='Match').click()
         page.get_by_role('tab', name='Entertainment').click()
         page.get_by_role('checkbox', name='Music').click()
-        page.get_by_text('Start', exact=True).click()
+        page.get_by_text('Start matching', exact=True).click()
 
     for page in (dave, erin):
-        page.get_by_text('You both like: Music').wait_for(timeout=10000)
+        page.get_by_label('You both like: Music').wait_for(timeout=10000)
     assert dave.get_by_text('Erin').count() == 0  # anonymous until both agree
 
     dave.get_by_placeholder('Type a message...').fill('hi stranger')
     dave.get_by_placeholder('Type a message...').press('Enter')
     erin.get_by_text('hi stranger').wait_for(timeout=10000)
 
-    dave.get_by_text('Keep in touch').click()
+    dave.get_by_role('button', name='Keep in touch', exact=True).click()
     dave.get_by_text('Waiting for them to agree').wait_for()
-    erin.get_by_text('Keep in touch').click()
+    erin.get_by_role('button', name='Keep in touch', exact=True).click()
     dave.get_by_text("You're now connected with Erin", exact=False).wait_for(timeout=10000)
     erin.get_by_text("You're now connected with Dave", exact=False).wait_for(timeout=10000)
 

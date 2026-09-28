@@ -8,6 +8,8 @@ import { useT } from '../hooks/useT';
 import { useThemeStore } from '../store/themeStore';
 import { useLangStore } from '../store/langStore';
 import type { useVoice } from '../hooks/useVoice';
+import { Button } from './ui/Button';
+import { DisplayText } from './ui/DisplayText';
 import { Fonts, Radius, Spacing } from '../theme';
 
 type Voice = ReturnType<typeof useVoice>;
@@ -76,25 +78,37 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
     } catch {}
   }
 
-  const tabButton = (key: 'general' | 'audio', label: string) => (
-    <TouchableOpacity style={[s.tab, tab === key && { borderBottomColor: c.accent }]} activeOpacity={0.8}
-      onPress={() => { setTab(key); if (key === 'audio') listDevices(); }}>
-      <Text style={[s.tabText, { color: tab === key ? c.accent : c.textMuted }]}>{label}</Text>
-    </TouchableOpacity>
-  );
+  const tabButton = (key: 'general' | 'audio', label: string) => {
+    const on = tab === key;
+    return (
+      <TouchableOpacity style={[s.tab, on && s.tabOn, on && { backgroundColor: c.surface }]} activeOpacity={0.8}
+        accessibilityRole="tab" accessibilityState={{ selected: on }}
+        onPress={() => { setTab(key); if (key === 'audio') listDevices(); }}>
+        <Text style={[s.tabText, { color: on ? c.text : c.textSub }, on && s.heavy]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
 
-  const langButton = (value: 'zh' | 'en', label: string) => (
-    <TouchableOpacity activeOpacity={0.8} onPress={() => setLang(value)}
-      style={[s.langBtn, { borderColor: c.border }, lang === value && { backgroundColor: c.accent, borderColor: c.accent }]}>
-      <Text style={{ color: lang === value ? '#fff' : c.textMuted, fontSize: 13, fontWeight: '600' }}>{label}</Text>
-    </TouchableOpacity>
-  );
+  const langButton = (value: 'zh' | 'en', label: string) => {
+    const on = lang === value;
+    return (
+      <TouchableOpacity activeOpacity={0.8} onPress={() => setLang(value)}
+        accessibilityRole="radio" accessibilityState={{ checked: on }}
+        style={[s.langBtn, { borderColor: on ? c.accent : c.border, backgroundColor: on ? c.accentBg : c.surface }]}>
+        <Text style={[s.langText, { color: on ? c.accentText : c.textSub }]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
 
-  const slider = (value: number, onChange: (v: number) => void) => (
-    <View style={s.sliderRow}>
-      <Slider style={{ flex: 1, height: 32 }} minimumValue={0} maximumValue={MAX_VOLUME} step={1} value={value}
-        onValueChange={onChange} minimumTrackTintColor={c.accent} maximumTrackTintColor={c.border} thumbTintColor={c.accent} />
-      <Text style={[s.sliderVal, { color: c.textMuted }]}>{Math.round(value)}%</Text>
+  const slider = (label: string, value: number, onChange: (v: number) => void) => (
+    <View style={[s.volume, { backgroundColor: c.surface2 }]}>
+      <View style={s.volumeHead}>
+        <Text style={[s.label, { color: c.text }]}>{label}</Text>
+        <Text style={[s.sliderVal, { color: value > 100 ? c.accent : c.text }]}>{Math.round(value)}%</Text>
+      </View>
+      <Slider style={{ width: '100%', height: 28 }} minimumValue={0} maximumValue={MAX_VOLUME} step={1} value={value}
+        onValueChange={onChange} minimumTrackTintColor={c.accent} maximumTrackTintColor={c.border} thumbTintColor={c.accent}
+        accessibilityLabel={label} />
     </View>
   );
 
@@ -105,8 +119,9 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
       value,
       onChange: (e: any) => onChange(e.target.value),
       style: {
-        width: '100%', padding: '6px 8px', borderRadius: 6, fontSize: 14, marginTop: 4, cursor: 'pointer', outline: 'none',
-        backgroundColor: c.isDark ? '#2a2b2f' : '#f0f0f3', color: c.text, border: `1px solid ${c.border}`,
+        width: '100%', height: 44, padding: '0 12px', borderRadius: Radius.md, fontSize: 15, cursor: 'pointer', outline: 'none',
+        // A raw <select> gets no share of the app's font rule (it has no dir attribute)
+        fontFamily: "Nunito, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif", fontWeight: 600, backgroundColor: c.surface2, color: c.text, border: `1.5px solid ${c.border}`,
       },
     },
     options.map((d) => React.createElement('option', { key: d.deviceId, value: d.deviceId }, d.label)),
@@ -116,10 +131,10 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <TouchableOpacity style={s.overlay} onPress={onClose} activeOpacity={1}>
+      <TouchableOpacity style={[s.overlay, { backgroundColor: c.overlay }]} onPress={onClose} activeOpacity={1}>
         <TouchableOpacity style={[s.box, { backgroundColor: c.surface }]} onPress={() => {}} activeOpacity={1}>
-          <Text style={[s.title, { color: c.text }]}>{t('settings')}</Text>
-          <View style={s.tabs}>
+          <DisplayText style={[s.title, { color: c.text }]}>{t('settings')}</DisplayText>
+          <View style={[s.tabs, { backgroundColor: c.surface2 }]} accessibilityRole="tablist">
             {tabButton('general', t('tab-general'))}
             {tabButton('audio', t('tab-audio'))}
           </View>
@@ -128,11 +143,12 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
             <View style={s.panel}>
               <View style={s.row}>
                 <Text style={[s.label, { color: c.text }]}>{t('dark-mode')}</Text>
-                <Switch value={isDark} onValueChange={toggleTheme} thumbColor="#fff" trackColor={{ false: '#ccc', true: c.accent }} />
+                <Switch value={isDark} onValueChange={toggleTheme} thumbColor={c.onAccent}
+                  trackColor={{ false: c.border, true: c.accent }} {...({ activeThumbColor: c.onAccent } as any)} />
               </View>
               <View style={s.row}>
                 <Text style={[s.label, { color: c.text }]}>{t('language')}</Text>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <View style={s.langs} accessibilityRole="radiogroup">
                   {langButton('zh', '中文')}
                   {langButton('en', 'EN')}
                 </View>
@@ -143,30 +159,26 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
               {/* Volumes are applied with Web Audio, which the native app doesn't have */}
               {Platform.OS === 'web' && (
                 <>
-                  <Text style={[s.label, { color: c.text }]}>{t('settings-mic-label')}</Text>
-                  {slider(voice.micVolume, voice.setMicVolume)}
-                  <Text style={[s.label, { color: c.text, marginTop: 12 }]}>{t('settings-speaker-label')}</Text>
-                  {slider(voice.speakerVolume, voice.setSpeakerVolume)}
+                  {slider(t('settings-mic-label'), voice.micVolume, voice.setMicVolume)}
+                  {slider(t('settings-speaker-label'), voice.speakerVolume, voice.setSpeakerVolume)}
                 </>
               )}
               {Platform.OS === 'web' && mics.length > 0 && (
-                <View style={{ gap: 4, marginTop: 8 }}>
-                  <Text style={[s.label, { color: c.textMuted, fontSize: 12 }]}>{t('settings-mic-label')}</Text>
+                <View style={s.device}>
+                  <Text style={[s.caption, { color: c.textSub }]}>{t('settings-mic-label')}</Text>
                   {select(devices.mic, mics, devices.chooseMic)}
                 </View>
               )}
               {canPickSpeaker && speakers.length > 0 && (
-                <View style={{ gap: 4, marginTop: 8 }}>
-                  <Text style={[s.label, { color: c.textMuted, fontSize: 12 }]}>{t('settings-speaker-label')}</Text>
+                <View style={s.device}>
+                  <Text style={[s.caption, { color: c.textSub }]}>{t('settings-speaker-label')}</Text>
                   {select(devices.speaker, speakers, devices.chooseSpeaker)}
                 </View>
               )}
             </View>
           )}
 
-          <TouchableOpacity style={[s.closeBtn, { backgroundColor: c.accent }]} onPress={onClose}>
-            <Text style={s.closeText}>{t('close')}</Text>
-          </TouchableOpacity>
+          <Button label={t('close')} variant="quiet" onPress={onClose} />
         </TouchableOpacity>
       </TouchableOpacity>
     </Modal>
@@ -176,18 +188,23 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
 const s = StyleSheet.create({
   // Anchored near the top, not centered: the device lists load a moment after the
   // audio tab opens, and a centered dialog would jump (sliders moving under the pointer)
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 96 },
-  box: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, width: 380 },
-  title: { fontSize: 17, fontWeight: String(Fonts.bold) as any },
-  tabs: { flexDirection: 'row', gap: Spacing.lg },
-  tab: { paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  tabText: { fontSize: 14, fontWeight: String(Fonts.semibold) as any },
-  panel: { gap: Spacing.sm },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6 },
-  label: { fontSize: 14 },
-  langBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: Radius.md, borderWidth: 1 },
-  sliderRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  sliderVal: { width: 40, fontSize: 12, textAlign: 'right' },
-  closeBtn: { borderRadius: Radius.md, padding: 10, alignItems: 'center', marginTop: 4 },
-  closeText: { color: '#fff', fontWeight: String(Fonts.semibold) as any },
+  overlay: { flex: 1, justifyContent: 'flex-start', alignItems: 'center', paddingTop: 96, paddingHorizontal: Spacing.lg },
+  box: { borderRadius: Radius.xxl, padding: Spacing.xxl, gap: Spacing.lg, width: '100%', maxWidth: 420 },
+  title: { fontSize: 24 },
+  tabs: { flexDirection: 'row', padding: 4, borderRadius: Radius.full },
+  tab: { flex: 1, height: 38, borderRadius: Radius.full, alignItems: 'center', justifyContent: 'center' },
+  tabOn: { shadowColor: '#161A23', shadowOpacity: 0.12, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
+  tabText: { fontSize: 14, fontWeight: String(Fonts.bold) as any },
+  heavy: { fontWeight: String(Fonts.heavy) as any },
+  panel: { gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  label: { flex: 1, fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  caption: { fontSize: 13, fontWeight: String(Fonts.bold) as any },
+  langs: { flexDirection: 'row', gap: 8 },
+  langBtn: { height: 36, paddingHorizontal: 14, borderRadius: Radius.full, borderWidth: 1.5, justifyContent: 'center' },
+  langText: { fontSize: 14, fontWeight: String(Fonts.heavy) as any },
+  volume: { borderRadius: 18, paddingVertical: 12, paddingHorizontal: Spacing.lg, gap: 4 },
+  volumeHead: { flexDirection: 'row', alignItems: 'center' },
+  sliderVal: { fontSize: 14, fontWeight: String(Fonts.heavy) as any },
+  device: { gap: 6 },
 });

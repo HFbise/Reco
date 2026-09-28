@@ -2,10 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { getSocket } from '../lib/socket';
 import { useT } from '../hooks/useT';
+import { useColors } from '../hooks/useColors';
+import { Fonts } from '../theme';
 
 /** Connection problems: the server waking up (first connect is slow), lost, or back. */
 export function ConnectionBanner() {
   const t = useT();
+  const c = useColors();
   const [status, setStatus] = useState<'ok' | 'waking' | 'down' | 'back'>('ok');
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasDownRef = useRef(false);
@@ -38,9 +41,14 @@ export function ConnectionBanner() {
 
   if (status === 'ok') return null;
 
+  // Soft tinted strips, not alarm-bright bars: green when back, blue while waking, red when lost
+  const look = status === 'back' ? { bg: c.successBg, fg: c.success }
+    : status === 'waking' ? { bg: c.accentBg, fg: c.accentText }
+    : { bg: c.dangerBg, fg: c.danger };
   return (
-    <View style={[s.banner, { backgroundColor: status === 'back' ? '#3ba55c' : status === 'waking' ? '#4f8ef7' : '#ed4245' }]}>
-      <Text style={s.text}>
+    <View style={[s.banner, { backgroundColor: look.bg }]} accessibilityRole="alert">
+      <View style={[s.dot, { backgroundColor: look.fg }]} />
+      <Text style={[s.text, { color: look.fg }]}>
         {status === 'back' ? t('reconnected') : status === 'waking' ? t('server-waking') : t('reconnecting')}
       </Text>
     </View>
@@ -48,6 +56,7 @@ export function ConnectionBanner() {
 }
 
 const s = StyleSheet.create({
-  banner: { paddingVertical: 5, paddingHorizontal: 12, alignItems: 'center' },
-  text: { color: '#fff', fontSize: 13, fontWeight: '600' as any, textAlign: 'center' },
+  banner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 7, paddingHorizontal: 14 },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  text: { flexShrink: 1, fontSize: 13, fontWeight: String(Fonts.bold) as any, textAlign: 'center' },
 });

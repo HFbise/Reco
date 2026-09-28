@@ -13,6 +13,9 @@ import { IconMic, IconPlus } from '../../src/components/Icon';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { BrandMark } from '../../src/components/BrandMark';
 import { DisplayText } from '../../src/components/ui/DisplayText';
+import { IconButton } from '../../src/components/ui/Button';
+import { useT } from '../../src/hooks/useT';
+import { Fonts, Radius } from '../../src/theme';
 
 const IS_WEB = Platform.OS === 'web';
 // CSS ease: cubic-bezier(0.25, 0.1, 0.25, 1.0)
@@ -21,6 +24,7 @@ const EASE = Easing.bezier(0.25, 0.1, 0.25, 1.0);
 export default function RoomsScreen() {
   const { width: SW } = useWindowDimensions();
   const c = useColors();
+  const t = useT();
   const { currentUser } = useAuthStore();
   const { voice, setRoom, voiceRoom, leaveAndSwitchRoom } = useMobileVoice();
   const { inVoice, voiceMembers } = voice;
@@ -132,13 +136,14 @@ export default function RoomsScreen() {
       }}
       activeOpacity={0.75}
     >
-      <IconMic size={13} color={c.accent} />
+      <IconMic size={14} color={c.accent} />
       {pillUser && (
-        <View style={[s.pillAvatarRing, pillUser.isSpeaking && { borderColor: c.success }]}>
-          <AvatarView username={pillUser.username} screenname={pillUser.screenname} color={pillUser.avatar_color} size={18} />
+        <View style={[s.pillAvatarRing, { borderColor: pillUser.isSpeaking ? c.success : 'transparent' }]}>
+          <AvatarView username={pillUser.username} screenname={pillUser.screenname} color={pillUser.avatar_color}
+            expression={pillUser.avatar_expression} size={20} />
         </View>
       )}
-      <Text style={[s.pillCount, { color: c.accent }]}>({voiceMembers.length})</Text>
+      <Text style={[s.pillCount, { color: c.accentText }]}>{voiceMembers.length}</Text>
     </TouchableOpacity>
   ) : null;
 
@@ -147,15 +152,16 @@ export default function RoomsScreen() {
   const topbar = (
     <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
       <View style={s.logo}>
-        <BrandMark size={24} />
-        <DisplayText style={[s.wordmark, { color: c.accent }]}>Reco</DisplayText>
+        <BrandMark size={28} />
+        <DisplayText style={[s.wordmark, { color: c.isDark ? c.accentText : c.accent }]}>Reco</DisplayText>
       </View>
       <View style={{ flex: 1 }} />
       {voicePill}
       {!currentUser?.guest && (
-        <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={handlePlusPress} activeOpacity={0.7}>
-          <IconPlus size={20} color={c.accent} />
-        </TouchableOpacity>
+        <View ref={plusBtnRef} collapsable={false}>
+          <IconButton label={t('welcome-join')} variant="tinted" size={40} onPress={handlePlusPress}
+            icon={(color) => <IconPlus size={20} color={color} />} />
+        </View>
       )}
     </View>
   );
@@ -221,14 +227,13 @@ export default function RoomsScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  topbar: { height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: 1 },
+  topbar: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 12, borderBottomWidth: 1 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  wordmark: { fontSize: 23 },
+  wordmark: { fontSize: 26 },
   content: { flex: 1 },
-  pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 4 },
-  pillCount: { fontSize: 12, fontWeight: '600' as any },
-  pillAvatarRing: { borderRadius: 11, borderWidth: 1.5, borderColor: 'transparent' },
-  plusBtn: { padding: 6 },
+  pill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: 10, borderRadius: Radius.full },
+  pillCount: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
+  pillAvatarRing: { borderRadius: Radius.full, borderWidth: 1.5 },
   // Web side-by-side layout
   slideViewport: { flex: 1, overflow: 'hidden' as any },
   slideTrack: { flexDirection: 'row', flex: 1 },

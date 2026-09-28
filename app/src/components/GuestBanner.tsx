@@ -18,21 +18,22 @@ export function GuestBanner() {
   const c = useColors();
   const t = useT();
   return (
-    <View style={[s.bar, { backgroundColor: c.surface, borderTopColor: c.border }]}>
-      <Text style={[s.text, { color: c.textSub }]}>{t('demo-banner')}</Text>
-      <TouchableOpacity style={[s.btn, { backgroundColor: c.accent }]} onPress={leaveDemoToSignUp} activeOpacity={0.85}>
-        <Text style={s.btnText}>{t('register')}</Text>
-      </TouchableOpacity>
+    <View style={s.wrap}>
+      <View style={[s.bar, { backgroundColor: c.sunnyBg }]}>
+        <Text style={[s.text, { color: c.text }]}>{t('demo-banner')}</Text>
+        <TouchableOpacity style={[s.btn, { backgroundColor: c.sunny }]} onPress={leaveDemoToSignUp} activeOpacity={0.85}
+          accessibilityRole="button">
+          <Text style={[s.btnText, { color: c.sunnyText }]}>{t('register')}</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  bar: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.md,
-    paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  text: { flex: 1, fontSize: 13, lineHeight: 18 },
-  btn: { borderRadius: Radius.md, paddingHorizontal: Spacing.lg, paddingVertical: 8 },
-  btnText: { color: '#fff', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
+  wrap: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 12 },
+  bar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: 14, borderRadius: Radius.xl },
+  text: { flex: 1, fontSize: 13, lineHeight: 19, fontWeight: String(Fonts.semibold) as any },
+  btn: { height: 38, borderRadius: Radius.md, paddingHorizontal: Spacing.lg, justifyContent: 'center' },
+  btnText: { fontSize: 14, fontWeight: String(Fonts.heavy) as any },
 });
