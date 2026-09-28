@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Switch, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
+import { MAX_VOLUME } from '../lib/webrtc';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { useThemeStore } from '../store/themeStore';
@@ -91,8 +92,8 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
 
   const slider = (value: number, onChange: (v: number) => void) => (
     <View style={s.sliderRow}>
-      <Slider style={{ flex: 1, height: 32 }} minimumValue={0} maximumValue={100} step={1} value={value}
-        onValueChange={onChange} minimumTrackTintColor={c.accent} maximumTrackTintColor={c.border} />
+      <Slider style={{ flex: 1, height: 32 }} minimumValue={0} maximumValue={MAX_VOLUME} step={1} value={value}
+        onValueChange={onChange} minimumTrackTintColor={c.accent} maximumTrackTintColor={c.border} thumbTintColor={c.accent} />
       <Text style={[s.sliderVal, { color: c.textMuted }]}>{Math.round(value)}%</Text>
     </View>
   );
@@ -139,15 +140,15 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
             </View>
           ) : (
             <View style={s.panel}>
-              {/* Mic volume is applied with Web Audio, which the native app doesn't have */}
+              {/* Volumes are applied with Web Audio, which the native app doesn't have */}
               {Platform.OS === 'web' && (
                 <>
                   <Text style={[s.label, { color: c.text }]}>{t('settings-mic-label')}</Text>
                   {slider(voice.micVolume, voice.setMicVolume)}
+                  <Text style={[s.label, { color: c.text, marginTop: 12 }]}>{t('settings-speaker-label')}</Text>
+                  {slider(voice.speakerVolume, voice.setSpeakerVolume)}
                 </>
               )}
-              <Text style={[s.label, { color: c.text, marginTop: 12 }]}>{t('settings-speaker-label')}</Text>
-              {slider(voice.speakerVolume, voice.setSpeakerVolume)}
               {Platform.OS === 'web' && mics.length > 0 && (
                 <View style={{ gap: 4, marginTop: 8 }}>
                   <Text style={[s.label, { color: c.textMuted, fontSize: 12 }]}>{t('settings-mic-label')}</Text>

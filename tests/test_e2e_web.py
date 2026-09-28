@@ -240,7 +240,8 @@ _OUTPUT_LEVEL = """async () => {
 }"""
 
 
-def test_two_browsers_talk_and_one_turns_the_other_up_to_150_percent(server, browser, tmp_path, shots):
+def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
+    """Two browsers in voice; every volume slider at 150% makes what's heard 1.5x louder."""
     create_user('gina', screenname='Gina')
     create_user('hugo', screenname='Hugo')
     wav = tmp_path / 'voice.wav'
@@ -266,14 +267,33 @@ def test_two_browsers_talk_and_one_turns_the_other_up_to_150_percent(server, bro
     gina, hugo = pages
     hugo.wait_for_timeout(2500)
 
-    before = hugo.evaluate(_OUTPUT_LEVEL)
-    assert before > 0.001  # Hugo hears Gina
+    def to_max(page, slider):
+        box = slider.bounding_box()
+        page.mouse.click(box['x'] + box['width'] - 1, box['y'] + box['height'] / 2)
+        page.wait_for_timeout(400)
 
-    hugo.get_by_text('Gina', exact=True).first.click()
+    def settings_slider(page, index):
+        page.get_by_label('Settings').first.click()
+        page.get_by_text('Audio', exact=True).click()
+        to_max(page, page.get_by_role('slider').nth(index))
+        page.get_by_text('Close', exact=True).last.click()
+
+    level = hugo.evaluate(_OUTPUT_LEVEL)
+    assert level > 0.001  # Hugo hears Gina
+
+    settings_slider(gina, 0)  # Gina's microphone
+    louder = hugo.evaluate(_OUTPUT_LEVEL)
+    assert 1.35 < louder / level < 1.65
+    level = louder
+
+    settings_slider(hugo, 1)  # Hugo's speaker
+    louder = hugo.evaluate(_OUTPUT_LEVEL)
+    assert 1.35 < louder / level < 1.65
+    level = louder
+
+    hugo.get_by_text('Gina', exact=True).first.click()  # Gina's volume, for Hugo only
     hugo.get_by_text('User volume').wait_for()
-    box = hugo.get_by_role('slider').last.bounding_box()
-    hugo.mouse.click(box['x'] + box['width'] - 1, box['y'] + box['height'] / 2)
-    hugo.get_by_text('150%').wait_for()
-    after = hugo.evaluate(_OUTPUT_LEVEL)
-    assert 1.35 < after / before < 1.65
+    to_max(hugo, hugo.get_by_role('slider').last)
+    louder = hugo.evaluate(_OUTPUT_LEVEL)
+    assert 1.35 < louder / level < 1.65
     b.close()

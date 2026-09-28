@@ -19,6 +19,7 @@ import {
   unlockAudio,
 } from '../lib/webrtc';
 import { playVoiceJoinSound, playVoiceLeaveSound } from '../lib/sounds';
+import { useVolumeStore } from '../store/volumeStore';
 
 export interface VoiceMember {
   username: string;
@@ -41,10 +42,10 @@ export function useVoice(room: string) {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [ping, setPing] = useState<number | null>(null);
-  const [micVolume, setMicVolumeState] = useState(100);
+  const micVolume = useVolumeStore((s) => s.mic);
+  const speakerVolume = useVolumeStore((s) => s.speaker);
   /** Mic volume only works where Web Audio can process the outgoing track (web) */
   const [micGainSupported, setMicGainSupported] = useState(false);
-  const [speakerVolume, setSpeakerVolumeState] = useState(100);
   const [isStreamingAudio, setIsStreamingAudio] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [remoteVideoStreams, setRemoteVideoStreams] = useState<Record<string, { stream: MediaStream; screenname: string }>>({});
@@ -56,14 +57,12 @@ export function useVoice(room: string) {
   const localStreamRef = useRef<any>(null);
   const rawMicRef = useRef<any>(null);
   const micGainRef = useRef<any>(null);
-  const micVolumeRef = useRef(100);
   const peerConnsRef = useRef<Record<string, any>>({});
   const remoteStreamsRef = useRef<Record<string, any>>({});
   const roomRef = useRef(room);
   const userRef = useRef(currentUser);
   const langRef = useRef(lang);
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const speakerVolumeRef = useRef(100);
   const micDeviceIdRef = useRef('');
   const displayStreamRef = useRef<any>(null);
   const streamAudioTrackRef = useRef<any>(null);
@@ -359,6 +358,8 @@ export function useVoice(room: string) {
     }
     // Still inside the click: the only moment browsers let audio playback start
     unlockAudio();
+    // Start undeafened at the saved level (leaving voice while deafened left it at 0)
+    setSpeakerVolumeAll(useVolumeStore.getState().speaker / 100);
     try {
       const audioConstraints: any = micDeviceIdRef.current
         ? { deviceId: { ideal: micDeviceIdRef.current } }
@@ -391,10 +392,18 @@ export function useVoice(room: string) {
           // one (possible on Safari) would send silence, so keep the raw mic then
           if (actx.state === 'running' && actx.createMediaStreamDestination) {
             const gain = actx.createGain();
-            gain.gain.value = micVolumeRef.current / 100;
+            gain.gain.value = useVolumeStore.getState().mic / 100;
+            // A mic boosted past 100% would clip for everyone: limit just under full scale
+            const limiter = actx.createDynamicsCompressor();
+            limiter.threshold.value = -1;
+            limiter.knee.value = 0;
+            limiter.ratio.value = 20;
+            limiter.attack.value = 0.002;
+            limiter.release.value = 0.1;
             const dest = actx.createMediaStreamDestination();
             src.connect(gain);
-            gain.connect(dest);
+            gain.connect(limiter);
+            limiter.connect(dest);
             micGainRef.current = gain;
             localStreamRef.current = dest.stream;
             setMicGainSupported(true);
@@ -469,19 +478,17 @@ export function useVoice(room: string) {
   function toggleDeafen() {
     const next = !isDeafened;
     setIsDeafened(next);
-    setSpeakerVolumeAll(next ? 0 : speakerVolumeRef.current / 100);
+    setSpeakerVolumeAll(next ? 0 : useVolumeStore.getState().speaker / 100);
   }
 
   function setMicVolume(v: number) {
-    micVolumeRef.current = v;
-    setMicVolumeState(v);
-    if (micGainRef.current) micGainRef.current.gain.value = v / 100;
+    useVolumeStore.getState().setMic(v);
+    if (micGainRef.current) micGainRef.current.gain.value = useVolumeStore.getState().mic / 100;
   }
 
   function setSpeakerVolume(v: number) {
-    speakerVolumeRef.current = v;
-    setSpeakerVolumeState(v);
-    if (!isDeafened) setSpeakerVolumeAll(v / 100);
+    useVolumeStore.getState().setSpeaker(v);
+    if (!isDeafened) setSpeakerVolumeAll(useVolumeStore.getState().speaker / 100);
   }
 
   function setMicDeviceId(id: string) {

@@ -6,7 +6,7 @@ import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../store/authStore';
 import { useBlockStore } from '../store/blockStore';
 import { useVolumeStore } from '../store/volumeStore';
-import { MAX_USER_VOLUME, canBoostVolume } from '../lib/webrtc';
+import { MAX_VOLUME } from '../lib/webrtc';
 import { AvatarView } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
@@ -185,7 +185,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                   isRed={voice.isDeafened}
                   onPress={voice.toggleDeafen}
                   icon={<IconSpeaker size={15} color="#fff" />}
-                  sliderValue={voice.speakerVolume}
+                  sliderValue={Platform.OS === 'web' ? voice.speakerVolume : undefined}
                   onSlider={voice.setSpeakerVolume}
                   c={c}
                 />
@@ -305,7 +305,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                   && (roomVoiceMembers ?? voice.voiceMembers).some((m) => m.username === selectedMember.username) && (
                   <UserVolume
                     value={volumes[selectedMember.username] ?? 100}
-                    max={canBoostVolume() ? MAX_USER_VOLUME : 100}
+                    max={MAX_VOLUME}
                     onChange={(v) => setVolume(selectedMember.username, v)}
                     label={t('user-volume')}
                     resetLabel={t('reset')}
@@ -507,7 +507,7 @@ function VoiceIconBtn({ isRed, onPress, icon, sliderValue, onSlider, c }: {
           <Text style={[s.volPopoverPct, { color: c.text }]}>{Math.round(sliderValue)}%</Text>
           <Slider
             style={s.volPopoverSlider}
-            minimumValue={0} maximumValue={100}
+            minimumValue={0} maximumValue={MAX_VOLUME}
             value={sliderValue}
             onValueChange={onSlider}
             minimumTrackTintColor={c.accent}

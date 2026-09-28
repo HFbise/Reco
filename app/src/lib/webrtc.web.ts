@@ -22,8 +22,8 @@ export async function getDisplayMedia(constraints: any): Promise<MediaStream | n
 
 // ── Remote audio ──────────────────────────────────────────────
 //
-// An <audio> element can't play louder than volume 1.0, so per-person volume up
-// to 150% goes through Web Audio instead:
+// An <audio> element can't play louder than volume 1.0, so volumes up to 150%
+// (per person and overall) go through Web Audio instead:
 //
 //   remote stream ─► person's gain (0–1.5) ─► master gain (speaker volume, deafen)
 //        ─► limiter (a boosted loud voice would otherwise clip) ─► one output <audio> (chosen speaker)
@@ -33,8 +33,8 @@ export async function getDisplayMedia(constraints: any): Promise<MediaStream | n
 // <audio>. If Web Audio can't run (no user gesture yet, old browser), streams
 // play through plain <audio> elements and volume tops out at 100%.
 
-/** Per-person volume range, in percent */
-export const MAX_USER_VOLUME = 150;
+/** Top of every volume slider (speaker, microphone, per person), in percent */
+export const MAX_VOLUME = 150;
 
 type Source = { el: HTMLAudioElement; node: MediaStreamAudioSourceNode | null };
 
@@ -154,21 +154,16 @@ export function stopRemoteStream(username: string): void {
   delete gains[username];
 }
 
-/** One person's volume in percent, 0–MAX_USER_VOLUME (above 100 only with Web Audio). */
+/** One person's volume in percent, 0–MAX_VOLUME (above 100 only with Web Audio). */
 export function setUserVolume(username: string, percent: number): void {
-  userVolume[username] = Math.max(0, Math.min(MAX_USER_VOLUME, percent));
+  userVolume[username] = Math.max(0, Math.min(MAX_VOLUME, percent));
   if (gains[username]) gains[username].gain.value = userVolume[username] / 100;
   applyFallbackVolume(username);
 }
 
-/** Whether volumes above 100% take effect right now. */
-export function canBoostVolume(): boolean {
-  return running();
-}
-
-/** Speaker volume for everyone, 0–1 (0 = deafened). */
+/** Speaker volume for everyone, 0–1.5 (0 = deafened). */
 export function setSpeakerVolumeAll(vol: number): void {
-  masterVolume = Math.max(0, Math.min(1, vol));
+  masterVolume = Math.max(0, Math.min(MAX_VOLUME / 100, vol));
   if (master) master.gain.value = masterVolume;
   for (const username of Object.keys(sources)) applyFallbackVolume(username);
 }
