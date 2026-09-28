@@ -272,6 +272,104 @@ def test_swiping_right_in_a_chat_goes_back_to_the_list(server, browser, shots):
     assert not composer.is_visible()
 
 
+def _touch(page, points):
+    """Raw touch events: points is a list of ('start'|'move'|'end', x, y, pause_ms)."""
+    cdp = page.context.new_cdp_session(page)
+    kinds = {'start': 'touchStart', 'move': 'touchMove', 'end': 'touchEnd'}
+    for kind, x, y, pause in points:
+        cdp.send('Input.dispatchTouchEvent', {
+            'type': kinds[kind], 'touchPoints': [] if kind == 'end' else [{'x': x, 'y': y}],
+        })
+        if pause:
+            page.wait_for_timeout(pause)
+
+
+def _phone(browser):
+    context = browser.new_context(
+        viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
+    )
+    return context.new_page()
+
+
+def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, browser, shots):
+    create_user('kim', screenname='Kim')
+    create_user('lee', screenname='Lee')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO messages (room, username, screenname, text) VALUES ('dm:kim:lee', 'lee', 'Lee', 'lunch?')")
+        cur.execute("UPDATE rooms SET members = array_append(members, 'kim') WHERE name = '大厅'")
+        cur.execute("INSERT INTO messages (room, username, screenname, text) VALUES ('大厅', 'lee', 'Lee', 'double tap me')")
+        conn.commit()
+    page = _phone(browser)
+    shots.append(page)
+    log_in(page, 'kim')
+
+    # Slide a DM left: "Close" shows; tapping it closes the DM
+    row = page.get_by_text('lunch?').bounding_box()
+    y = row['y'] + row['height'] / 2
+    _swipe(page, 300, y, 120, y + 4)
+    page.get_by_text('Close', exact=True).click()
+    page.get_by_text('lunch?').wait_for(state='detached')
+
+    # Double tap someone's message: a 👍 lands, and a second double tap doesn't take it back
+    open_room(page, 'Lobby')
+    bubble = page.get_by_text('double tap me').bounding_box()
+    bx, by = bubble['x'] + bubble['width'] / 2, bubble['y'] + bubble['height'] / 2
+    # Quick taps: under load a slow gap could miss the 300 ms double-tap window
+    double_tap = [('start', bx, by, 0), ('end', bx, by, 30), ('start', bx, by, 0), ('end', bx, by, 700)]
+    _touch(page, double_tap)
+    page.get_by_label('👍 1').wait_for()
+    _touch(page, double_tap)
+    page.wait_for_timeout(500)
+    assert page.get_by_label('👍 1').is_visible()
+
+    # Long-press opens the action sheet; dragging it down dismisses it.
+    # (The reaction row pushed the bubble up: measure it again.)
+    bubble = page.get_by_text('double tap me').bounding_box()
+    bx, by = bubble['x'] + bubble['width'] / 2, bubble['y'] + bubble['height'] / 2
+    _touch(page, [('start', bx, by, 700), ('end', bx, by, 600)])
+    sheet_emoji = page.get_by_text('😮', exact=True)
+    sheet_emoji.wait_for()
+    top = sheet_emoji.bounding_box()
+    _swipe(page, 200, top['y'] - 20, 200, top['y'] + 200)
+    sheet_emoji.wait_for(state='detached')
+
+    # The members drawer: push it back to the right to close it
+    page.get_by_label('Members').first.click()
+    join = page.get_by_text('Join Voice', exact=False)
+    join.wait_for()
+    page.wait_for_timeout(400)  # let it finish sliding in: until then the finger lands on the backdrop
+    _swipe(page, 150, 500, 380, 505)
+    join.wait_for(state='detached')
+
+    # The emoji picker is a bottom sheet on a phone: drag its top strip down to close it
+    page.get_by_label('Emoji').first.click()
+    search = page.get_by_placeholder('Search emoji…')
+    search.wait_for()
+    page.wait_for_timeout(400)  # the sheet slides up first
+    box = search.bounding_box()
+    _swipe(page, 195, box['y'] - 26, 195, box['y'] + 260)
+    search.wait_for(state='detached')
+
+
+def test_emoji_picker_search_insert_and_recent(server, browser, shots):
+    create_user('mona')
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'mona')
+    open_room(page, 'Lobby')
+    page.get_by_label('Emoji').first.click()
+    search = page.get_by_placeholder('Search emoji…')
+    search.fill('zzqqxx')
+    page.get_by_text('No emoji found').wait_for()
+    search.fill('')
+    page.get_by_text('😀', exact=True).first.click()
+    assert '😀' in page.get_by_placeholder('Type a message...').input_value()
+    # Used once, it's first in line next time
+    page.get_by_label('Emoji').first.click()
+    page.get_by_text('RECENTLY USED').wait_for()
+
+
 def _speech_level_wav(path):
     """A 300 Hz tone at -20 dBFS: roughly speech level, well under the output limiter."""
     import math

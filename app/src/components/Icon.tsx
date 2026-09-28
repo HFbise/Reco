@@ -303,3 +303,78 @@ export function IconHandshake({ size = 20, color = 'currentColor' }: Props) {
     </Stroke>
   );
 }
+
+// ── Emoji picker categories ─────────────────────────────────
+
+export function IconClock({ size = 20, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Circle cx="12" cy="12" r="10" /><Path d="M12 6v6l4 2" /></Stroke>;
+}
+
+export function IconSmile({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Circle cx="12" cy="12" r="10" /><Path d="M8 14s1.5 2 4 2 4-2 4-2" /><Line x1="9" x2="9.01" y1="9" y2="9" /><Line x1="15" x2="15.01" y1="9" y2="9" />
+    </Stroke>
+  );
+}
+
+export function IconHand({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M18 11V6a2 2 0 0 0-4 0v5" /><Path d="M14 10V4a2 2 0 0 0-4 0v6" /><Path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+      <Path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15" />
+    </Stroke>
+  );
+}
+
+export function IconLeaf({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" />
+      <Path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" />
+    </Stroke>
+  );
+}
+
+export function IconCoffee({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M17 8h1a4 4 0 1 1 0 8h-1" /><Path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+      <Line x1="6" x2="6" y1="2" y2="4" /><Line x1="10" x2="10" y1="2" y2="4" /><Line x1="14" x2="14" y1="2" y2="4" />
+    </Stroke>
+  );
+}
+
+export function IconPlane({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M17.8 19.2 16 11l3.5-3.5C21 6 21.5 4 21 3c-1-.5-3 0-4.5 1.5L13 8 4.8 6.2c-.5-.1-.9.1-1.1.5l-.3.5c-.2.5-.1 1 .3 1.3L9 12l-2 3H4l-1 1 3 2 2 3 1-1v-3l3-2 3.5 5.3c.3.4.8.5 1.3.3l.5-.2c.4-.3.6-.7.5-1.2z" />
+    </Stroke>
+  );
+}
+
+export function IconBall({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Circle cx="12" cy="12" r="10" /><Path d="M4.93 4.93c4.08 2.38 8.07 6.37 10.45 10.45" />
+      <Path d="M19.07 4.93c-4.08 2.38-8.07 6.37-10.45 10.45" /><Path d="M2 12h20" />
+    </Stroke>
+  );
+}
+
+export function IconBulb({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+      <Path d="M9 18h6" /><Path d="M10 22h4" />
+    </Stroke>
+  );
+}
+
+export function IconHeart({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />
+    </Stroke>
+  );
+}

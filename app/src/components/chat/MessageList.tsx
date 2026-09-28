@@ -5,6 +5,9 @@ import { buildFeed, type FeedItem } from '../../lib/feed';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { Spacing } from '../../theme';
+import { isTouchScreen } from '../../lib/pointer';
+
+const QUICK_REACTION = '👍';
 
 interface Props {
   messages: Message[];
@@ -70,6 +73,10 @@ export function MessageList(p: Props) {
         onReactionBtnPress={desktopActions ? (x, y, h) => p.onReactionButton(msg, x, y, h) : undefined}
         onEdit={desktopActions && msg.isOwn ? () => p.onEdit(msg) : undefined}
         onRecall={desktopActions && (msg.isOwn || p.canModerate) ? () => p.onRecall(msg) : undefined}
+        // Touch screens: double tap for a quick 👍. Only adds: a double tap never takes a reaction back
+        onDoubleTap={isTouchScreen && !p.readOnly && !msg.recalled ? () => {
+          if (!msg.reactions?.[QUICK_REACTION]?.includes(p.currentUsername ?? '')) p.onReact(msg.id, QUICK_REACTION);
+        } : undefined}
       />
     );
   }

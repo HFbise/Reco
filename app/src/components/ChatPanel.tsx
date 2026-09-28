@@ -11,7 +11,7 @@ import { useVoice } from '../hooks/useVoice';
 import { useRoomChat, type ChatToast } from '../hooks/useRoomChat';
 import { loadRecentEmojis, recordRecentEmoji, buildReactionQuickList } from '../lib/recentEmojis';
 import type { Message } from './MessageBubble';
-import { EmojiPicker } from './EmojiPicker';
+import { EmojiPicker, POPOVER_H, POPOVER_W } from './emoji/EmojiPicker';
 import { MembersPanel } from './MembersPanel';
 import { ChatHeader } from './chat/ChatHeader';
 import { MessageList } from './chat/MessageList';
@@ -221,15 +221,19 @@ export function ChatPanel({
         />
       </KeyboardAvoidingView>
 
-      {showInputEmoji && (
-        <>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setShowInputEmoji(false)} activeOpacity={0} />
-          <EmojiPicker
-            style={{ position: 'absolute', bottom: 64, left: 8, zIndex: 200 } as any}
-            onSelect={(emoji) => { setInput((prev) => prev + emoji); setShowInputEmoji(false); }}
-          />
-        </>
-      )}
+      {/* Emoji for the message box: recent ones first, and remembered like reactions */}
+      <EmojiPicker
+        visible={showInputEmoji}
+        sheet={!isDesktop}
+        position={{ bottom: 76, left: 12 }}
+        recent={recentEmojis}
+        onClose={() => setShowInputEmoji(false)}
+        onSelect={(emoji) => {
+          setInput((prev) => prev + emoji);
+          recordRecentEmoji(emoji).then(setRecentEmojis);
+          setShowInputEmoji(false);
+        }}
+      />
 
       {reactionBar && (
         <>
@@ -240,9 +244,9 @@ export function ChatPanel({
             c={c}
             onSelect={(emoji) => { react(reactionBar.msgId, emoji); setReactionBar(null); }}
             onMore={() => {
-              let top = barTop - 448;
+              let top = barTop - POPOVER_H - 8;
               if (top < 8) top = barTop + REACTION_BAR_H + 8;
-              const left = Math.min(Math.max(4, barLeft), (container.w || 800) - 352);
+              const left = Math.min(Math.max(4, barLeft), (container.w || 800) - POPOVER_W - 8);
               setReactionPicker({ msgId: reactionBar.msgId, top, left });
               setReactionBar(null);
             }}
@@ -250,18 +254,14 @@ export function ChatPanel({
         </>
       )}
 
-      {reactionPicker && (
-        <>
-          <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={() => setReactionPicker(null)} activeOpacity={0} />
-          <EmojiPicker
-            style={[
-              { position: 'absolute', zIndex: 200 } as any,
-              reactionPicker.top != null ? { top: reactionPicker.top, left: reactionPicker.left ?? 4 } : { bottom: 64, left: 8 },
-            ]}
-            onSelect={(emoji) => { react(reactionPicker.msgId, emoji); setReactionPicker(null); }}
-          />
-        </>
-      )}
+      <EmojiPicker
+        visible={!!reactionPicker}
+        sheet={!isDesktop}
+        position={reactionPicker?.top != null ? { top: reactionPicker.top, left: reactionPicker.left ?? 4 } : { bottom: 76, left: 12 }}
+        recent={recentEmojis}
+        onClose={() => setReactionPicker(null)}
+        onSelect={(emoji) => { if (reactionPicker) react(reactionPicker.msgId, emoji); setReactionPicker(null); }}
+      />
 
       <MessageActionsSheet
         message={isDesktop ? null : target ?? null}

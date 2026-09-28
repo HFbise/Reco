@@ -13,6 +13,8 @@ import { AvatarView } from './AvatarView';
 import { IconSearch, IconPlus, IconLock, IconHash, IconClose } from './Icon';
 import { DisplayText } from './ui/DisplayText';
 import { TextField } from './ui/TextField';
+import { SwipeRow } from './ui/SwipeRow';
+import { isTouchScreen } from '../lib/pointer';
 import { ModalFrame } from './account/ModalFrame';
 import { HEADER_HEIGHT } from './chat/ChatHeader';
 import { Fonts, Radius, Spacing } from '../theme';
@@ -103,6 +105,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   const [roomPwInput, setRoomPwInput] = useState('');
   const [roomPwError, setRoomPwError] = useState('');
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  // The DM row slid open to show "Close" (touch screens), at most one
+  const [swipedKey, setSwipedKey] = useState<string | null>(null);
 
   // Stable refs
   const selectedRoomRef = useRef(selectedRoom);
@@ -483,11 +487,15 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const isActive = entry.key === selectedRoom;
     const showClose = entry.type === 'dm' && hoveredKey === entry.key;
     const preview = entry.type === 'dm' ? previewText(entry.last) : '';
-    return (
+    const item = (
       <Pressable
         key={entry.key}
         style={({ pressed }) => [s.roomItem, isActive && { backgroundColor: c.accentBg }, pressed && { opacity: 0.75 }]}
-        onPress={() => handlePress(entry)}
+        onPress={() => {
+          // With a row slid open, a tap just closes it
+          if (swipedKey) { setSwipedKey(null); return; }
+          handlePress(entry);
+        }}
         onHoverIn={() => setHoveredKey(entry.key)}
         onHoverOut={() => setHoveredKey(k => (k === entry.key ? null : k))}
         onLongPress={entry.type === 'dm' && Platform.OS !== 'web' ? () => confirmCloseDm(entry) : undefined}
@@ -540,6 +548,24 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           </View>
         )}
       </Pressable>
+    );
+    if (entry.type !== 'dm') return item;
+    // Touch screens: slide a DM left to close it (mouse screens have the hover button above)
+    return (
+      <SwipeRow
+        key={entry.key}
+        enabled={isTouchScreen}
+        open={swipedKey === entry.key}
+        onOpenChange={(o) => setSwipedKey(o ? entry.key : null)}
+        actionLabel={t('close')}
+        actionIcon={<IconClose size={16} color={c.onAccent} />}
+        actionColor={c.danger}
+        actionTextColor={c.onAccent}
+        background={c.surface}
+        onAction={() => { setSwipedKey(null); closeDm(entry); }}
+      >
+        {item}
+      </SwipeRow>
     );
   };
 

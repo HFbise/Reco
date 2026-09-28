@@ -39,7 +39,8 @@ export function ChatHeader({
 
   const subtitle = isDm
     ? (dmMeta ? `@${dmMeta.username}` : '')
-    : [memberCount ? t('header-members', { n: memberCount }) : '', code ? t('header-code', { code }) : '']
+    : [memberCount ? t(memberCount === 1 ? 'header-member-one' : 'header-members', { n: memberCount }) : '',
+      code ? t('header-code', { code }) : '']
         .filter(Boolean).join(' · ');
 
   return (

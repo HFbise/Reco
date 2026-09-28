@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
@@ -36,17 +36,63 @@ interface Props {
   onRecall?: () => void;
   // Desktop: called when the react button is pressed, provides button's page position for popup placement
   onReactionBtnPress?: (pageX: number, pageY: number, btnH: number) => void;
+  /** Touch screens: a double tap on the bubble (a quick 👍) */
+  onDoubleTap?: () => void;
 }
+
+const DOUBLE_TAP_MS = 300;
 
 const AVATAR = 36;
 
-export function MessageBubble({ msg, currentUsername, cont, onLongPress, onReactionPress, isDesktop, onEdit, onRecall, onReactionBtnPress }: Props) {
+export function MessageBubble({
+  msg, currentUsername, cont, onLongPress, onReactionPress, isDesktop, onEdit, onRecall, onReactionBtnPress, onDoubleTap,
+}: Props) {
   const c = useColors();
   const t = useT();
   const { isOwn } = msg;
   const hasReactions = msg.reactions && Object.values(msg.reactions).some(u => u.length > 0);
   const [hovered, setHovered] = useState(false);
   const reactBtnRef = useRef<any>(null);
+  const lastTap = useRef(0);
+  const pop = useRef(new Animated.Value(0)).current;
+  const [popped, setPopped] = useState('👍');
+  const lastPop = useRef({ emoji: '', at: 0 });
+  // Reactions already there when the message first rendered (history) don't animate
+  const live = useRef(false);
+  useEffect(() => { live.current = true; }, []);
+
+  /** The emoji pops over the bubble and floats off: your reaction landed */
+  function popEmoji(emoji: string) {
+    const now = Date.now();
+    if (lastPop.current.emoji === emoji && now - lastPop.current.at < 1200) return; // the server echo of a tap we already showed
+    lastPop.current = { emoji, at: now };
+    setPopped(emoji);
+    pop.setValue(0);
+    Animated.timing(pop, { toValue: 1, duration: 650, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+  }
+
+  // Any emoji you add, from any menu, pops the same way
+  const mine = Object.entries(msg.reactions ?? {})
+    .filter(([, users]) => users.includes(currentUsername ?? '')).map(([e]) => e).join('|');
+  const prevMine = useRef(mine);
+  useEffect(() => {
+    const before = new Set(prevMine.current.split('|'));
+    prevMine.current = mine;
+    if (!live.current) return;
+    const added = mine.split('|').find((e) => e && !before.has(e));
+    if (added) popEmoji(added);
+  }, [mine]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleTap() {
+    const now = Date.now();
+    if (onDoubleTap && now - lastTap.current < DOUBLE_TAP_MS) {
+      lastTap.current = 0;
+      onDoubleTap();
+      popEmoji('👍'); // right away, without waiting for the server
+      return;
+    }
+    lastTap.current = now;
+  }
 
   const hoverHandlers = isDesktop && Platform.OS === 'web' ? {
     onMouseEnter: () => setHovered(true),
@@ -114,10 +160,11 @@ export function MessageBubble({ msg, currentUsername, cont, onLongPress, onReact
 
         <View style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}>
           <TouchableOpacity
+            onPress={onDoubleTap ? handleTap : undefined}
             onLongPress={onLongPress}
             delayLongPress={350}
             activeOpacity={0.85}
-            disabled={!onLongPress}
+            disabled={!onLongPress && !onDoubleTap}
             style={s.bubbleTouch}
           >
             <View style={[
@@ -128,6 +175,13 @@ export function MessageBubble({ msg, currentUsername, cont, onLongPress, onReact
             ]}>
               {bubbleContent}
             </View>
+            <Animated.Text pointerEvents="none" style={[s.pop, {
+              opacity: pop.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 1, 1, 0] }),
+              transform: [
+                { scale: pop.interpolate({ inputRange: [0, 0.3, 1], outputRange: [0.4, 1.25, 1] }) },
+                { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
+              ],
+            }]}>{popped}</Animated.Text>
           </TouchableOpacity>
           {hoverActions}
         </View>
@@ -136,30 +190,60 @@ export function MessageBubble({ msg, currentUsername, cont, onLongPress, onReact
           <View style={[s.reactionsRow, isOwn && s.reactionsRowOwn]}>
             {Object.entries(msg.reactions!).map(([emoji, users]) => {
               if (!users.length) return null;
-              const mine = users.includes(currentUsername ?? '');
               return (
-                <TouchableOpacity
+                <ReactionPill
                   key={emoji}
-                  style={[
-                    s.reactionPill,
-                    mine
-                      ? { backgroundColor: c.accentBg, borderColor: c.accent }
-                      : { backgroundColor: c.surface2, borderColor: 'transparent' },
-                  ]}
+                  emoji={emoji}
+                  count={users.length}
+                  mine={users.includes(currentUsername ?? '')}
+                  animate={live.current}
                   onPress={() => onReactionPress?.(emoji)}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`${emoji} ${users.length}`}
-                  accessibilityState={{ selected: mine }}
-                >
-                  <Text style={s.reactionEmoji}>{emoji}</Text>
-                  <Text style={[s.reactionCount, { color: mine ? c.accentText : c.textSub }]}>{users.length}</Text>
-                </TouchableOpacity>
+                />
               );
             })}
           </View>
         )}
       </View>
     </View>
+  );
+}
+
+/** A reaction count under a bubble. New ones pop in, and a count going up gives a little bounce. */
+function ReactionPill({ emoji, count, mine, animate, onPress }: {
+  emoji: string; count: number; mine: boolean; animate: boolean; onPress: () => void;
+}) {
+  const c = useColors();
+  const scale = useRef(new Animated.Value(animate ? 0.4 : 1)).current;
+  const prevCount = useRef(count);
+
+  useEffect(() => {
+    if (animate) Animated.spring(scale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (count > prevCount.current) {
+      scale.setValue(1.3);
+      Animated.spring(scale, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }).start();
+    }
+    prevCount.current = count;
+  }, [count, scale]);
+
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={[
+          s.reactionPill,
+          mine ? { backgroundColor: c.accentBg, borderColor: c.accent } : { backgroundColor: c.surface2, borderColor: 'transparent' },
+        ]}
+        onPress={onPress}
+        activeOpacity={0.7}
+        accessibilityLabel={`${emoji} ${count}`}
+        accessibilityState={{ selected: mine }}
+      >
+        <Text style={s.reactionEmoji}>{emoji}</Text>
+        <Text style={[s.reactionCount, { color: mine ? c.accentText : c.textSub }]}>{count}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -177,7 +261,8 @@ const s = StyleSheet.create({
   name: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
 
   // Without shrink the bubble grows to the text's full length instead of wrapping
-  bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%' },
+  bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%', position: 'relative' },
+  pop: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -18, fontSize: 30, lineHeight: 36 },
   bubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, maxWidth: '100%' },
   // The corner nearest the sender stays tight, like a speech bubble's tail
   tailOther: { borderBottomLeftRadius: 6 },

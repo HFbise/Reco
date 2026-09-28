@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import type { Message } from '../MessageBubble';
 import { useColors } from '../../hooks/useColors';
 import { IconPencil, IconPlus, IconTrash } from '../Icon';
@@ -25,13 +25,29 @@ interface Props {
 export function MessageActionsSheet(p: Props) {
   const c = useColors();
   const t = useT();
+
+  // Drag the sheet down to dismiss it (the handle on top invites it)
+  const y = useRef(new Animated.Value(0)).current;
+  const onClose = useRef(p.onClose);
+  onClose.current = p.onClose;
+  useEffect(() => { if (p.message) y.setValue(0); }, [p.message, y]);
+  const drag = useRef(PanResponder.create({
+    onMoveShouldSetPanResponderCapture: (_e, g) => g.dy > 8 && g.dy > Math.abs(g.dx),
+    onPanResponderMove: (_e, g) => y.setValue(Math.max(0, g.dy)),
+    onPanResponderRelease: (_e, g) => {
+      if (g.dy > 80 || g.vy > 0.5) onClose.current();
+      else Animated.spring(y, { toValue: 0, bounciness: 0, useNativeDriver: true }).start();
+    },
+    onPanResponderTerminate: () => Animated.spring(y, { toValue: 0, bounciness: 0, useNativeDriver: true }).start(),
+  })).current;
+
   return (
     <Modal visible={!!p.message} transparent animationType="fade" onRequestClose={p.onClose}>
       <View style={[s.overlay, { backgroundColor: c.overlay }]}>
         <TouchableOpacity style={{ flex: 1 }} activeOpacity={1}
           // The finger lifting from the long-press would otherwise hit the backdrop and close it at once
           onPress={() => { if (Date.now() - p.openedAt >= 400) p.onClose(); }} />
-        <View style={[s.sheet, { backgroundColor: c.surface }]}>
+        <Animated.View style={[s.sheet, { backgroundColor: c.surface, transform: [{ translateY: y }] }]} {...drag.panHandlers}>
           <View style={[s.handle, { backgroundColor: c.border }]} />
           <View style={s.reactions}>
             {p.quickEmojis.slice(0, 5).map((e) => (
@@ -55,7 +71,7 @@ export function MessageActionsSheet(p: Props) {
               )}
             </View>
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
@@ -72,7 +88,10 @@ function Action({ label, color, icon, onPress }: { label: string; color: string;
 
 const s = StyleSheet.create({
   overlay: { flex: 1, justifyContent: 'flex-end' },
-  sheet: { borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.lg, paddingBottom: 28, gap: 14 },
+  sheet: {
+    borderTopLeftRadius: Radius.xxl, borderTopRightRadius: Radius.xxl, padding: Spacing.lg, paddingBottom: 28, gap: 14,
+    touchAction: 'none',
+  } as any,
   handle: { alignSelf: 'center', width: 40, height: 5, borderRadius: 3, marginBottom: 2 },
   reactions: { flexDirection: 'row', justifyContent: 'space-between' },
   emoji: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
