@@ -203,3 +203,77 @@ def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, sho
     assert page.url.startswith(URL)
     assert page.get_by_placeholder('Rooms').is_visible()
     assert not page.get_by_placeholder('Type a message...').is_visible()
+
+
+def _speech_level_wav(path):
+    """A 300 Hz tone at -20 dBFS: roughly speech level, well under the output limiter."""
+    import math
+    import struct
+    import wave
+
+    rate = 48000
+    with wave.open(str(path), 'wb') as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(rate)
+        w.writeframes(
+            b''.join(struct.pack('<h', int(3277 * math.sin(2 * math.pi * 300 * i / rate))) for i in range(rate * 10))
+        )
+
+
+# Level of what the page actually plays: its unmuted Web Audio output element
+_OUTPUT_LEVEL = """async () => {
+  const out = [...document.querySelectorAll('audio')].find(a => !a.muted && a.srcObject);
+  const ctx = new AudioContext();
+  const an = ctx.createAnalyser();
+  ctx.createMediaStreamSource(out.srcObject).connect(an);
+  const buf = new Float32Array(an.fftSize);
+  let sum = 0, n = 0;
+  const end = performance.now() + 2000;
+  while (performance.now() < end) {
+    an.getFloatTimeDomainData(buf);
+    for (const v of buf) { sum += v * v; n++; }
+    await new Promise(r => setTimeout(r, 20));
+  }
+  ctx.close();
+  return Math.sqrt(sum / n);
+}"""
+
+
+def test_two_browsers_talk_and_one_turns_the_other_up_to_150_percent(server, browser, tmp_path, shots):
+    create_user('gina', screenname='Gina')
+    create_user('hugo', screenname='Hugo')
+    wav = tmp_path / 'voice.wav'
+    _speech_level_wav(wav)
+    # A second browser with a fake microphone that plays the file (same Playwright instance)
+    b = browser.browser_type.launch(
+        args=[
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            f'--use-file-for-fake-audio-capture={wav}',
+        ]
+    )
+    pages = []
+    for user in ('gina', 'hugo'):
+        ctx = b.new_context(locale='en-US', viewport={'width': 1280, 'height': 800}, permissions=['microphone'])
+        page = ctx.new_page()
+        shots.append(page)
+        log_in(page, user)
+        open_room(page, 'Lobby')
+        page.get_by_text('Join Voice', exact=False).first.click()
+        page.wait_for_timeout(1500)
+        pages.append(page)
+    gina, hugo = pages
+    hugo.wait_for_timeout(2500)
+
+    before = hugo.evaluate(_OUTPUT_LEVEL)
+    assert before > 0.001  # Hugo hears Gina
+
+    hugo.get_by_text('Gina', exact=True).first.click()
+    hugo.get_by_text('User volume').wait_for()
+    box = hugo.get_by_role('slider').last.bounding_box()
+    hugo.mouse.click(box['x'] + box['width'] - 1, box['y'] + box['height'] / 2)
+    hugo.get_by_text('150%').wait_for()
+    after = hugo.evaluate(_OUTPUT_LEVEL)
+    assert 1.35 < after / before < 1.65
+    b.close()

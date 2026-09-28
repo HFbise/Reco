@@ -16,6 +16,7 @@ import {
   setSpeakerVolumeAll,
   setSpeakerDevice,
   getDisplayMedia,
+  unlockAudio,
 } from '../lib/webrtc';
 import { playVoiceJoinSound, playVoiceLeaveSound } from '../lib/sounds';
 
@@ -356,6 +357,8 @@ export function useVoice(room: string) {
       showAlert(T('voice-not-supported'), T('voice-not-supported-msg'));
       return;
     }
+    // Still inside the click: the only moment browsers let audio playback start
+    unlockAudio();
     try {
       const audioConstraints: any = micDeviceIdRef.current
         ? { deviceId: { ideal: micDeviceIdRef.current } }

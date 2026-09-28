@@ -5,6 +5,7 @@ import { useAuthStore } from '../src/store/authStore';
 import { useThemeStore } from '../src/store/themeStore';
 import { useLangStore } from '../src/store/langStore';
 import { useSoundStore } from '../src/store/soundStore';
+import { useVolumeStore } from '../src/store/volumeStore';
 import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 
@@ -15,6 +16,7 @@ export default function RootLayout() {
   const { load: loadTheme } = useThemeStore();
   const { load: loadLang } = useLangStore();
   const { load: loadSound } = useSoundStore();
+  const loadVolumes = useVolumeStore((s) => s.load);
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -45,8 +47,9 @@ export default function RootLayout() {
       loadTheme(),
       loadLang(),
       loadSound(),
+      loadVolumes(),
     ]).then(() => setReady(true));
-  }, [loadUser, loadTheme, loadLang, loadSound]);
+  }, [loadUser, loadTheme, loadLang, loadSound, loadVolumes]);
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: scheme === 'dark' ? '#2a2b2f' : '#f0f0f3' }} />;
 

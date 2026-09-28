@@ -23,3 +23,9 @@ export function setSpeakerVolumeAll(_vol: number): void {}
 
 export async function getDisplayMedia(_constraints: any): Promise<MediaStream | null> { return null; }
 export function setSpeakerDevice(_deviceId: string): void {}
+
+// Per-person volume isn't wired up on native yet (the slider is hidden there)
+export const MAX_USER_VOLUME = 150;
+export function unlockAudio(): void {}
+export function setUserVolume(_username: string, _percent: number): void {}
+export function canBoostVolume(): boolean { return false; }

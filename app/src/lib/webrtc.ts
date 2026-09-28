@@ -11,4 +11,8 @@ export {
   setSpeakerVolumeAll,
   setSpeakerDevice,
   getDisplayMedia,
+  MAX_USER_VOLUME,
+  unlockAudio,
+  setUserVolume,
+  canBoostVolume,
 } from './webrtc.native';

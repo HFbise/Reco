@@ -1,10 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet, TextInput } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Modal, StyleSheet, TextInput, Platform } from 'react-native';
 import { showAlert } from '../lib/alert';
 import Slider from '@react-native-community/slider';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../store/authStore';
 import { useBlockStore } from '../store/blockStore';
+import { useVolumeStore } from '../store/volumeStore';
+import { MAX_USER_VOLUME, canBoostVolume } from '../lib/webrtc';
 import { AvatarView } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
@@ -44,6 +46,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
   const [showReportInput, setShowReportInput] = useState(false);
   const [reportReason, setReportReason] = useState('');
   const { blocked, addBlocked, removeBlocked } = useBlockStore();
+  const { volumes, setVolume } = useVolumeStore();
 
   useEffect(() => {
     if (!room) return;
@@ -297,6 +300,18 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
                     {selectedMember.is_online ? t('online') : t('offline')}
                   </Text>
                 </View>
+                {/* How loud they are for me (web: goes above 100% through Web Audio) */}
+                {Platform.OS === 'web' && voice?.inVoice && selectedMember.username !== currentUsername
+                  && (roomVoiceMembers ?? voice.voiceMembers).some((m) => m.username === selectedMember.username) && (
+                  <UserVolume
+                    value={volumes[selectedMember.username] ?? 100}
+                    max={canBoostVolume() ? MAX_USER_VOLUME : 100}
+                    onChange={(v) => setVolume(selectedMember.username, v)}
+                    label={t('user-volume')}
+                    resetLabel={t('reset')}
+                    c={c}
+                  />
+                )}
                 {selectedMember.username !== currentUsername && (
                   <View style={{ width: '100%', gap: 8 }}>
                     {onOpenDm && (
@@ -421,6 +436,39 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
   );
 }
 
+function UserVolume({ value, max, onChange, label, resetLabel, c }: {
+  value: number;
+  max: number;
+  onChange: (v: number) => void;
+  label: string;
+  resetLabel: string;
+  c: ReturnType<typeof useColors>;
+}) {
+  return (
+    <View style={s.userVol}>
+      <View style={s.userVolHead}>
+        <Text style={[s.userVolLabel, { color: c.textMuted }]}>{label}</Text>
+        <Text style={[s.userVolPct, { color: value > 100 ? c.accent : c.text }]}>{Math.round(Math.min(value, max))}%</Text>
+        {value !== 100 && (
+          <TouchableOpacity onPress={() => onChange(100)} activeOpacity={0.7} accessibilityLabel={resetLabel}>
+            <Text style={[s.userVolReset, { color: c.accent }]}>{resetLabel}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+      <Slider
+        style={s.userVolSlider}
+        minimumValue={0} maximumValue={max} step={5}
+        value={Math.min(value, max)}
+        onValueChange={onChange}
+        minimumTrackTintColor={c.accent}
+        maximumTrackTintColor={c.border}
+        thumbTintColor={c.accent}
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
+
 function VoiceIconBtn({ isRed, onPress, icon, sliderValue, onSlider, c }: {
   isRed: boolean;
   onPress: () => void;
@@ -498,6 +546,12 @@ function MemberRow({ member, c, offline = false, onPress }: { member: Member; c:
 }
 
 const s = StyleSheet.create({
+  userVol: { width: '100%', marginTop: 4, marginBottom: 8 },
+  userVolHead: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  userVolLabel: { flex: 1, fontSize: 12, fontWeight: '600' as any },
+  userVolPct: { fontSize: 12, fontWeight: '700' as any, minWidth: 38, textAlign: 'right' },
+  userVolReset: { fontSize: 12, fontWeight: '600' as any },
+  userVolSlider: { width: '100%', height: 32 },
   container: { width: 230, borderLeftWidth: 1, flexDirection: 'column' },
 
   voiceSection: { borderBottomWidth: 1, padding: Spacing.sm, gap: 5 },
