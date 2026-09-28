@@ -135,7 +135,7 @@ export function MemberCard({ member, room, currentUsername, myLevel, inVoice, sh
                 <ExprSvg expression="Laugh" width={36} height={39} color={avatarColor} />
               </View>
               <View style={[s.deco, { right: 118, top: 52, opacity: 0.16, transform: [{ rotate: '-10deg' }] }]} pointerEvents="none">
-                <ExprSvg expression="Smile" width={26} height={28} color={avatarColor} />
+                <ExprSvg expression="BigLaugh" width={26} height={28} color={avatarColor} />
               </View>
               <IconButton label={t('close')} onPress={onClose} variant="raised" round size={40} style={s.close}
                 icon={(color) => <IconClose size={16} color={color} />} />

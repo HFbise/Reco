@@ -37,7 +37,7 @@ export function BottomTabBar() {
   return (
     <View style={[s.bar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
       {tab('rooms', t('nav-chats'), '/(main)', <IconChat size={22} color={color('rooms')} />)}
-      {!isGuest && tab('match', t('nav-match'), '/(main)/match', <IconShuffle size={21} color={color('match')} />)}
+      {tab('match', t('nav-match'), '/(main)/match', <IconShuffle size={21} color={color('match')} />)}
       {tab('me', t('nav-me'), '/(main)/me', currentUser && !isGuest ? (
         <AvatarView expression={currentUser.avatar_expression} color={currentUser.avatar_color}
           username={currentUser.username} screenname={currentUser.screenname} size={24} />

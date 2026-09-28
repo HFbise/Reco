@@ -5,23 +5,29 @@ One TypeScript codebase serves the web app and the iOS/Android apps; a Flask +
 Socket.IO backend handles realtime traffic, and Postgres stores the data.
 
 **Live demo:** https://chat-5wg8.onrender.com. Click **"Take a look first"** to open a
-read-only demo room without an account. The free instance sleeps when idle, so the
-first load can take up to a minute.
+read-only demo room without an account; the **Match** tab shows the matching screen
+too (starting a match needs an account, since it pairs you with real people). The
+free instance sleeps when idle, so the first load can take up to a minute.
 
-![Desktop: group room](docs/screenshots/desktop-room.png)
+![Desktop: a group room with a voice channel going](docs/screenshots/desktop-room.png)
 
-| Random match (desktop) | Random match (mobile) | Dark mode |
+| Random match (desktop) | Random match (phone) | Chats with DM previews (phone) |
 |---|---|---|
-| ![](docs/screenshots/match-chat.png) | ![](docs/screenshots/mobile-match.png) | ![](docs/screenshots/desktop-room-dark.png) |
+| ![](docs/screenshots/match-chat.png) | ![](docs/screenshots/mobile-match.png) | ![](docs/screenshots/mobile-list.png) |
 
-| Match setup | Guest demo | Chinese UI |
+| Match setup | Member card | Dark mode |
 |---|---|---|
-| ![](docs/screenshots/match-start.png) | ![](docs/screenshots/guest-demo.png) | ![](docs/screenshots/desktop-zh.png) |
+| ![](docs/screenshots/match-start.png) | ![](docs/screenshots/member-card.png) | ![](docs/screenshots/desktop-room-dark.png) |
+
+| Sign in | Guest demo | Chinese UI |
+|---|---|---|
+| ![](docs/screenshots/login.png) | ![](docs/screenshots/guest-demo.png) | ![](docs/screenshots/desktop-zh.png) |
 
 ## Features
 
 - **Rooms and DMs:** public or password-protected rooms, invites, unread badges,
-  edits, recalls, emoji reactions and online presence.
+  edits, recalls, emoji reactions and online presence. The DM list shows each
+  conversation's last message and an online dot, kept live over the socket.
 - **Message history:** the most recent page loads on join, and older messages load on
   demand. Clients that reconnect after missing more than a page get a clean reset
   instead of a gap.
@@ -43,8 +49,9 @@ first load can take up to a minute.
     so neither side learns the other's IP address.
   - Report ends the chat, blocks the person and files the transcript for moderators.
     Transcripts are deleted after 7 days.
-- **Guest demo:** visitors can browse a seeded, read-only demo room. Every
-  write-type event is rejected on the server, not just hidden in the UI.
+- **Guest demo:** visitors can browse a seeded, read-only demo room and preview the
+  matching screen. Every write-type event (matching included) is rejected on the
+  server, not just hidden in the UI.
 - **Moderation panel** (`/admin`): users (reset password, rename, delete), rooms
   (kick, text and voice restrictions, recall), reports with match transcripts, and
   feedback.

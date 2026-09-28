@@ -178,3 +178,19 @@ def test_admin_can_read_a_reported_match_transcript(pair):
     assert f'/admin/matches/{match_id}' in reports
     transcript = web.get(f'/admin/matches/{match_id}').get_data(as_text=True)
     assert 'something awful' in transcript and 'bob' in transcript
+
+
+def test_demo_guests_can_look_at_matching_but_never_join_the_queue():
+    from conftest import anon_client
+
+    create_user('alice')
+    alice = connect_as('alice')
+    guest = anon_client()
+    guest.emit('guest_login', {})
+    guest.get_received()
+    guest.emit('match_enqueue', {'mode': 'text', 'tags': []})
+    assert events(guest, 'guest_read_only')
+    enqueue(alice)
+    # Alice waits alone: the guest never entered the queue
+    assert events(alice, 'match_found') == []
+    assert events(guest, 'match_found') == []

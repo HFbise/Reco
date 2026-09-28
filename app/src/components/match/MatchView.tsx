@@ -10,13 +10,15 @@ import { FaceRow } from '../ui/FaceRow';
 import { isSendKey } from '../../lib/keys';
 import {
   IconChat, IconCheck, IconClose, IconFlag, IconHandshake, IconLock, IconMic, IconMicOff, IconMore, IconNext, IconSend,
-  IconShuffle, IconStop,
+  IconShuffle, IconStop, IconUserPlus,
 } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { useMatch, type MatchMode, type Revealed } from '../../hooks/useMatch';
 import { useMatchVoice } from '../../hooks/useMatchVoice';
 import { showAlert } from '../../lib/alert';
+import { useAuthStore } from '../../store/authStore';
+import { leaveDemoToSignUp } from '../GuestBanner';
 import { MAX_TAGS, RELAX_AFTER_MS, TAG_CATEGORIES, knownTags, toggleTag } from '../../lib/matchTags';
 import type { I18nKey } from '../../lib/i18n';
 import { Fonts, Radius, Spacing } from '../../theme';
@@ -159,6 +161,7 @@ function MatchStart({ onStart, lastMode, lastTags }: { onStart: (m: MatchMode, t
   const [category, setCategory] = useState(TAG_CATEGORIES[0].id);
   const shown = TAG_CATEGORIES.find((x) => x.id === category) ?? TAG_CATEGORIES[0];
   const full = tags.length >= MAX_TAGS;
+  const isGuest = useAuthStore((st) => !!st.currentUser?.guest);
 
   const modeBtn = (value: MatchMode, label: string) => {
     const on = mode === value;
@@ -251,11 +254,18 @@ function MatchStart({ onStart, lastMode, lastTags }: { onStart: (m: MatchMode, t
         </View>
 
         <View style={s.startActions}>
-          <Button size="lg" label={t('match-start')} onPress={() => onStart(mode, tags)}
-            icon={(color) => <IconShuffle size={20} color={color} />} />
+          {isGuest ? (
+            // Demo visitors can look around, but matching means talking to real people: account first.
+            // (The server refuses a guest's match requests anyway.)
+            <Button size="lg" label={t('match-signup')} onPress={leaveDemoToSignUp}
+              icon={(color) => <IconUserPlus size={20} color={color} />} />
+          ) : (
+            <Button size="lg" label={t('match-start')} onPress={() => onStart(mode, tags)}
+              icon={(color) => <IconShuffle size={20} color={color} />} />
+          )}
           <View style={s.note}>
             <IconLock size={13} color={c.textSub} />
-            <Text style={[s.noteText, { color: c.textSub }]}>{t('match-private-note')}</Text>
+            <Text style={[s.noteText, { color: c.textSub }]}>{isGuest ? t('match-guest-note') : t('match-private-note')}</Text>
           </View>
         </View>
       </View>
@@ -292,7 +302,7 @@ function Searching({ tags, since, onCancel }: { tags: string[]; since: number; o
     <View style={[s.fill, s.center, { backgroundColor: c.bg }]}>
       <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }}>
         <FaceRow gap={0} faces={[
-          { expression: 'Smile', color: '#5865F2', size: 52, tilt: -12 },
+          { expression: 'Angi', color: '#5865F2', size: 52, tilt: -12 },
           { expression: 'Laugh', color: '#1A70D4', size: 68, overlap: -12, ring: c.bg },
           { expression: 'Em', color: '#EB459E', size: 52, tilt: 12, overlap: -12 },
         ]} />
@@ -463,7 +473,7 @@ const s = StyleSheet.create({
   pickedText: { fontSize: 13, fontWeight: String(Fonts.bold) as any },
   startActions: { gap: 10, marginTop: 4 },
   note: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
-  noteText: { fontSize: 13 },
+  noteText: { fontSize: 13, lineHeight: 18, flexShrink: 1, textAlign: 'center' },
 
   // searching
   searchText: { fontSize: 22, textAlign: 'center', maxWidth: 460, marginTop: 8 },

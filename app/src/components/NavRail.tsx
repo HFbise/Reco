@@ -51,7 +51,8 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
       <View style={s.logo}><BrandMark size={34} /></View>
       <View style={s.items}>
         {item('chats', t('nav-chats'), <IconChat size={22} color={active === 'chats' ? c.accent : c.textMuted} />)}
-        {showMatch && !isGuest && item('match', t('nav-match'), <IconShuffle size={21} color={active === 'match' ? c.accent : c.textMuted} />)}
+        {/* Guests see matching too, as a preview: starting one asks them to sign up */}
+        {showMatch && item('match', t('nav-match'), <IconShuffle size={21} color={active === 'match' ? c.accent : c.textMuted} />)}
         {!isGuest && item('me', t('nav-me'), (
           <AvatarView expression={currentUser?.avatar_expression} color={currentUser?.avatar_color}
             username={currentUser?.username} screenname={currentUser?.screenname} size={26} />

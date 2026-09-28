@@ -181,13 +181,17 @@ def test_random_match_text_chat_then_both_keep_in_touch(server, browser, shots):
     erin.get_by_text("You're now connected with Dave", exact=False).wait_for(timeout=10000)
 
 
-def test_guest_cannot_see_random_match(server, browser, demo_room, shots):
+def test_guest_sees_matching_as_a_preview_that_asks_to_sign_up(server, browser, demo_room, shots):
     page = new_page(browser)
     shots.append(page)
     page.goto(URL)
     page.get_by_text('Take a look first').click()
     page.get_by_text('Reco Demo', exact=True).first.wait_for()
-    assert page.get_by_role('tab', name='Match').count() == 0
+    page.get_by_role('tab', name='Match').click()
+    page.get_by_role('checkbox', name='Just chatting').click()  # the page can be explored
+    assert page.get_by_text('Start matching', exact=True).count() == 0
+    page.get_by_text('Sign up to start matching', exact=True).click()
+    page.get_by_placeholder('Display name').wait_for()  # the demo ends on the sign-up form
 
 
 def test_long_messages_wrap_on_a_phone(server, browser, demo_room, shots):

@@ -4,8 +4,11 @@ import { EXPRESSIONS, ExprSvg } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { Colors } from '../theme';
 
+// Smile is left out of the logo until its artwork is redrawn (avatars still offer it)
+const LOGO_FACES = EXPRESSIONS.filter((e) => e !== 'Smile');
+
 const pick = (except?: string) => {
-  const choices = EXPRESSIONS.filter((e) => e !== except);
+  const choices = LOGO_FACES.filter((e) => e !== except);
   return choices[Math.floor(Math.random() * choices.length)];
 };
 

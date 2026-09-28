@@ -33,7 +33,7 @@ export function ProfileView() {
               <ExprSvg expression="Laugh" width={36} height={39} color={avatarColor} />
             </View>
             <View style={[s.deco, { right: 96, top: 50, opacity: 0.16, transform: [{ rotate: '-10deg' }] }]} pointerEvents="none">
-              <ExprSvg expression="Smile" width={26} height={28} color={avatarColor} />
+              <ExprSvg expression="BigLaugh" width={26} height={28} color={avatarColor} />
             </View>
           </View>
           <View style={s.body}>

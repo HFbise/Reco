@@ -101,7 +101,7 @@ export function DesktopShell() {
           {section === 'chats' && !room && (
             <Welcome
               onJoin={isGuest ? undefined : () => roomsPanel.current?.openDropdown()}
-              onMatch={isGuest ? undefined : () => setSection('match')}
+              onMatch={() => setSection('match')}
             />
           )}
 
