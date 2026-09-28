@@ -14,7 +14,9 @@ import { ProfileView } from './account/ProfileView';
 import { MatchView } from './match/MatchView';
 import { SettingsModal, useSavedAudioDevices } from './SettingsModal';
 import type { DmMeta } from './chat/types';
-import { Fonts, Spacing } from '../theme';
+import { HEADER_HEIGHT } from './chat/ChatHeader';
+import { DisplayText } from './ui/DisplayText';
+import { Spacing } from '../theme';
 
 const dmIdWith = (me: string, other: string) => `dm:${[me, other].sort().join(':')}`;
 
@@ -77,7 +79,7 @@ export function DesktopShell() {
           {section === 'me' && (
             <View style={[s.page, { backgroundColor: c.bg }]}>
               <View style={[s.pageHeader, { borderBottomColor: c.border }]}>
-                <Text style={[s.pageTitle, { color: c.text }]}>{t('my-profile')}</Text>
+                <DisplayText style={[s.pageTitle, { color: c.text }]}>{t('my-profile')}</DisplayText>
               </View>
               <ProfileView />
             </View>
@@ -134,11 +136,11 @@ export function DesktopShell() {
 const s = StyleSheet.create({
   root: { flex: 1 },
   shell: { flex: 1, flexDirection: 'row' },
-  sidebar: { width: 280, borderRightWidth: StyleSheet.hairlineWidth },
+  sidebar: { width: 300, borderRightWidth: StyleSheet.hairlineWidth },
   main: { flex: 1 },
   welcome: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   welcomeHint: { fontSize: 15 },
   page: { flex: 1 },
-  pageHeader: { height: 50, justifyContent: 'center', paddingHorizontal: Spacing.lg, borderBottomWidth: 1 },
-  pageTitle: { fontSize: 15, fontWeight: String(Fonts.semibold) as any },
+  pageHeader: { height: HEADER_HEIGHT, justifyContent: 'center', paddingHorizontal: Spacing.xl, borderBottomWidth: 1 },
+  pageTitle: { fontSize: 20 },
 });

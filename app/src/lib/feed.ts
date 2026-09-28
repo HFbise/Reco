@@ -2,7 +2,8 @@ import type { Message } from '../components/MessageBubble';
 import { formatMsgTime, sameDay } from './time';
 
 export type FeedItem =
-  | (Message & { _type?: 'msg' })
+  // _cont: same sender as the message right before it, so the name and avatar can be skipped
+  | (Message & { _type?: 'msg'; _cont?: boolean })
   | { _type: 'sep'; _id: string; time: string };
 
 /** A time separator starts a new group after this much silence (or on a new day). */
@@ -22,7 +23,9 @@ export function buildFeed(messages: Message[], monthDay: (d: Date) => string, no
       items.push({ _type: 'sep', _id: `sep_${msg.id}`, time: formatMsgTime(msg.time, monthDay, now) });
     }
     if (valid) previous = at;
-    items.push({ ...msg, _type: 'msg' });
+    const last = items[items.length - 1];
+    const cont = !!last && last._type === 'msg' && !last.system && !msg.system && last.username === msg.username;
+    items.push({ ...msg, _type: 'msg', _cont: cont });
   }
   return items;
 }

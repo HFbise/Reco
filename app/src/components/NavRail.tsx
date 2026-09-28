@@ -70,16 +70,16 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
   );
 }
 
-export const RAIL_W = 72;
+export const RAIL_W = 76;
 
 const s = StyleSheet.create({
-  rail: { width: RAIL_W, borderRightWidth: StyleSheet.hairlineWidth, alignItems: 'center', paddingVertical: 14, gap: 6 },
-  logo: { marginBottom: 12 },
-  items: { gap: 8, alignItems: 'center' },
-  item: { alignItems: 'center', width: RAIL_W - 8, gap: 3 },
-  itemIcon: { width: 44, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
-  itemLabel: { fontSize: 11, fontWeight: String(Fonts.semibold) as any },
-  iconBtn: { width: 40, height: 40, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  rail: { width: RAIL_W, borderRightWidth: StyleSheet.hairlineWidth, alignItems: 'center', paddingVertical: 16, gap: 6 },
+  logo: { height: 44, justifyContent: 'center', marginBottom: 10 },
+  items: { gap: 10, alignItems: 'center' },
+  item: { alignItems: 'center', width: RAIL_W - 8, gap: 4 },
+  itemIcon: { width: 48, height: 40, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  itemLabel: { fontSize: 11, fontWeight: String(Fonts.heavy) as any },
+  iconBtn: { width: 44, height: 44, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
   signUp: { borderRadius: Radius.md, paddingHorizontal: 6, paddingVertical: 8, marginBottom: 6, width: RAIL_W - 14 },
   signUpText: { color: '#fff', fontSize: 11, fontWeight: String(Fonts.bold) as any, textAlign: 'center' },
 });

@@ -201,7 +201,7 @@ def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, sho
     page.go_back()
     page.wait_for_timeout(800)  # slide-out animation
     assert page.url.startswith(URL)
-    assert page.get_by_placeholder('Rooms').is_visible()
+    assert page.get_by_placeholder('Search chats').is_visible()
     assert not page.get_by_placeholder('Type a message...').is_visible()
 
 

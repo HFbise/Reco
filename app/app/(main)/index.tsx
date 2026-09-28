@@ -3,14 +3,13 @@ import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing,
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
-import { useT } from '../../src/hooks/useT';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMobileVoice } from '../../src/context/VoiceContext';
 import { RoomsPanel, type RoomsPanelHandle, type DmEntry } from '../../src/components/RoomsPanel';
 import { ChatPanel, type DmMeta } from '../../src/components/ChatPanel';
 import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { AvatarView } from '../../src/components/AvatarView';
-import { IconMic, IconPlus, IconChevronLeft, IconGroup, IconInfo } from '../../src/components/Icon';
+import { IconMic, IconPlus } from '../../src/components/Icon';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
 import { BrandMark } from '../../src/components/BrandMark';
 import { DisplayText } from '../../src/components/ui/DisplayText';
@@ -22,7 +21,6 @@ const EASE = Easing.bezier(0.25, 0.1, 0.25, 1.0);
 export default function RoomsScreen() {
   const { width: SW } = useWindowDimensions();
   const c = useColors();
-  const t = useT();
   const { currentUser } = useAuthStore();
   const { voice, setRoom, voiceRoom, leaveAndSwitchRoom } = useMobileVoice();
   const { inVoice, voiceMembers } = voice;
@@ -123,7 +121,6 @@ export default function RoomsScreen() {
     });
   }
 
-  const isActiveDm = activeRoom?.startsWith('dm:') ?? false;
   // Shared voice pill used in both topbar states
   const voicePill = inVoice && voiceRoom ? (
     <TouchableOpacity
@@ -148,38 +145,9 @@ export default function RoomsScreen() {
     </TouchableOpacity>
   ) : null;
 
-  // Web chat view: back + room name + voice pill + info/members buttons
-  // Web rooms / native: logo + spacer + voice pill + plus
-  const topbar = IS_WEB && activeRoom ? (
-    <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-      <TouchableOpacity style={s.plusBtn} onPress={closeRoom} activeOpacity={0.7}>
-        <IconChevronLeft size={20} color={c.accent} />
-      </TouchableOpacity>
-      {isActiveDm ? (
-        <View style={s.chatTitle}>
-          {activeDmMeta && (
-            <AvatarView username={activeDmMeta.username} screenname={activeDmMeta.screenname}
-              color={activeDmMeta.avatarColor} expression={activeDmMeta.avatarExpression} size={22} />
-          )}
-          <Text style={[s.chatTitleText, { color: c.text }]} numberOfLines={1}>
-            {activeDmMeta?.screenname ?? activeRoom}
-          </Text>
-        </View>
-      ) : (
-        <TouchableOpacity style={s.chatTitle} onPress={() => setInfoKey(k => k + 1)} activeOpacity={0.7}>
-          <IconGroup size={16} color={c.text} />
-          <Text style={[s.chatTitleText, { color: c.text }]} numberOfLines={1}>{t.room(activeRoom)}</Text>
-          <IconInfo size={13} color={c.textMuted} />
-        </TouchableOpacity>
-      )}
-      {voicePill}
-      {!isActiveDm && (
-        <TouchableOpacity style={s.plusBtn} onPress={() => setMembersKey(k => k + 1)} activeOpacity={0.7}>
-          <IconGroup size={20} color={c.textMuted} />
-        </TouchableOpacity>
-      )}
-    </View>
-  ) : (
+  // The chat list's top bar: logo, voice pill, "+". An open chat has its own
+  // header (ChatPanel's), which slides in with it.
+  const topbar = (
     <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
       <View style={s.logo}>
         <BrandMark size={24} />
@@ -200,11 +168,11 @@ export default function RoomsScreen() {
     return (
       <SafeAreaView style={[s.root, { backgroundColor: c.surface }]} edges={['top', 'left', 'right']}>
         <ConnectionBanner />
-        {topbar}
         <View style={s.slideViewport}>
           <Animated.View style={[s.slideTrack, { width: SW * 2, transform: [{ translateX: slideAnim }] }]}>
             {/* Left panel: Rooms */}
             <View style={[s.slidePanel, { width: SW, backgroundColor: c.surface }]}>
+              {topbar}
               <RoomsPanel
                 ref={roomsPanelRef}
                 onRoomSelect={openRoom}
@@ -221,7 +189,7 @@ export default function RoomsScreen() {
                   name={activeRoom}
                   password={activeRoomPw}
                   dmMeta={activeDmMeta}
-                  hideHeader
+                  showBackBtn
                   hideVoiceBar
                   externalVoice={activeDmMeta ? null : voice}
                   onClose={closeRoom}
@@ -266,8 +234,6 @@ const s = StyleSheet.create({
   pillCount: { fontSize: 12, fontWeight: '600' as any },
   pillAvatarRing: { borderRadius: 11, borderWidth: 1.5, borderColor: 'transparent' },
   plusBtn: { padding: 6 },
-  chatTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 2 },
-  chatTitleText: { flexShrink: 1, fontSize: 15, fontWeight: '600' as any },
   // Web side-by-side layout
   slideViewport: { flex: 1, overflow: 'hidden' as any },
   slideTrack: { flexDirection: 'row', flex: 1 },

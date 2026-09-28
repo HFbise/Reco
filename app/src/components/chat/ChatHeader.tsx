@@ -1,15 +1,23 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AvatarView } from '../AvatarView';
-import { IconChevronLeft, IconGroup, IconInfo, IconMic } from '../Icon';
+import { IconChevronLeft, IconInfo, IconMic, IconUsers } from '../Icon';
+import { IconButton } from '../ui/Button';
+import { DisplayText } from '../ui/DisplayText';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import type { VoiceMember } from '../../hooks/useVoice';
 import type { DmMeta } from './types';
 import { Fonts, Spacing } from '../../theme';
 
+/** Header height, shared with the chat list's header so the two line up */
+export const HEADER_HEIGHT = 64;
+
 interface Props {
   name: string;
   dmMeta?: DmMeta | null;
+  /** Rooms: member count and room code, under the name */
+  memberCount?: number;
+  code?: string;
   showBackBtn: boolean;
   onBack: () => void;
   onOpenInfo: () => void;
@@ -22,60 +30,60 @@ interface Props {
 }
 
 export function ChatHeader({
-  name, dmMeta, showBackBtn, onBack, onOpenInfo, onOpenMembers, voicePillMembers, onVoicePillPress, showMembersButton,
+  name, dmMeta, memberCount, code, showBackBtn, onBack, onOpenInfo, onOpenMembers, voicePillMembers, onVoicePillPress, showMembersButton,
 }: Props) {
   const c = useColors();
   const t = useT();
   const isDm = name.startsWith('dm:');
   const speaker = voicePillMembers.find((m) => m.isSpeaking) ?? voicePillMembers[0];
 
+  const subtitle = isDm
+    ? (dmMeta ? `@${dmMeta.username}` : '')
+    : [memberCount ? t('header-members', { n: memberCount }) : '', code ? t('header-code', { code }) : '']
+        .filter(Boolean).join(' · ');
+
   return (
     <View style={[s.header, { backgroundColor: c.bg, borderBottomColor: c.border }]}>
       {showBackBtn && (
-        <TouchableOpacity onPress={onBack} style={s.iconBtn}>
-          <IconChevronLeft size={20} color={c.accent} />
-        </TouchableOpacity>
+        <IconButton label={t('back')} onPress={onBack} icon={(color) => <IconChevronLeft size={22} color={color} />} />
       )}
-      {isDm ? (
-        <View style={s.title} pointerEvents="box-none">
-          {dmMeta && (
-            <AvatarView expression={dmMeta.avatarExpression} color={dmMeta.avatarColor}
-              username={dmMeta.username} screenname={dmMeta.screenname} size={24} />
-          )}
-          <Text style={[s.titleText, { color: c.text }]} numberOfLines={1}>{dmMeta?.screenname ?? name}</Text>
-        </View>
-      ) : (
-        <View style={s.title} pointerEvents="box-none">
-          <IconGroup size={18} color={c.text} />
-          <Text style={[s.titleText, { color: c.text }]} numberOfLines={1}>{t.room(name)}</Text>
-          <TouchableOpacity onPress={onOpenInfo} activeOpacity={0.6} style={s.infoBtn}>
-            <IconInfo size={14} color={c.textMuted} />
-          </TouchableOpacity>
-        </View>
+      {isDm && dmMeta && (
+        <AvatarView expression={dmMeta.avatarExpression} color={dmMeta.avatarColor}
+          username={dmMeta.username} screenname={dmMeta.screenname} size={36} />
       )}
+      <View style={s.titleBlock}>
+        <DisplayText style={[s.title, { color: c.text }]} numberOfLines={1}>
+          {isDm ? (dmMeta?.screenname ?? name) : t.room(name)}
+        </DisplayText>
+        {!!subtitle && <Text style={[s.subtitle, { color: c.textSub }]} numberOfLines={1}>{subtitle}</Text>}
+      </View>
       {!isDm && voicePillMembers.length > 0 && (
-        <TouchableOpacity onPress={onVoicePillPress} activeOpacity={0.7}
-          style={[s.voicePill, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)' }]}>
-          <IconMic size={13} color={c.accent} />
-          {speaker && <AvatarView username={speaker.username} screenname={speaker.screenname} color={speaker.avatar_color} size={18} />}
-          <Text style={[s.voicePillCount, { color: c.accent }]}>({voicePillMembers.length})</Text>
+        <TouchableOpacity onPress={onVoicePillPress} activeOpacity={0.7} accessibilityLabel={t('voice-chat')}
+          style={[s.voicePill, { backgroundColor: c.accentBg }]}>
+          <IconMic size={14} color={c.accent} />
+          {speaker && <AvatarView username={speaker.username} screenname={speaker.screenname} color={speaker.avatar_color}
+            expression={speaker.avatar_expression} size={20} />}
+          <Text style={[s.voicePillCount, { color: c.accentText }]}>{voicePillMembers.length}</Text>
         </TouchableOpacity>
+      )}
+      {!isDm && (
+        <IconButton label={t('room-info')} onPress={onOpenInfo} icon={(color) => <IconInfo size={20} color={color} />} />
       )}
       {showMembersButton && !isDm && (
-        <TouchableOpacity onPress={onOpenMembers} style={s.iconBtn} activeOpacity={0.7}>
-          <IconGroup size={20} color={c.textMuted} />
-        </TouchableOpacity>
+        <IconButton label={t('members')} variant="tinted" onPress={onOpenMembers} icon={(color) => <IconUsers size={20} color={color} />} />
       )}
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  header: { height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.lg, borderBottomWidth: 1 },
-  iconBtn: { padding: 6, marginRight: Spacing.xs, borderRadius: 6 },
-  title: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  titleText: { flexShrink: 1, fontSize: 15, fontWeight: String(Fonts.semibold) as any },
-  infoBtn: { padding: 4, opacity: 0.5 },
-  voicePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 6 },
-  voicePillCount: { fontSize: 12, fontWeight: '600' },
+  header: {
+    height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingLeft: Spacing.lg, paddingRight: Spacing.md, borderBottomWidth: 1,
+  },
+  titleBlock: { flex: 1, minWidth: 0, gap: 1 },
+  title: { fontSize: 20 },
+  subtitle: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
+  voicePill: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 32, paddingHorizontal: 10, borderRadius: 16 },
+  voicePillCount: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
 });

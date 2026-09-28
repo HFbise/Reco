@@ -35,15 +35,13 @@ export function MessageList(p: Props) {
     if (item._type === 'sep') {
       return (
         <View style={s.timeSep}>
-          <View style={[s.timeSepLine, { backgroundColor: c.border }]} />
-          <Text style={[s.timeSepText, { color: c.textMuted, backgroundColor: c.bg }]}>{item.time}</Text>
-          <View style={[s.timeSepLine, { backgroundColor: c.border }]} />
+          <Text style={[s.timeSepText, { color: c.textSub, backgroundColor: c.surface2 }]}>{item.time}</Text>
         </View>
       );
     }
-    const msg = item as Message;
+    const msg = item as Message & { _cont?: boolean };
     if (msg.system) {
-      return <Text style={[s.sysMsg, { color: c.textMuted }]}>{t.system(msg)}</Text>;
+      return <Text style={[s.sysMsg, { color: c.textSub }]}>{t.system(msg)}</Text>;
     }
     const invite = msg.meta?.invite;
     if (invite) {
@@ -64,6 +62,7 @@ export function MessageList(p: Props) {
     return (
       <MessageBubble
         msg={msg}
+        cont={msg._cont}
         currentUsername={p.currentUsername}
         isDesktop={p.isDesktop}
         onReactionPress={p.readOnly ? undefined : (emoji) => p.onReact(msg.id, emoji)}
@@ -98,11 +97,10 @@ export function MessageList(p: Props) {
 }
 
 const s = StyleSheet.create({
-  list: { paddingVertical: Spacing.sm },
-  timeSep: { flexDirection: 'row', alignItems: 'center', marginVertical: 8, paddingHorizontal: Spacing.lg },
-  timeSepLine: { flex: 1, height: StyleSheet.hairlineWidth },
-  timeSepText: { fontSize: 11, paddingHorizontal: 8 },
-  sysMsg: { textAlign: 'center', fontSize: 12, paddingVertical: 4, paddingHorizontal: Spacing.lg, opacity: 0.55 },
+  list: { paddingTop: Spacing.sm, paddingBottom: Spacing.lg },
+  timeSep: { alignItems: 'center', marginTop: 18, marginBottom: 4 },
+  timeSepText: { fontSize: 12, fontWeight: '800', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
+  sysMsg: { textAlign: 'center', fontSize: 13, paddingTop: 10, paddingHorizontal: Spacing.lg },
   loadOlderBtn: { alignItems: 'center', paddingVertical: 12 },
   loadOlderText: { fontSize: 13, fontWeight: '600' as any },
   inviteCard: { margin: 12, borderRadius: 12, borderWidth: 1, padding: 12, gap: 8 },

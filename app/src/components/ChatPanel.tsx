@@ -182,6 +182,8 @@ export function ChatPanel({
         <ChatHeader
           name={name}
           dmMeta={dmMeta}
+          memberCount={chat.room.memberCount}
+          code={chat.room.code}
           showBackBtn={showBackBtn}
           onBack={handleBack}
           onOpenInfo={() => setShowRoomInfo(true)}

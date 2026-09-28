@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
 import { IconBan, IconEmoji, IconSend } from '../Icon';
@@ -21,10 +22,15 @@ interface Props {
   isGuest: boolean;
 }
 
+// The message box starts one line tall and grows with what's typed, up to a limit
+const MIN_INPUT = 40;
+const MAX_INPUT = 120;
+
 /** The bottom of the chat: message box, or the edit / muted / demo-guest variants. */
 export function Composer(p: Props) {
   const c = useColors();
   const t = useT();
+  const [inputHeight, setInputHeight] = useState(MIN_INPUT);
 
   if (p.editText !== null) {
     return (
@@ -62,40 +68,48 @@ export function Composer(p: Props) {
   }
   return (
     <View style={[s.inputArea, { backgroundColor: c.bg }]}>
-      <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7} accessibilityLabel={t('emoji')}>
-        <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textMuted} />
-      </TouchableOpacity>
-      <TextInput
-        style={[s.input, { backgroundColor: c.surface2, color: c.text }]}
-        placeholder={t('ph-message')}
-        placeholderTextColor={c.textMuted}
-        value={p.input}
-        onChangeText={p.onChangeInput}
-        onSubmitEditing={p.onSend}
-        returnKeyType="send"
-        multiline
-        onKeyPress={(e: any) => {
-          // Web: Enter sends, Shift+Enter adds a line. Not while an input method is composing:
-          // there Enter picks the candidate (e.g. pinyin), it doesn't mean "send"
-          if (Platform.OS === 'web' && isSendKey(e.nativeEvent)) {
-            e.preventDefault?.();
-            p.onSend();
-          }
-        }}
-      />
-      <TouchableOpacity style={[s.sendBtn, { backgroundColor: c.accent }, !p.input.trim() && s.sendBtnDisabled]}
-        onPress={p.onSend} activeOpacity={0.8}>
-        <IconSend size={17} color="#fff" />
-      </TouchableOpacity>
+      <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }, !c.isDark && s.cardLifted]}>
+        <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7} accessibilityLabel={t('emoji')}>
+          <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textSub} />
+        </TouchableOpacity>
+        <TextInput
+          style={[s.input, { color: c.text, height: inputHeight }]}
+          numberOfLines={1}
+          onContentSizeChange={(e) =>
+            setInputHeight(Math.min(MAX_INPUT, Math.max(MIN_INPUT, Math.ceil(e.nativeEvent.contentSize.height))))}
+          placeholder={t('ph-message')}
+          placeholderTextColor={c.textMuted}
+          value={p.input}
+          onChangeText={p.onChangeInput}
+          onSubmitEditing={p.onSend}
+          returnKeyType="send"
+          multiline
+          onKeyPress={(e: any) => {
+            // Web: Enter sends, Shift+Enter adds a line. Not while an input method is composing:
+            // there Enter picks the candidate (e.g. pinyin), it doesn't mean "send"
+            if (Platform.OS === 'web' && isSendKey(e.nativeEvent)) {
+              e.preventDefault?.();
+              p.onSend();
+            }
+          }}
+        />
+        <TouchableOpacity style={[s.sendBtn, { backgroundColor: c.accent }, !p.input.trim() && s.sendBtnDisabled]}
+          onPress={p.onSend} activeOpacity={0.8} accessibilityLabel={t('send')}>
+          <IconSend size={18} color={c.onAccent} />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
 
 const s = StyleSheet.create({
-  inputArea: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: Spacing.lg, paddingVertical: 10, paddingBottom: 14 },
-  emojiBtn: { padding: 2, borderRadius: 6 },
-  input: { flex: 1, borderRadius: 10, paddingHorizontal: 16, paddingVertical: 11, fontSize: 15, maxHeight: 120 },
-  sendBtn: { borderRadius: 10, width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  inputArea: { paddingHorizontal: Spacing.lg, paddingTop: 8, paddingBottom: 16 },
+  // One card holds the emoji button, the text and the send button
+  card: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, borderWidth: 1, padding: 6, paddingLeft: 6 },
+  cardLifted: { shadowColor: '#161A23', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  emojiBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  input: { flex: 1, paddingHorizontal: 6, paddingVertical: 10, fontSize: 15, lineHeight: 20, outlineStyle: 'none' } as any,
+  sendBtn: { borderRadius: 14, width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { opacity: 0.45 },
   editBar: { borderTopWidth: 1, padding: Spacing.md, gap: Spacing.sm },
   editLabel: { fontSize: 12, fontWeight: String(Fonts.semibold) as any },

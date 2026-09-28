@@ -10,7 +10,9 @@ import { getSocket } from '../lib/socket';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
-import { IconSearch, IconPlus, IconLock, IconGroup, IconClose } from './Icon';
+import { IconSearch, IconPlus, IconLock, IconHash, IconClose } from './Icon';
+import { DisplayText } from './ui/DisplayText';
+import { HEADER_HEIGHT } from './chat/ChatHeader';
 import { Fonts, Radius, Spacing } from '../theme';
 import { playNotifSound } from '../lib/sounds';
 import { useSoundStore } from '../store/soundStore';
@@ -400,15 +402,81 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   );
 
   const searchBar = (
-    <View style={[s.searchWrap, { backgroundColor: c.isDark ? 'rgba(0,0,0,0.25)' : 'rgba(0,0,0,0.06)' }]}>
-      <IconSearch size={14} color={c.textMuted} />
+    <View style={[s.searchWrap, { backgroundColor: c.bg }]}>
+      <IconSearch size={16} color={c.textMuted} />
       <TextInput
         style={[s.searchInput, { color: c.text }]}
-        placeholder={t('rooms')}
+        placeholder={t('ph-search-chats')}
         placeholderTextColor={c.textMuted}
         value={search}
         onChangeText={setSearch}
+        accessibilityLabel={t('ph-search-chats')}
       />
+    </View>
+  );
+
+  const plusButton = !currentUser?.guest && (
+    <TouchableOpacity ref={plusBtnRef} style={[s.plusBtn, { backgroundColor: c.accentBg }]} onPress={() => openDropdown()}
+      activeOpacity={0.7} accessibilityLabel={`${t('create-room')} / ${t('find-room')}`}>
+      <IconPlus size={18} color={c.accent} />
+    </TouchableOpacity>
+  );
+
+  const row = (entry: Entry) => {
+    const isActive = entry.key === selectedRoom;
+    const showClose = entry.type === 'dm' && hoveredKey === entry.key;
+    return (
+      <Pressable
+        key={entry.key}
+        style={({ pressed }) => [s.roomItem, isActive && { backgroundColor: c.accentBg }, pressed && { opacity: 0.75 }]}
+        onPress={() => handlePress(entry)}
+        onHoverIn={() => setHoveredKey(entry.key)}
+        onHoverOut={() => setHoveredKey(k => (k === entry.key ? null : k))}
+        onLongPress={entry.type === 'dm' && Platform.OS !== 'web' ? () => confirmCloseDm(entry) : undefined}
+        accessibilityRole="button"
+        accessibilityState={{ selected: isActive }}
+      >
+        {entry.type === 'room' ? (
+          <View style={[s.roomIcon, { backgroundColor: isActive ? c.accent : c.accentBg }]}>
+            <IconHash size={18} color={isActive ? c.onAccent : c.accent} />
+          </View>
+        ) : (
+          <AvatarView
+            expression={entry.avatarExpression}
+            color={entry.avatarColor}
+            username={entry.otherUsername}
+            screenname={entry.displayName}
+            size={36}
+          />
+        )}
+        <Text style={[s.roomName, { color: isActive ? c.accentText : c.text }, isActive && s.roomNameActive]} numberOfLines={1}>
+          {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
+        </Text>
+        {entry.type === 'room' && entry.hasPassword && <IconLock size={13} color={c.textMuted} />}
+        {showClose ? (
+          <Pressable
+            style={({ hovered }: any) => [s.closeBtn, hovered && { backgroundColor: c.surface2 }]}
+            onPress={() => closeDm(entry)}
+            hitSlop={6}
+            accessibilityLabel={t('close-dm')}
+          >
+            <IconClose size={12} color={c.textSub} />
+          </Pressable>
+        ) : entry.unread > 0 && (
+          <View style={[s.badge, { backgroundColor: c.unread }]} accessibilityLabel={`${entry.unread}`}>
+            <Text style={[s.badgeText, { color: c.unreadText }]}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
+          </View>
+        )}
+      </Pressable>
+    );
+  };
+
+  const rooms = sorted.filter((e) => e.type === 'room');
+  const dms = sorted.filter((e) => e.type === 'dm');
+  const section = (label: string, list: Entry[]) => list.length > 0 && (
+    <View style={s.section}>
+      <Text style={[s.sectionLabel, { color: c.textMuted }]}>{label}</Text>
+      {list.map(row)}
     </View>
   );
 
@@ -416,21 +484,17 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     <View style={s.container}>
       {showSidebarHeader ? (
         <>
-          <View style={[s.sidebarHeader, { borderBottomColor: c.border }]}>
-            <Text style={[s.sidebarTitle, { color: c.text }]}>{t('rooms')}</Text>
-            {!currentUser?.guest && (
-              <TouchableOpacity ref={plusBtnRef} style={s.plusBtn} onPress={() => openDropdown()} activeOpacity={0.7}>
-                <IconPlus size={18} color={c.accent} />
-              </TouchableOpacity>
-            )}
+          <View style={s.sidebarHeader}>
+            <DisplayText style={[s.sidebarTitle, { color: c.text }]}>{t('nav-chats')}</DisplayText>
+            {plusButton}
             {plusDropdown}
           </View>
-          <View style={[s.searchOnlyBar, { borderBottomColor: c.border }]}>
+          <View style={s.searchOnlyBar}>
             {searchBar}
           </View>
         </>
       ) : (
-        <View style={[s.topBar, { borderBottomColor: c.border }]}>
+        <View style={s.topBar}>
           {searchBar}
           {plusDropdown}
         </View>
@@ -440,55 +504,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         <ActivityIndicator size="small" color={c.accent} style={{ marginTop: 24 }} />
       )}
       <ScrollView contentContainerStyle={s.scrollContent}>
-        {sorted.map(entry => {
-          const isActive = entry.key === selectedRoom;
-          const showClose = entry.type === 'dm' && hoveredKey === entry.key;
-          return (
-            <Pressable
-              key={entry.key}
-              style={({ pressed }) => [s.roomItem, isActive && { backgroundColor: c.accentBg }, pressed && { opacity: 0.7 }]}
-              onPress={() => handlePress(entry)}
-              onHoverIn={() => setHoveredKey(entry.key)}
-              onHoverOut={() => setHoveredKey(k => (k === entry.key ? null : k))}
-              onLongPress={entry.type === 'dm' && Platform.OS !== 'web' ? () => confirmCloseDm(entry) : undefined}
-            >
-              {entry.type === 'room' ? (
-                <View style={s.roomIcon}>
-                  <IconGroup size={24} color={isActive ? c.accent : c.textMuted} />
-                </View>
-              ) : (
-                <AvatarView
-                  expression={entry.avatarExpression}
-                  color={entry.avatarColor}
-                  username={entry.otherUsername}
-                  screenname={entry.displayName}
-                  size={24}
-                />
-              )}
-              <Text
-                style={[s.roomName, { color: isActive ? c.text : c.textSub }, isActive && s.roomNameActive]}
-                numberOfLines={1}
-              >
-                {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
-              </Text>
-              {entry.type === 'room' && entry.hasPassword && <IconLock size={12} color={c.textMuted} />}
-              {showClose ? (
-                <Pressable
-                  style={({ hovered }: any) => [s.closeBtn, hovered && { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]}
-                  onPress={() => closeDm(entry)}
-                  hitSlop={6}
-                  accessibilityLabel={t('close-dm')}
-                >
-                  <IconClose size={12} color={c.textMuted} />
-                </Pressable>
-              ) : entry.unread > 0 && (
-                <View style={[s.badge, { backgroundColor: c.unread }]}>
-                  <Text style={[s.badgeText, { color: c.unreadText }]}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
-                </View>
-              )}
-            </Pressable>
-          );
-        })}
+        {section(t('section-rooms'), rooms)}
+        {section(t('section-dms'), dms)}
       </ScrollView>
 
       {/* Create room */}
@@ -593,27 +610,21 @@ const s = StyleSheet.create({
 
   sidebarHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    height: 50, paddingHorizontal: 14, borderBottomWidth: 1, // lines up with the chat header
+    height: HEADER_HEIGHT, paddingLeft: 20, paddingRight: 14, // lines up with the chat header
   },
-  sidebarTitle: { fontSize: 16, fontWeight: String(Fonts.bold) as any },
+  sidebarTitle: { fontSize: 24 },
 
-  searchOnlyBar: {
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  searchOnlyBar: { paddingHorizontal: 14, paddingBottom: 10 },
 
-  topBar: {
-    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    paddingHorizontal: Spacing.sm, paddingVertical: Spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: 14, paddingVertical: 10 },
+  // flexGrow, not flex: in the sidebar's column a flex basis of 0 would squash the height
   searchWrap: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
-    borderRadius: Radius.md, paddingHorizontal: Spacing.md, paddingVertical: 8,
+    flexGrow: 1, flexShrink: 1, flexDirection: 'row', alignItems: 'center', gap: 10,
+    height: 42, borderRadius: 14, paddingHorizontal: 14,
   },
-  searchInput: { flex: 1, fontSize: 14 },
+  searchInput: { flex: 1, fontSize: 15, outlineStyle: 'none' } as any,
 
-  plusBtn: { padding: 3, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },
+  plusBtn: { width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   dropdown: {
     minWidth: 180, borderRadius: 10, overflow: 'hidden',
     shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12,
@@ -622,21 +633,26 @@ const s = StyleSheet.create({
   dropdownItem: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, paddingHorizontal: 16 },
   dropdownText: { fontSize: 14 },
 
-  scrollContent: { paddingHorizontal: 8, paddingVertical: 4, paddingBottom: Spacing.lg },
+  scrollContent: { paddingHorizontal: 10, paddingBottom: Spacing.lg },
 
-  roomItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8,
+  section: { gap: 2, marginTop: 6 },
+  sectionLabel: {
+    fontSize: 12, fontWeight: String(Fonts.heavy) as any, letterSpacing: 0.6, textTransform: 'uppercase',
+    paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6,
   },
-  roomIcon: { flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
-  roomName: { flex: 1, fontSize: 15, fontWeight: String(Fonts.regular) as any },
-  roomNameActive: { fontWeight: String(Fonts.medium) as any },
+  roomItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingVertical: 8, paddingHorizontal: 10, borderRadius: 14,
+  },
+  roomIcon: { width: 36, height: 36, borderRadius: 12, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
+  roomName: { flex: 1, fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  roomNameActive: { fontWeight: String(Fonts.heavy) as any },
   badge: {
-    minWidth: 18, height: 18, borderRadius: Radius.full,
-    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
+    minWidth: 22, height: 22, borderRadius: Radius.full,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7,
   },
   badgeText: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
-  closeBtn: { width: 20, height: 20, borderRadius: Radius.sm, alignItems: 'center', justifyContent: 'center' },
+  closeBtn: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xxl },
   modalBox: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, width: '100%', maxWidth: 400 },

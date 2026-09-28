@@ -40,6 +40,22 @@ test('messages with unparseable times are kept without breaking grouping', () =>
   assert.equal(feed.filter((i) => i._type !== 'sep').length, 3);
 });
 
+test('back-to-back messages from one sender are marked as a continuation', () => {
+  const start = new Date(2026, 8, 27, 14, 0);
+  const from = (id: number, username: string, at: Date, system = false): Message =>
+    ({ ...msg(id, at), username, system });
+  const feed = buildFeed([
+    from(1, 'ann', start),
+    from(2, 'ann', minutes(start, 1)), // same sender, same burst
+    from(3, 'bob', minutes(start, 2)),
+    from(4, 'system', minutes(start, 2), true),
+    from(5, 'bob', minutes(start, 3)), // after a system line: starts fresh
+    from(6, 'bob', new Date(start.getTime() + GROUP_GAP_MS + 5 * 60_000)), // after a time separator: fresh
+  ], monthDay, NOW);
+  const cont = feed.filter((i) => i._type !== 'sep').map((i) => (i as { _cont?: boolean })._cont);
+  assert.deepEqual(cont, [false, true, false, false, false, false]);
+});
+
 test('separator labels: time only today, date + time otherwise', () => {
   assert.equal(formatMsgTime(new Date(2026, 8, 27, 9, 5).toISOString(), monthDay, NOW), '09:05');
   assert.equal(formatMsgTime(new Date(2026, 8, 20, 9, 5).toISOString(), monthDay, NOW), '9/20 09:05');
