@@ -266,6 +266,7 @@ def test_swiping_right_in_a_chat_goes_back_to_the_list(server, browser, shots):
     page.get_by_text('Lobby', exact=True).first.click()
     composer = page.get_by_placeholder('Type a message...')
     composer.wait_for()
+    _wait_until_still(page, composer)  # the chat slides in from the right
 
     _swipe(page, 60, 400, 60, 250)  # scrolling up and down is not a swipe back
     assert composer.is_visible()
@@ -290,6 +291,17 @@ def _touch(page, points):
         )
         if pause:
             page.wait_for_timeout(pause)
+
+
+def _wait_until_still(page, locator, timeout_ms=5000):
+    """Wait for an element to stop moving (slide-in animations) before tapping by coordinates."""
+    last = None
+    for _ in range(timeout_ms // 100):
+        box = locator.bounding_box()
+        if box and last and abs(box['x'] - last['x']) < 0.5 and abs(box['y'] - last['y']) < 0.5:
+            return
+        last = box
+        page.wait_for_timeout(100)
 
 
 def _phone(browser):
@@ -325,6 +337,9 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
 
     # Double tap someone's message: a 👍 lands, and a second double tap doesn't take it back
     open_room(page, 'Lobby')
+    # The chat slides in from the right: measure only once it has stopped (on a slow CI
+    # machine the first measurement was mid-slide and both taps landed beside the bubble)
+    _wait_until_still(page, page.get_by_text('double tap me'))
     bubble = page.get_by_text('double tap me').bounding_box()
     bx, by = bubble['x'] + bubble['width'] / 2, bubble['y'] + bubble['height'] / 2
     # Quick taps: under load a slow gap could miss the 300 ms double-tap window
@@ -337,11 +352,13 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
 
     # Long-press opens the action sheet; dragging it down dismisses it.
     # (The reaction row pushed the bubble up: measure it again.)
+    _wait_until_still(page, page.get_by_text('double tap me'))
     bubble = page.get_by_text('double tap me').bounding_box()
     bx, by = bubble['x'] + bubble['width'] / 2, bubble['y'] + bubble['height'] / 2
     _touch(page, [('start', bx, by, 700), ('end', bx, by, 600)])
     sheet_emoji = page.get_by_text('😮', exact=True)
     sheet_emoji.wait_for()
+    _wait_until_still(page, sheet_emoji)
     top = sheet_emoji.bounding_box()
     _swipe(page, 200, top['y'] - 20, 200, top['y'] + 200)
     sheet_emoji.wait_for(state='detached')
@@ -350,7 +367,7 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
     page.get_by_label('Members').first.click()
     join = page.get_by_text('Join Voice', exact=False)
     join.wait_for()
-    page.wait_for_timeout(400)  # let it finish sliding in: until then the finger lands on the backdrop
+    _wait_until_still(page, join)  # while it slides in, the finger would land on the backdrop
     _swipe(page, 150, 500, 380, 505)
     join.wait_for(state='detached')
 
@@ -358,7 +375,7 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
     page.get_by_label('Emoji').first.click()
     search = page.get_by_placeholder('Search emoji…')
     search.wait_for()
-    page.wait_for_timeout(400)  # the sheet slides up first
+    _wait_until_still(page, search)  # the sheet slides up first
     box = search.bounding_box()
     _swipe(page, 195, box['y'] - 26, 195, box['y'] + 260)
     search.wait_for(state='detached')
