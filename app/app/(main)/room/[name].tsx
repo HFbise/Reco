@@ -34,7 +34,6 @@ export default function RoomScreen() {
         name={name}
         password={password}
         showBackBtn
-        hideVoiceBar
         externalVoice={isDm ? null : voice}
         dmMeta={dmMeta}
         activeVoiceRoom={isDm ? undefined : voiceRoom || undefined}

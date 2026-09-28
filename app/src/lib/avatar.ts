@@ -32,6 +32,22 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 /**
+ * A soft wash of `color` over `background` (profile banners): `amount` of the
+ * background shows through. Non-hex input falls back to the background.
+ */
+export function tint(color: string, background: string, amount: number): string {
+  if (!HEX.test(color) || !HEX.test(background)) return background;
+  const bg = parseInt(background.slice(1), 16);
+  const n = parseInt(color.slice(1), 16);
+  const channel = (shift: number) => {
+    const v = (n >> shift) & 0xff;
+    const b = (bg >> shift) & 0xff;
+    return Math.round(v + (b - v) * amount).toString(16).padStart(2, '0');
+  };
+  return `#${channel(16)}${channel(8)}${channel(0)}`;
+}
+
+/**
  * A sender's name in their avatar color, darkened (light theme) or lightened
  * (dark theme) just enough to read as small text (4.5:1) on `background`.
  */

@@ -34,7 +34,6 @@ export default function RoomsScreen() {
   const slideAnim = useRef(new Animated.Value(0)).current;
   // Trigger ChatPanel modals from topbar (web chat view)
   const [membersKey, setMembersKey] = useState(0);
-  const [infoKey, setInfoKey] = useState(0);
 
   const pillUser = voiceMembers.find(m => m.isSpeaking) ?? voiceMembers[0];
 
@@ -54,7 +53,6 @@ export default function RoomsScreen() {
     if (IS_WEB) {
       const wasOpen = !!activeRoom;
       setMembersKey(0);
-      setInfoKey(0);
       setActiveRoom(name);
       setActiveRoomPw(password);
       setActiveDmMeta(null);
@@ -68,7 +66,6 @@ export default function RoomsScreen() {
     if (IS_WEB) {
       const wasOpen = !!activeRoom;
       setMembersKey(0);
-      setInfoKey(0);
       setActiveRoom(dm.dm_room);
       setActiveRoomPw(undefined);
       setActiveDmMeta({
@@ -124,7 +121,7 @@ export default function RoomsScreen() {
   // Shared voice pill used in both topbar states
   const voicePill = inVoice && voiceRoom ? (
     <TouchableOpacity
-      style={[s.pill, { backgroundColor: c.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.07)' }]}
+      style={[s.pill, { backgroundColor: c.accentBg }]}
       onPress={() => {
         if (activeRoom === voiceRoom) {
           setMembersKey(k => k + 1);
@@ -137,7 +134,7 @@ export default function RoomsScreen() {
     >
       <IconMic size={13} color={c.accent} />
       {pillUser && (
-        <View style={[s.pillAvatarRing, pillUser.isSpeaking && { borderColor: '#3ba55c' }]}>
+        <View style={[s.pillAvatarRing, pillUser.isSpeaking && { borderColor: c.success }]}>
           <AvatarView username={pillUser.username} screenname={pillUser.screenname} color={pillUser.avatar_color} size={18} />
         </View>
       )}
@@ -190,14 +187,12 @@ export default function RoomsScreen() {
                   password={activeRoomPw}
                   dmMeta={activeDmMeta}
                   showBackBtn
-                  hideVoiceBar
                   externalVoice={activeDmMeta ? null : voice}
                   onClose={closeRoom}
                   activeVoiceRoom={activeDmMeta ? undefined : voiceRoom || undefined}
                   onLeaveAndSwitch={activeDmMeta ? undefined : leaveAndSwitchRoom}
                   onNavigateToRoom={openRoom}
                   membersKey={membersKey}
-                  infoKey={infoKey}
                 />
               )}
             </View>

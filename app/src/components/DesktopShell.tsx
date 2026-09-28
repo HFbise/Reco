@@ -109,7 +109,6 @@ export function DesktopShell() {
               name={room}
               password={roomPassword}
               dmMeta={dmMeta}
-              hideVoiceBar
               externalVoice={null}
               onClose={closeRoom}
               onNavigateToRoom={(name) => openRoom(name)}

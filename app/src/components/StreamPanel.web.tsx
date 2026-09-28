@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../hooks/useT';
+import { useColors } from '../hooks/useColors';
+import { IconClose, IconMaximize, IconPictureInPicture } from './Icon';
 
 interface VideoStream { stream: MediaStream; screenname: string; }
 interface Props {
@@ -33,7 +35,7 @@ export function StreamPanel({ streams }: Props) {
   return (
     <>
       {cardEntries.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 4, background: '#0e0e0e', padding: 4, minHeight: 180, flexShrink: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8, background: '#0E0F12', padding: 8, minHeight: 180, flexShrink: 0 }}>
           {cardEntries.map(([username, { stream, screenname }]) =>
             (modes[username] ?? 'card') === 'hidden'
               ? <RewatchCard key={username} screenname={screenname} onRewatch={() => setMode(username, 'card')} />
@@ -78,9 +80,19 @@ function fullscreen(el: HTMLElement | null) {
   else if (v.mozRequestFullScreen) v.mozRequestFullScreen();
 }
 
+// Controls sit on top of video, so they stay dark in both themes
 const btnStyle: React.CSSProperties = {
-  background: 'rgba(0,0,0,0.55)', border: 'none', color: 'white',
-  borderRadius: 4, cursor: 'pointer', padding: '2px 7px', fontSize: 14, lineHeight: '1.6',
+  background: 'rgba(0,0,0,0.55)', border: 'none', color: 'white', cursor: 'pointer',
+  width: 32, height: 32, borderRadius: 16, padding: 0,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+};
+
+function VideoButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return <button style={btnStyle} onClick={onClick} title={label} aria-label={label}>{children}</button>;
+}
+
+const liveBadge: React.CSSProperties = {
+  background: '#D93A3A', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 800, letterSpacing: 0.3,
 };
 
 // ── VideoCard (in-panel) ──────────────────────────────────────
@@ -92,16 +104,16 @@ function VideoCard({ screenname, stream, onPopOut, onHide }: {
   const videoRef = useRef<HTMLVideoElement>(null);
   useVideoStream(videoRef, stream);
   return (
-    <div style={{ position: 'relative', flex: 1, minWidth: 260, minHeight: 160, background: '#1a1a1a', borderRadius: 6, overflow: 'hidden' }}>
+    <div style={{ position: 'relative', flex: 1, minWidth: 260, minHeight: 160, background: '#1A1C21', borderRadius: 16, overflow: 'hidden' }}>
       <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
-      <div style={{ position: 'absolute', bottom: 6, left: 8, color: 'white', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5, pointerEvents: 'none' }}>
-        <span style={{ background: 'rgba(220,38,38,0.9)', borderRadius: 3, padding: '1px 5px', fontSize: 10, fontWeight: 'bold' }}>LIVE</span>
+      <div style={{ position: 'absolute', bottom: 10, left: 12, color: 'white', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
+        <span style={liveBadge}>LIVE</span>
         {screenname}
       </div>
-      <div style={{ position: 'absolute', top: 4, right: 4, display: 'flex', gap: 4 }}>
-        <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title={t('stream-fullscreen')}>⤢</button>
-        <button style={btnStyle} onClick={onPopOut} title={t('stream-pop-out')}>⧉</button>
-        <button style={btnStyle} onClick={onHide} title={t('close')}>✕</button>
+      <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+        <VideoButton label={t('stream-fullscreen')} onClick={() => fullscreen(videoRef.current)}><IconMaximize size={15} color="#FFFFFF" /></VideoButton>
+        <VideoButton label={t('stream-pop-out')} onClick={onPopOut}><IconPictureInPicture size={15} color="#FFFFFF" /></VideoButton>
+        <VideoButton label={t('close')} onClick={onHide}><IconClose size={13} color="#FFFFFF" /></VideoButton>
       </div>
     </div>
   );
@@ -111,12 +123,13 @@ function VideoCard({ screenname, stream, onPopOut, onHide }: {
 
 function RewatchCard({ screenname, onRewatch }: { screenname: string; onRewatch: () => void }) {
   const t = useT();
+  const c = useColors();
   return (
-    <div style={{ flex: 1, minWidth: 200, minHeight: 80, background: '#1a1a1a', borderRadius: 6, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-      <span style={{ color: '#bbb', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#E0625D' }} />{t('stream-live', { name: screenname })}</span>
+    <div style={{ flex: 1, minWidth: 200, minHeight: 80, background: '#1A1C21', borderRadius: 16, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+      <span style={{ color: '#C9CDD6', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}><span style={{ width: 8, height: 8, borderRadius: 4, background: '#E0625D' }} />{t('stream-live', { name: screenname })}</span>
       <button
         onClick={onRewatch}
-        style={{ background: '#4f8ef7', border: 'none', color: 'white', borderRadius: 5, padding: '5px 16px', cursor: 'pointer', fontSize: 13 }}
+        style={{ background: c.accent, border: 'none', color: c.onAccent, borderRadius: 999, padding: '7px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 800, fontFamily: 'inherit' }}
       >{t('stream-rewatch')}</button>
     </div>
   );
@@ -175,19 +188,19 @@ function FloaterCard({ screenname, stream, onPopIn }: {
       ref={floaterRef}
       style={{
         position: 'fixed', right: 20, bottom: 20, width: 320, height: 210,
-        background: '#1a1a1a', borderRadius: 8, overflow: 'hidden',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.7)', zIndex: 1000,
+        background: '#1A1C21', borderRadius: 16, overflow: 'hidden',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 1000,
         display: 'flex', flexDirection: 'column',
       }}
     >
       <div
         onMouseDown={onMouseDown}
-        style={{ background: '#111', padding: '5px 8px', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, userSelect: 'none' } as React.CSSProperties}
+        style={{ background: '#121418', padding: '6px 8px 6px 12px', cursor: 'grab', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0, userSelect: 'none' } as React.CSSProperties}
       >
-        <span style={{ color: '#ccc', fontSize: 12 }}>{screenname}</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <button style={btnStyle} onClick={() => fullscreen(videoRef.current)} title={t('stream-fullscreen')}>⤢</button>
-          <button style={btnStyle} onClick={onPopIn} title={t('stream-pop-in')}>⊡</button>
+        <span style={{ color: '#C9CDD6', fontSize: 13, fontWeight: 700 }}>{screenname}</span>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <VideoButton label={t('stream-fullscreen')} onClick={() => fullscreen(videoRef.current)}><IconMaximize size={15} color="#FFFFFF" /></VideoButton>
+          <VideoButton label={t('stream-pop-in')} onClick={onPopIn}><IconPictureInPicture size={15} color="#FFFFFF" /></VideoButton>
         </div>
       </div>
       <video ref={videoRef} autoPlay playsInline style={{ flex: 1, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />

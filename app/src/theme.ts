@@ -25,6 +25,7 @@ const light = {
   sunny: '#FFB020',
   sunnyText: '#3D2800',
   sunnyBg: '#FFF4DC',
+  crown: '#B27700', // owner crown icon on surfaces
 
   // Messages
   bubbleOwn: '#1A70D4',
@@ -60,6 +61,7 @@ const dark: Palette = {
   sunny: '#D9A441',
   sunnyText: '#2A1D00',
   sunnyBg: '#3A3020',
+  crown: '#D9A441',
 
   bubbleOwn: '#2F5E9E', // own messages: a dim blue, not a bright block
   bubbleOther: '#282C34',

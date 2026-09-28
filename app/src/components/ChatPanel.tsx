@@ -20,7 +20,6 @@ import { RoomInfoModal } from './chat/RoomInfoModal';
 import { MessageActionsSheet } from './chat/MessageActionsSheet';
 import { ReactionQuickBar } from './chat/ReactionQuickBar';
 import { RightDrawer } from './chat/RightDrawer';
-import { VoiceBar } from './chat/VoiceBar';
 import type { DmMeta, ExternalVoice } from './chat/types';
 
 export type { DmMeta, ExternalVoice } from './chat/types';
@@ -38,23 +37,19 @@ interface Props {
   password?: string;
   onClose?: () => void;
   showBackBtn?: boolean;
-  hideVoiceBar?: boolean;
   externalVoice?: ExternalVoice | null;
   dmMeta?: DmMeta | null;
   activeVoiceRoom?: string;
   onLeaveAndSwitch?: (room: string) => void;
   onNavigateToRoom?: (room: string) => void;
-  hideHeader?: boolean;
-  /** Bumped by a parent to open the members drawer / room info from outside */
+  /** Bumped by a parent to open the members drawer from outside */
   membersKey?: number;
-  infoKey?: number;
 }
 
 export function ChatPanel({
-  name, password, onClose, showBackBtn = false, hideVoiceBar = false, externalVoice, dmMeta,
-  activeVoiceRoom, onLeaveAndSwitch, onNavigateToRoom, hideHeader = false, membersKey, infoKey,
+  name, password, onClose, showBackBtn = false, externalVoice, dmMeta,
+  activeVoiceRoom, onLeaveAndSwitch, onNavigateToRoom, membersKey,
 }: Props) {
-  const isDm = name.startsWith('dm:');
   const { currentUser } = useAuthStore();
   const isGuest = !!currentUser?.guest;
   const c = useColors();
@@ -119,11 +114,9 @@ export function ChatPanel({
       if (kind === 'send-failed' || kind === 'rate-limited') setInput((cur) => cur || lastSentRef.current);
     },
   });
-  const showVoiceBar = !hideVoiceBar && !isDm && !isGuest && (inVoiceHere || chat.voiceMembers.length > 0);
 
   useEffect(() => { loadRecentEmojis().then(setRecentEmojis); }, []);
   useEffect(() => { if (membersKey) setShowMembers(true); }, [membersKey]);
-  useEffect(() => { if (infoKey) setShowRoomInfo(true); }, [infoKey]);
 
   function joinVoiceHere() {
     if (inVoiceElsewhere && onLeaveAndSwitch) {
@@ -178,36 +171,19 @@ export function ChatPanel({
       style={[s.container, { backgroundColor: c.bg }]}
       onLayout={() => containerRef.current?.measure((_x, _y, w, _h, pageX, pageY) => setContainer({ x: pageX, y: pageY, w }))}
     >
-      {!hideHeader && (
-        <ChatHeader
-          name={name}
-          dmMeta={dmMeta}
-          memberCount={chat.room.memberCount}
-          code={chat.room.code}
-          showBackBtn={showBackBtn}
-          onBack={handleBack}
-          onOpenInfo={() => setShowRoomInfo(true)}
-          onOpenMembers={() => setShowMembers(true)}
-          voicePillMembers={voice.inVoice ? voice.voiceMembers : chat.voiceMembers}
-          onVoicePillPress={inVoiceElsewhere ? () => onNavigateToRoom?.(activeVoiceRoom!) : () => setShowMembers(true)}
-          showMembersButton={!isDesktop}
-        />
-      )}
-
-      {showVoiceBar && (
-        <VoiceBar
-          inVoice={inVoiceHere}
-          inVoiceElsewhere={inVoiceElsewhere}
-          activeVoiceRoom={activeVoiceRoom}
-          voiceMembers={chat.voiceMembers}
-          isMuted={voice.isMuted}
-          currentUsername={currentUser?.username}
-          onJoin={joinVoiceHere}
-          onLeave={voice.leaveVoice}
-          onToggleMute={voice.toggleMute}
-          c={c}
-        />
-      )}
+      <ChatHeader
+        name={name}
+        dmMeta={dmMeta}
+        memberCount={chat.room.memberCount}
+        code={chat.room.code}
+        showBackBtn={showBackBtn}
+        onBack={handleBack}
+        onOpenInfo={() => setShowRoomInfo(true)}
+        onOpenMembers={() => setShowMembers(true)}
+        voicePillMembers={voice.inVoice ? voice.voiceMembers : chat.voiceMembers}
+        onVoicePillPress={inVoiceElsewhere ? () => onNavigateToRoom?.(activeVoiceRoom!) : () => setShowMembers(true)}
+        showMembersButton={!isDesktop}
+      />
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <MessageList
@@ -320,6 +296,7 @@ export function ChatPanel({
             currentUsername={currentUser?.username}
             isVoiceHere={inVoiceHere}
             onJoinVoice={joinVoiceHere}
+            style={{ width: '100%', borderLeftWidth: 0 }}
           />
         </RightDrawer>
       )}

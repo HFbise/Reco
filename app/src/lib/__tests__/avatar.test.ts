@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { contrastRatio, getAvatarColor, nameColor } from '../avatar';
+import { contrastRatio, getAvatarColor, nameColor, tint } from '../avatar';
 
 const PALETTE = ['#5865F2', '#3BA55C', '#FAA61A', '#ED4245', '#EB459E', '#57F287', '#0099E1', '#9C84EC'];
 
@@ -27,4 +27,11 @@ test('contrast ratio matches the WCAG formula', () => {
 
 test('non-hex input is returned unchanged', () => {
   assert.equal(nameColor('red', false, '#FFFFFF'), 'red');
+});
+
+test('tint washes a color over the background', () => {
+  assert.equal(tint('#000000', '#FFFFFF', 0), '#000000');
+  assert.equal(tint('#000000', '#FFFFFF', 1), '#ffffff');
+  assert.equal(tint('#000000', '#FFFFFF', 0.5), '#808080');
+  assert.equal(tint('red', '#1F2228', 0.8), '#1F2228');
 });

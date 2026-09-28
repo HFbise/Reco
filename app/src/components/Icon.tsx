@@ -278,3 +278,11 @@ export function IconUsers({ size = 18, color = 'currentColor' }: Props) {
     </Stroke>
   );
 }
+
+export function IconMaximize({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M15 3h6v6" /><Path d="M9 21H3v-6" /><Path d="M21 3l-7 7" /><Path d="M3 21l7-7" /></Stroke>;
+}
+
+export function IconPictureInPicture({ size = 16, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Rect width="20" height="16" x="2" y="4" rx="2" /><Rect width="8" height="6" x="12" y="12" rx="1" /></Stroke>;
+}
