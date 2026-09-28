@@ -30,8 +30,10 @@ export async function getDisplayMedia(constraints: any): Promise<MediaStream | n
 //
 // Chrome only feeds a remote WebRTC stream into Web Audio while the stream is
 // also attached to a media element, so each one also plays through a muted
-// <audio>. If Web Audio can't run (no user gesture yet, old browser), streams
-// play through plain <audio> elements and volume tops out at 100%.
+// <audio>. Until the AudioContext is actually running (starting it can take a
+// moment, or wait for a click), streams play through plain <audio> elements
+// capped at 100%, and move onto Web Audio as soon as it runs. With no Web Audio
+// at all they simply stay there.
 
 /** Top of every volume slider (speaker, microphone, per person), in percent */
 export const MAX_VOLUME = 150;
@@ -91,6 +93,13 @@ export function unlockAudio(): void {
       limiter.connect(dest);
       output = audioElement(dest.stream, false);
       setSink(output);
+      ctx.addEventListener('statechange', () => {
+        if (!running()) return;
+        output?.play().catch(() => {});
+        for (const username of Object.keys(sources)) upgrade(username);
+        const waiting = whenRunning.splice(0);
+        waiting.forEach((cb) => cb());
+      });
     } catch {
       ctx = null;
       return;
@@ -98,6 +107,33 @@ export function unlockAudio(): void {
   }
   ctx.resume?.().catch(() => {});
   output?.play().catch(() => {});
+}
+
+/** The shared AudioContext (null before unlockAudio, or without Web Audio). */
+export function audioContext(): AudioContext | null {
+  return ctx;
+}
+
+const whenRunning: (() => void)[] = [];
+
+/** Run `cb` once the AudioContext is running: now if it already is. */
+export function whenAudioRunning(cb: () => void): void {
+  if (running()) cb();
+  else if (ctx) whenRunning.push(cb);
+}
+
+/** Move `username`'s plain-<audio> streams onto Web Audio (their volume can then pass 100%). */
+function upgrade(username: string) {
+  for (const src of Object.values(sources[username] ?? {})) {
+    if (src.node || !src.el.srcObject) continue;
+    try {
+      src.node = ctx!.createMediaStreamSource(src.el.srcObject as MediaStream);
+      src.node.connect(gainFor(username));
+      src.el.muted = true; // still attached, so Chrome keeps pulling the stream
+    } catch {
+      src.node = null;
+    }
+  }
 }
 
 function gainFor(username: string): GainNode {

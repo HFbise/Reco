@@ -28,3 +28,5 @@ export function setSpeakerDevice(_deviceId: string): void {}
 export const MAX_VOLUME = 150;
 export function unlockAudio(): void {}
 export function setUserVolume(_username: string, _percent: number): void {}
+export function audioContext(): AudioContext | null { return null; }
+export function whenAudioRunning(_cb: () => void): void {}

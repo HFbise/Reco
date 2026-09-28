@@ -17,6 +17,8 @@ import {
   setSpeakerDevice,
   getDisplayMedia,
   unlockAudio,
+  audioContext,
+  whenAudioRunning,
 } from '../lib/webrtc';
 import { playVoiceJoinSound, playVoiceLeaveSound } from '../lib/sounds';
 import { useVolumeStore } from '../store/volumeStore';
@@ -68,7 +70,8 @@ export function useVoice(room: string) {
   const streamAudioTrackRef = useRef<any>(null);
   const voiceMembersRef = useRef<VoiceMember[]>([]);
   const speakIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const speakAudioCtxRef = useRef<any>(null);
+  /** Web Audio nodes of the mic pipeline (on the shared context), disconnected on leave */
+  const micNodesRef = useRef<any[]>([]);
 
   useEffect(() => { roomRef.current = room; }, [room]);
   useEffect(() => { userRef.current = currentUser; }, [currentUser]);
@@ -168,6 +171,25 @@ export function useVoice(room: string) {
     delete remoteStreamsRef.current[username];
     const pc = peerConnsRef.current[username];
     if (pc) { pc.close(); delete peerConnsRef.current[username]; }
+  }
+
+  /** Send the volume-adjusted mic instead of the raw one, on every open connection. */
+  function switchToProcessedMic(processed: any) {
+    const next = processed.getAudioTracks()[0];
+    const prev = localStreamRef.current?.getAudioTracks()[0];
+    if (!next || next === prev) return;
+    next.enabled = prev ? prev.enabled : true; // keep the mute state
+    for (const pc of Object.values(peerConnsRef.current) as any[]) {
+      const sender = pc.getSenders?.().find((s: any) => s.track === prev);
+      sender?.replaceTrack(next).catch(() => {});
+    }
+    localStreamRef.current = processed;
+    setMicGainSupported(true);
+  }
+
+  function disconnectMicNodes() {
+    for (const node of micNodesRef.current) { try { node.disconnect(); } catch {} }
+    micNodesRef.current = [];
   }
 
   function stopLocalStream() {
@@ -337,8 +359,7 @@ export function useVoice(room: string) {
     return () => {
       if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
       if (speakIntervalRef.current) { clearInterval(speakIntervalRef.current); speakIntervalRef.current = null; }
-      try { speakAudioCtxRef.current?.close(); } catch {}
-      speakAudioCtxRef.current = null;
+      disconnectMicNodes();
       if (inVoiceRef.current) {
         actions.current.stopLive(false);
         actions.current.stopStreamAudio(false);
@@ -377,37 +398,33 @@ export function useVoice(room: string) {
       setIsMuted(false);
       setIsDeafened(false);
       setPing(null);
-      // Web Audio (web only): mic volume and speaking detection
-      const AC = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
-      let actx: any = null;
+      // Web Audio (web only): mic volume and speaking detection, on the shared context.
+      // Peers get the raw mic at first; once the context runs (it may take a moment)
+      // they're switched to the volume-adjusted track. Sending that track earlier
+      // would send silence while the context is still suspended.
+      const actx: any = audioContext();
       let src: any = null;
-      if (AC) {
+      if (actx?.createMediaStreamDestination) {
         try {
-          actx = new AC();
-          // resume() can stay pending forever without a user gesture (Safari): don't wait on it
-          await Promise.race([actx.resume?.(), new Promise((r) => setTimeout(r, 300))]);
           src = actx.createMediaStreamSource(stream);
-          speakAudioCtxRef.current = actx;
-          // Only send the processed track if the context really runs: a suspended
-          // one (possible on Safari) would send silence, so keep the raw mic then
-          if (actx.state === 'running' && actx.createMediaStreamDestination) {
-            const gain = actx.createGain();
-            gain.gain.value = useVolumeStore.getState().mic / 100;
-            // A mic boosted past 100% would clip for everyone: limit just under full scale
-            const limiter = actx.createDynamicsCompressor();
-            limiter.threshold.value = -1;
-            limiter.knee.value = 0;
-            limiter.ratio.value = 20;
-            limiter.attack.value = 0.002;
-            limiter.release.value = 0.1;
-            const dest = actx.createMediaStreamDestination();
-            src.connect(gain);
-            gain.connect(limiter);
-            limiter.connect(dest);
-            micGainRef.current = gain;
-            localStreamRef.current = dest.stream;
-            setMicGainSupported(true);
-          }
+          const gain = actx.createGain();
+          gain.gain.value = useVolumeStore.getState().mic / 100;
+          // A mic boosted past 100% would clip for everyone: limit just under full scale
+          const limiter = actx.createDynamicsCompressor();
+          limiter.threshold.value = -1;
+          limiter.knee.value = 0;
+          limiter.ratio.value = 20;
+          limiter.attack.value = 0.002;
+          limiter.release.value = 0.1;
+          const dest = actx.createMediaStreamDestination();
+          src.connect(gain);
+          gain.connect(limiter);
+          limiter.connect(dest);
+          micGainRef.current = gain;
+          micNodesRef.current = [src, gain, limiter];
+          whenAudioRunning(() => {
+            if (rawMicRef.current === stream) switchToProcessedMic(dest.stream);
+          });
         } catch {
           src = null;
         }
@@ -451,8 +468,7 @@ export function useVoice(room: string) {
     playVoiceLeaveSound();
     if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
     if (speakIntervalRef.current) { clearInterval(speakIntervalRef.current); speakIntervalRef.current = null; }
-    try { speakAudioCtxRef.current?.close(); } catch {}
-    speakAudioCtxRef.current = null;
+    disconnectMicNodes();
     stopLive(false);
     stopStreamAudio(false);
     stopLocalStream();

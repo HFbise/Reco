@@ -174,7 +174,9 @@ export function SettingsModal({ visible, onClose, voice, devices }: Props) {
 }
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', alignItems: 'center' },
+  // Anchored near the top, not centered: the device lists load a moment after the
+  // audio tab opens, and a centered dialog would jump (sliders moving under the pointer)
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-start', alignItems: 'center', paddingTop: 96 },
   box: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.md, width: 380 },
   title: { fontSize: 17, fontWeight: String(Fonts.bold) as any },
   tabs: { flexDirection: 'row', gap: Spacing.lg },

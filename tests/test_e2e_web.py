@@ -275,7 +275,10 @@ def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
     def settings_slider(page, index):
         page.get_by_label('Settings').first.click()
         page.get_by_text('Audio', exact=True).click()
+        # The device pickers load a moment later and resize the dialog: click after that
+        page.get_by_role('combobox').first.wait_for()
         to_max(page, page.get_by_role('slider').nth(index))
+        page.get_by_text('150%').first.wait_for()
         page.get_by_text('Close', exact=True).last.click()
 
     level = hugo.evaluate(_OUTPUT_LEVEL)

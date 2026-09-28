@@ -14,4 +14,6 @@ export {
   MAX_VOLUME,
   unlockAudio,
   setUserVolume,
+  audioContext,
+  whenAudioRunning,
 } from './webrtc.native';
