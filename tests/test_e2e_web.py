@@ -243,9 +243,13 @@ def _swipe(page, x0, y0, x1, y1, steps=12):
     point = lambda x, y: [{'x': x, 'y': y}]  # noqa: E731
     cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': point(x0, y0)})
     for i in range(1, steps + 1):
-        cdp.send('Input.dispatchTouchEvent', {
-            'type': 'touchMove', 'touchPoints': point(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps),
-        })
+        cdp.send(
+            'Input.dispatchTouchEvent',
+            {
+                'type': 'touchMove',
+                'touchPoints': point(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps),
+            },
+        )
         page.wait_for_timeout(16)
     cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
     page.wait_for_timeout(800)  # slide animation
@@ -277,9 +281,13 @@ def _touch(page, points):
     cdp = page.context.new_cdp_session(page)
     kinds = {'start': 'touchStart', 'move': 'touchMove', 'end': 'touchEnd'}
     for kind, x, y, pause in points:
-        cdp.send('Input.dispatchTouchEvent', {
-            'type': kinds[kind], 'touchPoints': [] if kind == 'end' else [{'x': x, 'y': y}],
-        })
+        cdp.send(
+            'Input.dispatchTouchEvent',
+            {
+                'type': kinds[kind],
+                'touchPoints': [] if kind == 'end' else [{'x': x, 'y': y}],
+            },
+        )
         if pause:
             page.wait_for_timeout(pause)
 
@@ -296,9 +304,13 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
     create_user('lee', screenname='Lee')
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute("INSERT INTO messages (room, username, screenname, text) VALUES ('dm:kim:lee', 'lee', 'Lee', 'lunch?')")
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:kim:lee', 'lee', 'Lee', 'lunch?')"
+        )
         cur.execute("UPDATE rooms SET members = array_append(members, 'kim') WHERE name = '大厅'")
-        cur.execute("INSERT INTO messages (room, username, screenname, text) VALUES ('大厅', 'lee', 'Lee', 'double tap me')")
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('大厅', 'lee', 'Lee', 'double tap me')"
+        )
         conn.commit()
     page = _phone(browser)
     shots.append(page)
