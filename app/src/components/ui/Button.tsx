@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useColors } from '../../hooks/useColors';
 import { Fonts, Radius } from '../../theme';
+import { DisplayText } from './DisplayText';
 
 type Variant = 'primary' | 'secondary' | 'sunny' | 'quiet' | 'danger';
 
@@ -57,7 +58,9 @@ export function Button({
       ) : (
         <View style={s.row}>
           {icon?.(fg)}
-          <Text style={[size === 'lg' ? s.labelLg : s.label, { color: fg }]} numberOfLines={1}>{label}</Text>
+          {size === 'lg'
+            ? <DisplayText style={[s.labelLg, { color: fg }]} numberOfLines={1}>{label}</DisplayText>
+            : <Text style={[s.label, { color: fg }]} numberOfLines={1}>{label}</Text>}
         </View>
       )}
     </TouchableOpacity>
@@ -111,7 +114,7 @@ const s = StyleSheet.create({
   lg: { minHeight: 54 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   label: { fontSize: 15, fontWeight: String(Fonts.heavy) as any },
-  labelLg: { fontSize: 18, fontWeight: String(Fonts.semibold) as any, fontFamily: Fonts.display },
+  labelLg: { fontSize: 18 },
   icon: { alignItems: 'center', justifyContent: 'center' },
   raised: { shadowColor: '#161A23', shadowOpacity: 0.1, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
 });

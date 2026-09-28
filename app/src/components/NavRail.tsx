@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { AvatarView } from './AvatarView';
+import { BrandMark } from './BrandMark';
 import { IconChat, IconLogout, IconMoon, IconSettings, IconShuffle, IconSun } from './Icon';
 import { leaveDemoToSignUp } from './GuestBanner';
 import { useColors } from '../hooks/useColors';
@@ -47,8 +48,7 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
 
   return (
     <View style={[s.rail, { backgroundColor: c.surface, borderRightColor: c.border }]}>
-      <Image source={require('../../assets/reco-icon.png')} style={s.logo} resizeMode="contain"
-        tintColor={isDark ? '#fff' : undefined} />
+      <View style={s.logo}><BrandMark size={40} /></View>
       <View style={s.items}>
         {item('chats', t('nav-chats'), <IconChat size={22} color={active === 'chats' ? c.accent : c.textMuted} />)}
         {showMatch && !isGuest && item('match', t('nav-match'), <IconShuffle size={21} color={active === 'match' ? c.accent : c.textMuted} />)}
@@ -74,7 +74,7 @@ export const RAIL_W = 72;
 
 const s = StyleSheet.create({
   rail: { width: RAIL_W, borderRightWidth: StyleSheet.hairlineWidth, alignItems: 'center', paddingVertical: 14, gap: 6 },
-  logo: { width: 34, height: 34, marginBottom: 10 },
+  logo: { marginBottom: 12 },
   items: { gap: 8, alignItems: 'center' },
   item: { alignItems: 'center', width: RAIL_W - 8, gap: 3 },
   itemIcon: { width: 44, height: 36, borderRadius: Radius.md, alignItems: 'center', justifyContent: 'center' },

@@ -13,6 +13,8 @@ import { useT } from '../../src/hooks/useT';
 import { useLangStore } from '../../src/store/langStore';
 import { useThemeStore } from '../../src/store/themeStore';
 import { IconMoon, IconSun } from '../../src/components/Icon';
+import { BrandMark } from '../../src/components/BrandMark';
+import { DisplayText } from '../../src/components/ui/DisplayText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fonts, Radius, Spacing } from '../../src/theme';
 
@@ -157,7 +159,10 @@ export default function AuthScreen() {
     <KeyboardAvoidingView style={[s.container, { backgroundColor: c.bg }]} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.column}>
-          <Text style={[s.logo, { color: c.accent }]}>Reco</Text>
+          <View style={s.brand}>
+            <BrandMark size={76} />
+            <DisplayText style={[s.logo, { color: c.accent }]}>Reco</DisplayText>
+          </View>
 
           <View style={[s.tabs, { borderColor: c.border, backgroundColor: c.surface }]}>
             <TouchableOpacity style={[s.tab, tab === 'login' && { backgroundColor: c.accent }]} onPress={() => { setTab('login'); setError(''); }}>
@@ -353,7 +358,8 @@ const s = StyleSheet.create({
   cornerText: { fontSize: 13, fontWeight: String(Fonts.semibold) as any },
   scroll: { flexGrow: 1, justifyContent: 'center', padding: Spacing.xxl + 8 },
   column: { width: '100%', maxWidth: 360, alignSelf: 'center' },
-  logo: { fontSize: 36, fontWeight: String(Fonts.heavy) as any, textAlign: 'center', marginBottom: 40 },
+  brand: { alignItems: 'center', gap: 10, marginBottom: 36 },
+  logo: { fontSize: 42, textAlign: 'center' },
   tabs: { flexDirection: 'row', marginBottom: Spacing.xl, borderRadius: Radius.md, overflow: 'hidden', borderWidth: 1 },
   tab: { flex: 1, paddingVertical: 9, alignItems: 'center' },
   tabText: { fontWeight: String(Fonts.semibold) as any, fontSize: 14 },

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Image, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
@@ -12,6 +12,8 @@ import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { AvatarView } from '../../src/components/AvatarView';
 import { IconMic, IconPlus, IconChevronLeft, IconGroup, IconInfo } from '../../src/components/Icon';
 import { ConnectionBanner } from '../../src/components/ConnectionBanner';
+import { BrandMark } from '../../src/components/BrandMark';
+import { DisplayText } from '../../src/components/ui/DisplayText';
 
 const IS_WEB = Platform.OS === 'web';
 // CSS ease: cubic-bezier(0.25, 0.1, 0.25, 1.0)
@@ -179,7 +181,10 @@ export default function RoomsScreen() {
     </View>
   ) : (
     <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
-      <Image source={require('../../assets/reco-logo.png')} style={s.logo} tintColor={c.isDark ? '#fff' : undefined} resizeMode="contain" />
+      <View style={s.logo}>
+        <BrandMark size={28} />
+        <DisplayText style={[s.wordmark, { color: c.accent }]}>Reco</DisplayText>
+      </View>
       <View style={{ flex: 1 }} />
       {voicePill}
       {!currentUser?.guest && (
@@ -254,7 +259,8 @@ export default function RoomsScreen() {
 const s = StyleSheet.create({
   root: { flex: 1 },
   topbar: { height: 50, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, borderBottomWidth: 1 },
-  logo: { height: 22, width: 70 },
+  logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  wordmark: { fontSize: 23 },
   content: { flex: 1 },
   pill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginRight: 4 },
   pillCount: { fontSize: 12, fontWeight: '600' as any },

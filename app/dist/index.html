@@ -30,14 +30,18 @@
         height: 100%;
         flex: 1;
       }
-      /* App typeface. react-native-web sets a system font on every Text and
-         TextInput through a class; these selectors outrank that class, while a
-         component's own fontFamily (headings use Fredoka) still wins. Chinese
+      /* App typefaces. react-native-web gives every Text and TextInput a system
+         font through a class (and turns a component's fontFamily into a class
+         too); these selectors outrank both. Body text is Nunito; text marked
+         data-font="display" (the DisplayText component) is Fredoka. Chinese
          falls back to the platform's CJK font. */
       body [dir],
       body input[class],
       body textarea[class] {
         font-family: Nunito, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
+      }
+      body [data-font='display'] {
+        font-family: Fredoka, Nunito, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', system-ui, sans-serif;
       }
       /* iOS zooms into any focused input under 16px and never zooms back out,
          which leaves the page cropped. Touch screens get 16px inputs instead. */
@@ -55,6 +59,6 @@
       You need to enable JavaScript to run this app.
     </noscript>
     <div id="root"></div>
-  <script src="/_expo/static/js/web/entry-c89f782c2c16c324546cd6a250891f35.js" defer></script>
+  <script src="/_expo/static/js/web/entry-95b1088ca0bd33c84989ceb27bc9df0c.js" defer></script>
 </body>
 </html>
