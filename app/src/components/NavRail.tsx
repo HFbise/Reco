@@ -48,7 +48,7 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
 
   return (
     <View style={[s.rail, { backgroundColor: c.surface, borderRightColor: c.border }]}>
-      <View style={s.logo}><BrandMark size={40} /></View>
+      <View style={s.logo}><BrandMark size={34} /></View>
       <View style={s.items}>
         {item('chats', t('nav-chats'), <IconChat size={22} color={active === 'chats' ? c.accent : c.textMuted} />)}
         {showMatch && !isGuest && item('match', t('nav-match'), <IconShuffle size={21} color={active === 'match' ? c.accent : c.textMuted} />)}

@@ -160,7 +160,7 @@ export default function AuthScreen() {
       <ScrollView contentContainerStyle={s.scroll} keyboardShouldPersistTaps="handled">
         <View style={s.column}>
           <View style={s.brand}>
-            <BrandMark size={76} />
+            <BrandMark size={68} />
             <DisplayText style={[s.logo, { color: c.accent }]}>Reco</DisplayText>
           </View>
 

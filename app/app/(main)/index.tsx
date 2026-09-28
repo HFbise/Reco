@@ -182,7 +182,7 @@ export default function RoomsScreen() {
   ) : (
     <View style={[s.topbar, { backgroundColor: c.surface, borderBottomColor: c.border }]}>
       <View style={s.logo}>
-        <BrandMark size={28} />
+        <BrandMark size={24} />
         <DisplayText style={[s.wordmark, { color: c.accent }]}>Reco</DisplayText>
       </View>
       <View style={{ flex: 1 }} />

@@ -11,10 +11,11 @@ export const AVATAR_COLORS_LIST = [
   '#EB459E', '#57F287', '#0099E1', '#9C84EC',
 ];
 
-// SVG paths ported directly from app.js AVATAR_SVGS — viewBox 0 0 14 15, fill white
-function ExprSvg({ expression, width, height }: { expression: string; width: number; height: number }) {
-  const f = 'white';
-  const st = 'white';
+// The R-bubble faces (logo/asset/R_*.svg), viewBox 0 0 14 15. White on avatars;
+// the logo draws them in brand blue on a transparent ground.
+export function ExprSvg({ expression, width, height, color = 'white' }: { expression: string; width: number; height: number; color?: string }) {
+  const f = color;
+  const st = color;
 
   if (expression === 'Smile') return (
     <Svg width={width} height={height} viewBox="0 0 14 15" fill="none">
