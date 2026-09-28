@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Dimensions, Animated, Easing, Platform, PanResponder, useWindowDimensions } from 'react-native';
 import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
@@ -40,6 +40,30 @@ export default function RoomsScreen() {
   const [membersKey, setMembersKey] = useState(0);
 
   const pillUser = voiceMembers.find(m => m.isSpeaking) ?? voiceMembers[0];
+
+  // Swipe right in an open chat to go back to the list. The chat follows the finger;
+  // let go past 30% of the width (or with a flick) to close, otherwise it springs back.
+  // Latest values through a ref: the responder is created once.
+  const swipeRef = useRef({ SW, open: false, close: () => {} });
+  swipeRef.current = { SW, open: !!activeRoom, close: () => closeRoom() };
+  const swipeBack = useRef(PanResponder.create({
+    // Capture: claim clearly sideways drags before the message list does; vertical ones stay scrolls
+    onMoveShouldSetPanResponderCapture: (e, g) => {
+      if (!swipeRef.current.open) return false;
+      // Dragging inside the text box moves the cursor, not the page
+      const target = (e.nativeEvent as any).target as HTMLElement | undefined;
+      if (target?.closest?.('input, textarea')) return false;
+      return g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+    },
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderMove: (_e, g) => slideAnim.setValue(-swipeRef.current.SW + Math.max(0, g.dx)),
+    onPanResponderRelease: (_e, g) => {
+      if (g.dx > swipeRef.current.SW * 0.3 || g.vx > 0.5) swipeRef.current.close();
+      else Animated.spring(slideAnim, { toValue: -swipeRef.current.SW, bounciness: 0, useNativeDriver: true }).start();
+    },
+    onPanResponderTerminate: () =>
+      Animated.spring(slideAnim, { toValue: -swipeRef.current.SW, bounciness: 0, useNativeDriver: true }).start(),
+  })).current;
 
   function slideIn() {
     Animated.timing(slideAnim, { toValue: -SW, duration: 280, easing: EASE, useNativeDriver: true }).start();
@@ -186,7 +210,7 @@ export default function RoomsScreen() {
               <BottomTabBar />
             </View>
             {/* Right panel: Chat */}
-            <View style={[s.slidePanel, { width: SW, backgroundColor: c.bg }]}>
+            <View style={[s.slidePanel, s.swipeArea, { width: SW, backgroundColor: c.bg }]} {...swipeBack.panHandlers}>
               {activeRoom && (
                 <ChatPanel
                   key={activeRoom}
@@ -239,4 +263,6 @@ const s = StyleSheet.create({
   slideViewport: { flex: 1, overflow: 'hidden' as any },
   slideTrack: { flexDirection: 'row', flex: 1 },
   slidePanel: { flex: 1 },
+  // The browser keeps vertical scrolling; sideways drags are ours (swipe back)
+  swipeArea: { touchAction: 'pan-y' } as any,
 });

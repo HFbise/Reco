@@ -11,6 +11,9 @@ import { Fonts, Radius } from '../theme';
 
 type Tab = 'rooms' | 'match' | 'me';
 
+// Extra room under the tabs so they sit clear of the phone's bottom edge and home bar
+const LIFT = 10;
+
 /** Mobile navigation: the same destinations as the desktop NavRail. */
 export function BottomTabBar() {
   const pathname = usePathname();
@@ -35,7 +38,7 @@ export function BottomTabBar() {
   };
 
   return (
-    <View style={[s.bar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 8) }]}>
+    <View style={[s.bar, { backgroundColor: c.surface, borderTopColor: c.border, paddingBottom: Math.max(insets.bottom, 8) + LIFT }]}>
       {tab('rooms', t('nav-chats'), '/(main)', <IconChat size={22} color={color('rooms')} />)}
       {tab('match', t('nav-match'), '/(main)/match', <IconShuffle size={21} color={color('match')} />)}
       {tab('me', t('nav-me'), '/(main)/me', currentUser && !isGuest ? (

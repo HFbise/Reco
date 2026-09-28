@@ -237,6 +237,41 @@ def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, sho
     assert not page.get_by_placeholder('Type a message...').is_visible()
 
 
+def _swipe(page, x0, y0, x1, y1, steps=12):
+    """A real finger drag (touchstart, touchmove..., touchend) through the DevTools protocol."""
+    cdp = page.context.new_cdp_session(page)
+    point = lambda x, y: [{'x': x, 'y': y}]  # noqa: E731
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart', 'touchPoints': point(x0, y0)})
+    for i in range(1, steps + 1):
+        cdp.send('Input.dispatchTouchEvent', {
+            'type': 'touchMove', 'touchPoints': point(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps),
+        })
+        page.wait_for_timeout(16)
+    cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+    page.wait_for_timeout(800)  # slide animation
+
+
+def test_swiping_right_in_a_chat_goes_back_to_the_list(server, browser, shots):
+    create_user('hana')
+    context = browser.new_context(
+        viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
+    )
+    page = context.new_page()
+    shots.append(page)
+    log_in(page, 'hana')
+    page.get_by_text('Lobby', exact=True).first.click()
+    composer = page.get_by_placeholder('Type a message...')
+    composer.wait_for()
+
+    _swipe(page, 60, 400, 60, 250)  # scrolling up and down is not a swipe back
+    assert composer.is_visible()
+    _swipe(page, 40, 400, 110, 405)  # a short drag springs back
+    assert composer.is_visible()
+    _swipe(page, 40, 400, 320, 410)  # a real swipe closes the chat
+    assert page.get_by_placeholder('Search chats').is_visible()
+    assert not composer.is_visible()
+
+
 def _speech_level_wav(path):
     """A 300 Hz tone at -20 dBFS: roughly speech level, well under the output limiter."""
     import math
