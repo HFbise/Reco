@@ -23,6 +23,20 @@ AVATAR_EXPRESSIONS = ('Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em', 'Lenny'
 AVATAR_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 
+def sign_in(user: dict, stored_hash: str) -> dict:
+    """Bind this socket to `user` (a users row) and return what the client keeps of the session."""
+    bind(user['username'])
+    return {
+        'success': True,
+        'username': user['username'],
+        'token': make_token(user['username'], stored_hash),
+        'screenname': user['screenname'],
+        'bio': user.get('bio') or '',
+        'avatar_expression': user.get('avatar_expression') or 'Smile',
+        'avatar_color': user.get('avatar_color') or '#5865F2',
+    }
+
+
 @socketio.on('register')
 def handle_register(data):
     username = str_field(data, 'username').strip().lower()
@@ -89,6 +103,9 @@ def handle_login(data):
         if not user:
             fail('login_result', 'user_not_found')
             return
+        if not user['has_password']:
+            fail('login_result', 'no_password')  # made with GitHub or Google and no password set yet
+            return
         ok, needs_migrate = verify_password(user['password'], password)
         if not ok:
             record_login_fail(username)
@@ -102,19 +119,7 @@ def handle_login(data):
                 cur = conn.cursor()
                 cur.execute('UPDATE users SET password = %s WHERE username = %s', (stored_hash, user['username']))
                 conn.commit()
-        bind(user['username'])
-        emit(
-            'login_result',
-            {
-                'success': True,
-                'username': user['username'],
-                'token': make_token(user['username'], stored_hash),
-                'screenname': user['screenname'],
-                'bio': user.get('bio') or '',
-                'avatar_expression': user.get('avatar_expression') or 'Smile',
-                'avatar_color': user.get('avatar_color') or '#5865F2',
-            },
-        )
+        emit('login_result', sign_in(user, stored_hash))
     except Exception as e:
         log.exception('login error: %s', e)
         fail('login_result', 'server_error')
@@ -178,10 +183,10 @@ def handle_change_password(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT password FROM users WHERE username = %s', (username,))
+            cur.execute('SELECT password, has_password FROM users WHERE username = %s', (username,))
             user = cur.fetchone()
-            ok, _ = verify_password(user['password'], str_field(data, 'old_password'))
-            if not ok:
+            # Accounts made with GitHub or Google have no old password to give: they set a first one
+            if user['has_password'] and not verify_password(user['password'], str_field(data, 'old_password'))[0]:
                 fail('change_password_result', 'wrong_old_password')
                 return
             new_password = str_field(data, 'new_password')
@@ -189,7 +194,7 @@ def handle_change_password(username, data):
                 fail('change_password_result', 'password_too_short', {'min': MIN_PASSWORD_LEN})
                 return
             new_hash = hash_password(new_password)
-            cur.execute('UPDATE users SET password = %s WHERE username = %s', (new_hash, username))
+            cur.execute('UPDATE users SET password = %s, has_password = TRUE WHERE username = %s', (new_hash, username))
             conn.commit()
         end_sessions(username, keep_sid=request.sid)  # other devices must sign in again
         emit('change_password_result', {'success': True, 'token': make_token(username, new_hash)})
@@ -204,11 +209,15 @@ def handle_get_security_question(data):
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                'SELECT security_question FROM users WHERE username = %s', (str_field(data, 'username').strip(),)
+                'SELECT security_question, has_password FROM users WHERE username = %s',
+                (str_field(data, 'username').strip(),),
             )
             user = cur.fetchone()
         if not user:
             fail('security_question_result', 'user_not_found')
+            return
+        if not user['has_password']:
+            fail('security_question_result', 'no_password')
             return
         stored = user['security_question'] or ''
         # An id the client can translate; unknown legacy text is passed through as-is
@@ -231,8 +240,11 @@ def handle_reset_password(data):
             if not allowed:
                 fail('reset_password_result', 'too_many_attempts', {'secs': secs})
                 return
-            cur.execute('SELECT security_answer FROM users WHERE username = %s', (username,))
+            cur.execute('SELECT security_answer, has_password FROM users WHERE username = %s', (username,))
             user = cur.fetchone()
+            if user and not user['has_password']:
+                fail('reset_password_result', 'no_password')
+                return
             ok, needs_migrate = (
                 verify_password(user['security_answer'], answer) if user and user['security_answer'] else (False, False)
             )
@@ -294,13 +306,17 @@ def handle_delete_account(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT password FROM users WHERE username = %s', (username,))
+            cur.execute('SELECT password, has_password FROM users WHERE username = %s', (username,))
             row = cur.fetchone()
             if not row:
                 fail('delete_account_result', 'user_not_found')
                 return
-            ok, _ = verify_password(row['password'], password)
-            if not ok:
+            if not row['has_password']:
+                # Made with GitHub or Google and no password: the username, typed out, confirms
+                if password.strip().lower() != username:
+                    fail('delete_account_result', 'wrong_confirmation')
+                    return
+            elif not verify_password(row['password'], password)[0]:
                 fail('delete_account_result', 'wrong_password')
                 return
             delete_account(cur, username)

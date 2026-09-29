@@ -23,7 +23,11 @@ function useOnOpen(visible: boolean, reset: () => void) {
   }, [visible]);
 }
 
-export function ChangePasswordModal({ visible, onClose }: DialogProps) {
+/** Change the password, or (hasPassword false: an account made with GitHub or Google) set a first one. */
+export function ChangePasswordModal({ visible, onClose, hasPassword = true, onSaved }: DialogProps & {
+  hasPassword?: boolean; onSaved?: () => void;
+}) {
+  const c = useColors();
   const t = useT();
   const [oldPw, setOldPw] = useState('');
   const [newPw, setNewPw] = useState('');
@@ -33,21 +37,26 @@ export function ChangePasswordModal({ visible, onClose }: DialogProps) {
   useOnOpen(visible, () => { setOldPw(''); setNewPw(''); setConfirmPw(''); setError(''); });
 
   async function save() {
-    if (!oldPw || !newPw || !confirmPw) { setError(t('err-fill-required')); return; }
+    if ((hasPassword && !oldPw) || !newPw || !confirmPw) { setError(t('err-fill-required')); return; }
     if (newPw !== confirmPw) { setError(t('err-password-mismatch')); return; }
     setBusy(true);
     const reply = await changePassword(oldPw, newPw);
     setBusy(false);
     if (!reply.success) { setError(t.server(reply, 'err-change-failed')); return; }
     onClose();
-    showAlert(t('password-changed'));
+    onSaved?.();
+    showAlert(hasPassword ? t('password-changed') : t('password-set-done'));
   }
 
   return (
-    <ModalFrame visible={visible} onClose={onClose} title={t('change-password')} error={error}
+    <ModalFrame visible={visible} onClose={onClose} title={hasPassword ? t('change-password') : t('set-password')} error={error}
       confirmLabel={t('save')} onConfirm={save} busy={busy}>
-      <TextField placeholder={t('ph-old-password')} value={oldPw}
-        onChangeText={setOldPw} secureTextEntry autoComplete="current-password" textContentType="password" />
+      {hasPassword ? (
+        <TextField placeholder={t('ph-old-password')} value={oldPw}
+          onChangeText={setOldPw} secureTextEntry autoComplete="current-password" textContentType="password" />
+      ) : (
+        <Text style={{ color: c.textSub, fontSize: 14, lineHeight: 20 }}>{t('set-password-note')}</Text>
+      )}
       <TextField placeholder={t('ph-new-password')} value={newPw}
         onChangeText={setNewPw} secureTextEntry autoComplete="new-password" textContentType="newPassword" />
       <TextField placeholder={t('ph-confirm-password')} value={confirmPw}
@@ -144,9 +153,10 @@ export function FeedbackModal({ visible, onClose }: DialogProps) {
   );
 }
 
-export function DeleteAccountModal({ visible, onClose }: DialogProps) {
+export function DeleteAccountModal({ visible, onClose, hasPassword = true }: DialogProps & { hasPassword?: boolean }) {
   const c = useColors();
   const t = useT();
+  const username = useAuthStore((s) => s.currentUser?.username ?? '');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -163,10 +173,14 @@ export function DeleteAccountModal({ visible, onClose }: DialogProps) {
   return (
     <ModalFrame visible={visible} onClose={onClose} title={t('confirm-delete-title')} titleColor={c.danger}
       error={error} confirmLabel={t('delete-account')} onConfirm={confirm} busy={busy} danger>
-      <Text style={{ color: c.textSub, fontSize: 14, lineHeight: 20 }}>{t('confirm-delete-msg')}</Text>
-      <TextField placeholder={t('ph-password')}
-        value={password} onChangeText={setPassword} secureTextEntry autoComplete="current-password"
-        textContentType="password" onSubmitEditing={confirm} />
+      <Text style={{ color: c.textSub, fontSize: 14, lineHeight: 20 }}>
+        {hasPassword ? t('confirm-delete-msg') : t('confirm-delete-msg-username', { username })}
+      </Text>
+      {/* Without a password of its own, the account is confirmed by typing its username */}
+      <TextField placeholder={hasPassword ? t('ph-password') : username}
+        value={password} onChangeText={setPassword} secureTextEntry={hasPassword}
+        autoComplete={hasPassword ? 'current-password' : 'off'} autoCapitalize="none" autoCorrect={false}
+        textContentType={hasPassword ? 'password' : 'none'} onSubmitEditing={confirm} />
     </ModalFrame>
   );
 }

@@ -42,12 +42,12 @@ sid_users: dict = {}  # { sid: username }
 MEMBERS_ROOM = 'members'
 
 
-def _pw_fingerprint(password_hash: str) -> str:
+def password_fingerprint(password_hash: str) -> str:
     return hashlib.sha256(password_hash.encode()).hexdigest()[:16]
 
 
 def make_token(username: str, password_hash: str) -> str:
-    return _serializer.dumps({'u': username, 'p': _pw_fingerprint(password_hash)})
+    return _serializer.dumps({'u': username, 'p': password_fingerprint(password_hash)})
 
 
 def is_guest(username) -> bool:
@@ -80,7 +80,7 @@ def verify_token(token: str):
         cur = conn.cursor()
         cur.execute('SELECT password FROM users WHERE username = %s', (username,))
         row = cur.fetchone()
-    if not row or _pw_fingerprint(row['password']) != payload.get('p'):
+    if not row or password_fingerprint(row['password']) != payload.get('p'):
         return None
     return username
 

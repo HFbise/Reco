@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { AvatarView, ExprSvg } from '../AvatarView';
 import { Button } from '../ui/Button';
@@ -7,12 +7,17 @@ import { IconChat, IconLock, IconLogout, IconPencil, IconTrash } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { useAuthStore } from '../../store/authStore';
-import { logout } from '../../lib/account';
+import { logout, request } from '../../lib/account';
+import { showAlert } from '../../lib/alert';
+import { connectProvider, OAUTH_SUPPORTED, PROVIDER_NAMES, type Provider } from '../../lib/oauth';
+import { ProviderMark } from '../BrandIcons';
 import { getAvatarColor, tint } from '../../lib/avatar';
 import { ChangePasswordModal, DeleteAccountModal, EditProfileModal, FeedbackModal } from './AccountModals';
 import { Fonts, Radius, Spacing } from '../../theme';
 
 type Dialog = 'edit' | 'password' | 'feedback' | 'delete' | null;
+
+interface SignInMethods { has_password: boolean; linked: Provider[]; available: Provider[] }
 
 /** "Me": profile card, bio and account actions. Shared by the desktop panel and the mobile tab. */
 export function ProfileView() {
@@ -22,6 +27,34 @@ export function ProfileView() {
   const [dialog, setDialog] = useState<Dialog>(null);
   const close = () => setDialog(null);
   const avatarColor = currentUser?.avatar_color || getAvatarColor(currentUser?.username ?? '');
+  const [methods, setMethods] = useState<SignInMethods | null>(null);
+  const [pending, setPending] = useState<Provider | null>(null);
+  const hasPassword = methods?.has_password ?? true;
+
+  const loadMethods = useCallback(() => {
+    request('get_sign_in_methods', {}, 'sign_in_methods').then((data) => { if (data.success) setMethods(data); });
+  }, []);
+  useEffect(loadMethods, [loadMethods]);
+
+  async function connect(provider: Provider) {
+    setPending(provider);
+    if (!(await connectProvider(provider))) {  // on success the page leaves for the provider
+      setPending(null);
+      showAlert(t('srv-server_error'));
+    }
+  }
+
+  async function disconnect(provider: Provider) {
+    setPending(provider);
+    const reply = await request('oauth_unlink', { provider }, 'oauth_unlink_result');
+    setPending(null);
+    if (reply.success) loadMethods();
+    else showAlert(t.server(reply, 'srv-server_error'));
+  }
+
+  // Providers this server offers (web only), plus any already connected so they can be removed
+  const shown = (['github', 'google'] as const).filter((p) =>
+    methods?.linked.includes(p) || (OAUTH_SUPPORTED && methods?.available.includes(p)));
 
   return (
     <>
@@ -54,8 +87,24 @@ export function ProfileView() {
         </View>
 
         <View style={[s.list, { backgroundColor: c.surface }]}>
-          <Row label={t('change-password')} icon={<IconLock size={16} color={c.textSub} />} onPress={() => setDialog('password')} />
-          <View style={[s.divider, { backgroundColor: c.border }]} />
+          <Text style={[s.listTitle, { color: c.textSub }]}>{t('sign-in-methods')}</Text>
+          <MethodRow label={t('password')} icon={<IconLock size={16} color={c.textSub} />}
+            status={hasPassword ? t('method-password-on') : t('method-password-off')}
+            action={hasPassword ? t('change') : t('set-password')} onAction={() => setDialog('password')} />
+          {shown.map((p) => {
+            const linked = !!methods?.linked.includes(p);
+            return (
+              <View key={p}>
+                <View style={[s.divider, { backgroundColor: c.border }]} />
+                <MethodRow label={PROVIDER_NAMES[p]} icon={<ProviderMark provider={p} size={18} color={c.text} />}
+                  status={linked ? t('connected') : t('not-connected')} busy={pending === p}
+                  action={linked ? t('disconnect') : t('connect')} onAction={() => (linked ? disconnect(p) : connect(p))} />
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={[s.list, { backgroundColor: c.surface }]}>
           <Row label={t('feedback-btn')} icon={<IconChat size={18} color={c.textSub} />} onPress={() => setDialog('feedback')} />
         </View>
 
@@ -67,9 +116,9 @@ export function ProfileView() {
       </ScrollView>
 
       <EditProfileModal visible={dialog === 'edit'} onClose={close} />
-      <ChangePasswordModal visible={dialog === 'password'} onClose={close} />
+      <ChangePasswordModal visible={dialog === 'password'} onClose={close} hasPassword={hasPassword} onSaved={loadMethods} />
       <FeedbackModal visible={dialog === 'feedback'} onClose={close} />
-      <DeleteAccountModal visible={dialog === 'delete'} onClose={close} />
+      <DeleteAccountModal visible={dialog === 'delete'} onClose={close} hasPassword={hasPassword} />
     </>
   );
 }
@@ -81,6 +130,24 @@ function Row({ label, icon, onPress, danger }: { label: string; icon: ReactNode;
       <View style={[s.rowIcon, { backgroundColor: danger ? c.dangerBg : c.surface2 }]}>{icon}</View>
       <Text style={[s.rowText, { color: danger ? c.danger : c.text }]}>{label}</Text>
     </TouchableOpacity>
+  );
+}
+
+/** A way to sign in: what it is, whether it's on, and the one thing you can do about it. */
+function MethodRow({ label, icon, status, action, onAction, busy }: {
+  label: string; icon: ReactNode; status: string; action: string; onAction: () => void; busy?: boolean;
+}) {
+  const c = useColors();
+  return (
+    <View style={s.row}>
+      <View style={[s.rowIcon, { backgroundColor: c.surface2 }]}>{icon}</View>
+      <View style={s.rowBody}>
+        <Text style={[s.rowText, { color: c.text }]}>{label}</Text>
+        <Text style={[s.rowSub, { color: c.textMuted }]}>{status}</Text>
+      </View>
+      <Button label={action} variant="quiet" onPress={onAction} busy={busy} style={s.rowAction}
+        accessibilityLabel={`${action} ${label}`} />
+    </View>
   );
 }
 
@@ -102,4 +169,8 @@ const s = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 14, height: 56, paddingHorizontal: Spacing.lg },
   rowIcon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   rowText: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  rowBody: { flex: 1, gap: 1 },
+  rowSub: { fontSize: 13 },
+  rowAction: { minHeight: 36, paddingHorizontal: 14 },
+  listTitle: { fontSize: 13, fontWeight: String(Fonts.heavy) as any, paddingHorizontal: Spacing.lg, paddingTop: 10, paddingBottom: 2 },
 });

@@ -25,6 +25,11 @@ free instance sleeps when idle, so the first load can take up to a minute.
 
 ## Features
 
+- **Sign in with GitHub or Google** (web), next to username and password. A new
+  identity picks its username first; an existing account connects either provider
+  from its profile, and can add a password later. Accounts are never matched up by
+  email, no email or other scopes are requested, and the last way to sign in can't be
+  removed.
 - **Rooms and DMs:** public or password-protected rooms, invites, edits, recalls,
   emoji reactions, replies that quote the message they answer (tap the quote to jump
   back to it), "… is typing" and online presence. The DM list shows each
@@ -103,6 +108,11 @@ flowchart LR
   token that embeds a fingerprint of the password hash, so changing the password
   logs out every other session. Handlers receive the verified username; nothing
   trusts a username sent by the client.
+- **OAuth without tokens in URLs.** A signed, HttpOnly `state` cookie ties the
+  provider's callback to the browser that started it. The callback hands the app a
+  short-lived, single-use ticket in the URL fragment (never sent to servers or in
+  `Referer`), which the app trades over the socket for a normal session. The
+  provider's access token is used once to read the account id, then dropped.
 - **Replies are codes, not strings.** For example, `fail('join', 'wrong_password')`.
   The client's i18n layer turns them into text, and a test checks that every server
   code has a translation.
@@ -151,6 +161,10 @@ The schema is created and migrated automatically on startup.
 | `ADMIN_PASSWORD` | Enables the `/admin` panel |
 | `TURN_HOST`, `TURN_PORT`, `TURN_SECRET` | TURN server for voice; without it voice falls back to STUN only, and voice matching is disabled |
 | `SENTRY_DSN` | Error reporting (optional) |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Sign in with GitHub (optional; callback `<site>/auth/github/callback`) |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google (optional; callback `<site>/auth/google/callback`) |
+| `PUBLIC_URL` | The site's address for OAuth callbacks (Render's `RENDER_EXTERNAL_URL` is used when unset) |
+| `APP_URL` | Where OAuth sends the browser back, if the web app runs elsewhere (local Expo dev: `http://localhost:8081`) |
 | `CORS_ORIGINS` | Allowed origins for Socket.IO (default `*`) |
 | `PRIVACY_CONTACT_EMAIL` | Shown on `/privacy` |
 | `DB_POOL_MAX` | Max database connections (default 10) |

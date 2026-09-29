@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { usePathname } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
@@ -26,7 +27,9 @@ export function DesktopShell() {
   const c = useColors();
   const t = useT();
 
-  const [section, setSection] = useState<Section>('chats');
+  // /me opens on the profile (e.g. back from connecting GitHub or Google)
+  const pathname = usePathname();
+  const [section, setSection] = useState<Section>(pathname === '/me' ? 'me' : 'chats');
   const [room, setRoom] = useState<string | null>(null);
   const [roomPassword, setRoomPassword] = useState<string | undefined>();
   const [dmMeta, setDmMeta] = useState<DmMeta | null>(null);

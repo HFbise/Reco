@@ -24,7 +24,8 @@ URL = f'http://127.0.0.1:{PORT}'
 
 @pytest.fixture(scope='module')
 def server():
-    env = dict(os.environ, PORT=str(PORT), SECRET_KEY='e2e')
+    # GitHub credentials make the server offer 'Continue with GitHub' (github.com itself is stubbed)
+    env = dict(os.environ, PORT=str(PORT), SECRET_KEY='e2e', GITHUB_CLIENT_ID='e2e-gh', GITHUB_CLIENT_SECRET='e2e')
     proc = subprocess.Popen(
         [sys.executable, 'app.py'], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -598,3 +599,54 @@ def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
     louder = hugo.evaluate(_OUTPUT_LEVEL)
     assert 1.35 < louder / level < 1.65
     b.close()
+
+
+def test_github_sign_in_makes_an_account_that_can_add_a_password(server, browser, shots):
+    from itsdangerous import URLSafeTimedSerializer
+
+    page = new_page(browser)
+    shots.append(page)
+    # The button goes to our server, which redirects to GitHub; stop there instead of leaving
+    # (Playwright doesn't intercept redirect targets, so stub our own route)
+    sent_to = []
+
+    def to_github(route):
+        sent_to.append(route.fetch(max_redirects=0).headers['location'])
+        route.fulfill(body='off to GitHub')
+
+    page.route(f'{URL}/auth/github', to_github)
+    page.goto(URL)
+    page.get_by_text('Continue with GitHub').click()
+    page.get_by_text('off to GitHub').wait_for()
+    assert sent_to[0].startswith('https://github.com/login/oauth/authorize?') and 'client_id=e2e-gh' in sent_to[0]
+
+    # Back from GitHub as someone new (the round trip itself is covered in test_oauth.py)
+    ticket = URLSafeTimedSerializer('e2e', salt='oauth').dumps({'pv': 'github', 'id': '777'}, salt='oauth-signup')
+    page.goto(f'{URL}/oauth#signup={ticket}&provider=github&username=octo_cat&screenname=Octo')
+    page.get_by_text('One last step').wait_for()
+    assert page.get_by_placeholder('Username').input_value() == 'octo_cat'
+    page.get_by_text('Create account').click()
+    page.get_by_text('Lobby').first.wait_for()
+    assert 'signup=' not in page.url  # the ticket doesn't stay in the address bar
+
+    page.goto(f'{URL}/me')
+    page.get_by_text('Sign-in methods').wait_for()
+    page.get_by_text('Connected', exact=True).wait_for()  # loaded after the page
+    assert page.get_by_text('Not set', exact=True).is_visible()
+    page.get_by_label('Set a password Password').click()
+    page.get_by_placeholder('New password', exact=True).fill('octopass1')
+    page.get_by_placeholder('Confirm new password').fill('octopass1')
+    page.get_by_text('Save', exact=True).click()
+    page.get_by_text('Sign in with your username and password').wait_for()
+
+    other = new_page(browser)
+    shots.append(other)
+    log_in(other, 'octo_cat', 'octopass1')
+
+
+def test_a_cancelled_github_sign_in_says_so_on_the_login_screen(server, browser, shots):
+    page = new_page(browser)
+    shots.append(page)
+    page.goto(f'{URL}/oauth#error=oauth_cancelled')
+    page.get_by_text('Sign-in was cancelled').wait_for()
+    assert page.get_by_placeholder('Password').is_visible()

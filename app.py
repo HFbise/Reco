@@ -24,6 +24,7 @@ import client_errors
 import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
 import images
+import oauth
 import reads
 import voice_state
 from admin import admin_bp
@@ -36,6 +37,7 @@ from state import LOBBY, online_users
 app.register_blueprint(admin_bp)
 app.register_blueprint(images.bp)
 app.register_blueprint(client_errors.bp)
+app.register_blueprint(oauth.bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
@@ -246,6 +248,7 @@ def _migrate():
             cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL')
             reads.migrate(cur)
             images.migrate(cur)
+            oauth.migrate(cur)
 
             # Backfill missing room codes
             import random

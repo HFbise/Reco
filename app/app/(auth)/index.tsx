@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, Modal,
   StyleSheet, KeyboardAvoidingView, Platform, ScrollView,
@@ -8,6 +8,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useAuthStore } from '../../src/store/authStore';
 import { connectSocket } from '../../src/lib/socket';
 import { request } from '../../src/lib/account';
+import { fetchProviders, PROVIDER_NAMES, signInWith, type Provider } from '../../src/lib/oauth';
 import { useColors } from '../../src/hooks/useColors';
 import { useT } from '../../src/hooks/useT';
 import { useLangStore } from '../../src/store/langStore';
@@ -18,6 +19,7 @@ import { Button } from '../../src/components/ui/Button';
 import { TextField } from '../../src/components/ui/TextField';
 import { ModalFrame } from '../../src/components/account/ModalFrame';
 import { BrandMark } from '../../src/components/BrandMark';
+import { ProviderMark } from '../../src/components/BrandIcons';
 import { DisplayText } from '../../src/components/ui/DisplayText';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Fonts, Radius, Spacing } from '../../src/theme';
@@ -37,12 +39,14 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const { lang, setLang } = useLangStore();
   const { isDark, toggle: toggleTheme } = useThemeStore();
-  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  // oauth_error: sent back here by the /oauth screen when GitHub / Google sign-in didn't work
+  const { mode, oauth_error } = useLocalSearchParams<{ mode?: string; oauth_error?: string }>();
   const [tab, setTab] = useState<Tab>(mode === 'register' ? 'register' : 'login');
   const [username, setUsername] = useState('');
   const [screenname, setScreenname] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [error, setError] = useState(oauth_error ? t.server({ code: oauth_error }, 'srv-server_error') : '');
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [secQuestion, setSecQuestion] = useState(SECURITY_QUESTIONS[0]);
   const [secAnswer, setSecAnswer] = useState('');
   const [showQPicker, setShowQPicker] = useState(false);
@@ -63,6 +67,8 @@ export default function AuthScreen() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [slow, setSlow] = useState(false);
+
+  useEffect(() => { fetchProviders().then(setProviders); }, []);
 
   /** One request at a time, with a spinner, and a "waking up" note if the server is slow. */
   async function ask(event: string, payload: object, resultEvent: string) {
@@ -263,6 +269,12 @@ export default function AuthScreen() {
               <Text style={[s.or, { color: c.textMuted }]}>{t('or')}</Text>
               <View style={[s.rule, { backgroundColor: c.border }]} />
             </View>
+
+            {providers.map((p) => (
+              <Button key={p} variant="quiet" size="lg" disabled={busy} onPress={() => signInWith(p)}
+                label={t('continue-with', { provider: PROVIDER_NAMES[p] })}
+                icon={(color) => <ProviderMark provider={p} color={color} size={20} />} />
+            ))}
 
             <TouchableOpacity style={[s.demo, { borderColor: brand, backgroundColor: c.surface }]} onPress={viewDemo}
               activeOpacity={0.8} disabled={busy} accessibilityRole="button">

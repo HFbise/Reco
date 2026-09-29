@@ -238,6 +238,7 @@ def delete_account(cur, username: str):
     cur.execute('DELETE FROM push_tokens WHERE username = %s', (username,))
     cur.execute('DELETE FROM room_restrictions WHERE username = %s', (username,))
     cur.execute('DELETE FROM room_invites WHERE username = %s', (username,))
+    cur.execute('DELETE FROM oauth_accounts WHERE username = %s', (username,))
     cur.execute('DELETE FROM users WHERE username = %s', (username,))
     cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
@@ -289,6 +290,7 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE room_restrictions SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE room_invites SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE room_invites SET invited_by = %s WHERE invited_by = %s', (new, old))
+        cur.execute('UPDATE oauth_accounts SET username = %s WHERE username = %s', (new, old))
         cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (old,))
         conn.commit()
 

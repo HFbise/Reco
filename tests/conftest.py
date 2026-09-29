@@ -58,6 +58,7 @@ TABLES = [
     'matches',
     'read_marks',
     'images',
+    'oauth_accounts',
 ]
 
 
