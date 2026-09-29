@@ -1,16 +1,16 @@
 import { useRef, useState } from 'react';
 import { Animated, Easing, Platform, Pressable } from 'react-native';
-import { EXPRESSIONS, ExprSvg } from './AvatarView';
+import { LOGO_EXPRESSIONS, ExprSvg } from './AvatarView';
 import { useColors } from '../hooks/useColors';
 import { Colors } from '../theme';
 
 const pick = (except?: string) => {
-  const choices = EXPRESSIONS.filter((e) => e !== except);
+  const choices = LOGO_EXPRESSIONS.filter((e) => e !== except);
   return choices[Math.floor(Math.random() * choices.length)];
 };
 
-// The logo wears one of the faces (logo/asset/R_*.svg), picked when the app
-// loads: a different mood per visit.
+// The logo wears one of its faces (logo/asset/R_*.svg; the R_F_ ones are for avatars only),
+// picked when the app loads: a different mood per visit.
 const FIRST_FACE = pick();
 
 /** Reco's logo: the R bubble with a face. Tap it and it wiggles into another face. */

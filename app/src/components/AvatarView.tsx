@@ -2,8 +2,11 @@ import { View } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { getAvatarColor } from '../lib/avatar';
 
-// Expression names — same order as web AVATAR_EXPRESSIONS
-export const EXPRESSIONS = ['Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em', 'Lenny', 'oO', 'Drooling', 'Crazy'] as const;
+// Faces the logo wears too (logo/asset/R_<name>.svg)
+export const LOGO_EXPRESSIONS = ['Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em'] as const;
+// Every face an avatar can pick: the logo's plus the avatar-only ones (R_F_<name>.svg; 'o.O' is keyed 'oO').
+// Same list as handlers/auth.py AVATAR_EXPRESSIONS.
+export const EXPRESSIONS = [...LOGO_EXPRESSIONS, 'Lenny', 'oO', 'Drooling', 'Crazy'] as const;
 export type ExpressionKey = typeof EXPRESSIONS[number];
 
 export const AVATAR_COLORS_LIST = [
@@ -11,8 +14,8 @@ export const AVATAR_COLORS_LIST = [
   '#EB459E', '#57F287', '#0099E1', '#9C84EC',
 ];
 
-// The R-bubble faces (logo/asset/R_*.svg): viewBox 0 0 14 15 for the first six, 0 0 12 12 for the
-// newer ones (drawn partly with strokes, which follow the color too). White on avatars;
+// The R-bubble faces: viewBox 0 0 14 15 for the logo's (R_*.svg), 0 0 12 12 for the avatar-only
+// ones (R_F_*.svg, drawn partly with strokes, which follow the color too). White on avatars;
 // the logo draws them in brand blue on a transparent ground.
 export function ExprSvg({ expression, width, height, color = 'white' }: { expression: string; width: number; height: number; color?: string }) {
   const f = color;

@@ -21,7 +21,7 @@ import moderation
 from auth_session import authenticated
 from db import get_db
 from extensions import socketio
-from handlers.auth import AVATAR_EXPRESSIONS
+from handlers.auth import LOGO_EXPRESSIONS
 from matching import MODES, MatchQueue, Ticket, normalize_tags
 from replies import fail
 from state import check_msg_rate, emit_system_msg
@@ -119,7 +119,7 @@ def _start(a: Ticket, b: Ticket):
                 'match_id': match_id,
                 'mode': ticket.mode,
                 'shared_tags': shared,
-                'stranger': {'expression': rng.choice(AVATAR_EXPRESSIONS), 'color': rng.choice(COLORS)},
+                'stranger': {'expression': rng.choice(LOGO_EXPRESSIONS), 'color': rng.choice(COLORS)},
                 # voice: exactly one side makes the WebRTC offer
                 'initiator': initiator,
             },

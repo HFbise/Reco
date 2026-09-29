@@ -55,6 +55,7 @@ def test_stranger_avatar_is_random_not_the_real_one(pair):
         conn.commit()
     found = events(alice, 'match_found')[0]
     assert found['stranger']['color'] in match_handlers.COLORS
+    assert found['stranger']['expression'] in match_handlers.LOGO_EXPRESSIONS  # not the avatar-only faces
 
 
 def test_messages_are_stored_with_real_identity_for_moderation(pair):

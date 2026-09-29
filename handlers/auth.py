@@ -18,8 +18,10 @@ log = logging.getLogger(__name__)
 MAX_SCREENNAME_LEN = 32
 MAX_BIO_LEN = 200
 MIN_PASSWORD_LEN = 6
-# The logo faces an avatar can wear (logo/asset/R_*.svg); keep in step with AvatarView.EXPRESSIONS
-AVATAR_EXPRESSIONS = ('Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em', 'Lenny', 'oO', 'Drooling', 'Crazy')
+# The faces an avatar can wear: the logo's own (logo/asset/R_*.svg) plus avatar-only ones
+# (R_F_*.svg) that users pick for themselves. Keep in step with AvatarView.EXPRESSIONS.
+LOGO_EXPRESSIONS = ('Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em')
+AVATAR_EXPRESSIONS = LOGO_EXPRESSIONS + ('Lenny', 'oO', 'Drooling', 'Crazy')
 AVATAR_COLOR_RE = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 

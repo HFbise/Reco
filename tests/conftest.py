@@ -27,6 +27,11 @@ os.environ.setdefault('SECRET_KEY', 'test-secret')
 os.environ.setdefault('ADMIN_PASSWORD', 'test-admin')
 os.environ.setdefault('TURN_SECRET', 'test-turn')
 os.environ.setdefault('TURN_HOST', 'turn.test')
+# app.py loads the developer's .env, which must not switch real services on in tests (Sentry
+# would receive every deliberate test error). dotenv never overrides a variable already set.
+for _name in ('SENTRY_DSN', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'):
+    os.environ[_name] = ''
+os.environ['PUBLIC_URL'] = os.environ['APP_URL'] = ''
 
 import app as app_module  # noqa: E402  (registers every socket handler)
 import auth_session  # noqa: E402

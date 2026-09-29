@@ -88,7 +88,7 @@ def test_avatar_must_be_a_known_expression_and_a_hex_color():
     assert events(alice, 'save_avatar_result')[0]['code'] == 'invalid_avatar'
     alice.emit('save_avatar', {'expression': 'Laugh', 'color': '#3BA55C'})
     assert events(alice, 'save_avatar_result')[0]['success']
-    # The newer faces are allowed too; their file names aren't keys ('o.O' is stored as 'oO')
+    # The avatar-only faces (R_F_*.svg) can be picked too, by key ('o.O' is stored as 'oO')
     alice.emit('save_avatar', {'expression': 'Crazy', 'color': '#3BA55C'})
     assert events(alice, 'save_avatar_result')[0]['success']
     alice.emit('save_avatar', {'expression': 'o.O', 'color': '#3BA55C'})
