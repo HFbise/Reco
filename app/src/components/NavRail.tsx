@@ -53,10 +53,6 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
         {item('chats', t('nav-chats'), <IconChat size={22} color={active === 'chats' ? c.accent : c.textMuted} />)}
         {/* Guests see matching too, as a preview: starting one asks them to sign up */}
         {showMatch && item('match', t('nav-match'), <IconShuffle size={21} color={active === 'match' ? c.accent : c.textMuted} />)}
-        {!isGuest && item('me', t('nav-me'), (
-          <AvatarView expression={currentUser?.avatar_expression} color={currentUser?.avatar_color}
-            username={currentUser?.username} screenname={currentUser?.screenname} size={26} />
-        ))}
       </View>
       <View style={{ flex: 1 }} />
       {isGuest && (
@@ -65,7 +61,14 @@ export function NavRail({ active, onSelect, onOpenSettings, showMatch = false }:
         </TouchableOpacity>
       )}
       {iconButton(t('dark-mode'), toggle, isDark ? <IconSun size={19} color={c.textMuted} /> : <IconMoon size={19} color={c.textMuted} />)}
-      {iconButton(t('settings'), onOpenSettings, <IconSettings size={19} color={c.textMuted} />)}
+      {/* Your profile sits down here and settings open from it. Guests have no profile,
+          so they keep the settings button (language, theme). */}
+      {isGuest
+        ? iconButton(t('settings'), onOpenSettings, <IconSettings size={19} color={c.textMuted} />)
+        : item('me', t('nav-me'), (
+          <AvatarView expression={currentUser?.avatar_expression} color={currentUser?.avatar_color}
+            username={currentUser?.username} screenname={currentUser?.screenname} size={26} />
+        ))}
       {iconButton(t('logout'), logout, <IconLogout size={19} color={c.textMuted} />)}
     </View>
   );

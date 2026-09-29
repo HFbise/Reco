@@ -572,13 +572,15 @@ def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
         page.wait_for_timeout(400)
 
     def settings_slider(page, index):
-        page.get_by_label('Settings').first.click()
+        page.get_by_label('Me', exact=True).click()  # settings open from your profile
+        page.get_by_text('Settings', exact=True).click()
         page.get_by_text('Audio', exact=True).click()
         # The device pickers load a moment later and resize the dialog: click after that
         page.get_by_role('combobox').first.wait_for()
         to_max(page, page.get_by_role('slider').nth(index))
         page.get_by_text('150%').first.wait_for()
         page.get_by_text('Close', exact=True).last.click()
+        page.get_by_label('Chats', exact=True).click()  # back to the room (voice stays connected)
 
     level = hugo.evaluate(_OUTPUT_LEVEL)
     assert level > 0.001  # Hugo hears Gina

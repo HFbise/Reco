@@ -87,7 +87,7 @@ export function DesktopShell() {
               <View style={[s.pageHeader, { borderBottomColor: c.border }]}>
                 <DisplayText style={[s.pageTitle, { color: c.text }]}>{t('my-profile')}</DisplayText>
               </View>
-              <ProfileView />
+              <ProfileView onOpenSettings={() => setShowSettings(true)} />
             </View>
           )}
 

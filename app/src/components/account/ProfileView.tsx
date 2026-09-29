@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { AvatarView, ExprSvg } from '../AvatarView';
 import { Button } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
-import { IconChat, IconLock, IconLogout, IconPencil, IconTrash } from '../Icon';
+import { IconChat, IconLock, IconLogout, IconPencil, IconSettings, IconTrash } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { useAuthStore } from '../../store/authStore';
@@ -19,8 +19,9 @@ type Dialog = 'edit' | 'password' | 'feedback' | 'delete' | null;
 
 interface SignInMethods { has_password: boolean; linked: Provider[]; available: Provider[] }
 
-/** "Me": profile card, bio and account actions. Shared by the desktop panel and the mobile tab. */
-export function ProfileView() {
+/** "Me": profile card, bio and account actions. Shared by the desktop panel and the mobile tab.
+ *  onOpenSettings: desktop only, where settings (voice devices and levels) open from here. */
+export function ProfileView({ onOpenSettings }: { onOpenSettings?: () => void } = {}) {
   const c = useColors();
   const t = useT();
   const currentUser = useAuthStore((s) => s.currentUser);
@@ -105,6 +106,12 @@ export function ProfileView() {
         </View>
 
         <View style={[s.list, { backgroundColor: c.surface }]}>
+          {onOpenSettings && (
+            <>
+              <Row label={t('settings')} icon={<IconSettings size={18} color={c.textSub} />} onPress={onOpenSettings} />
+              <View style={[s.divider, { backgroundColor: c.border }]} />
+            </>
+          )}
           <Row label={t('feedback-btn')} icon={<IconChat size={18} color={c.textSub} />} onPress={() => setDialog('feedback')} />
         </View>
 
