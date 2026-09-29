@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { MessageBubble, type Message } from '../MessageBubble';
+import { TypingIndicator } from './TypingIndicator';
 import { buildFeed, type FeedItem } from '../../lib/feed';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
@@ -27,6 +28,8 @@ interface Props {
   onRecall: (msg: Message) => void;
   onOpenRoom: (room: string) => void;
   onReply: (msg: Message) => void;
+  /** Display names of the others typing right now */
+  typing: string[];
 }
 
 const HIGHLIGHT_MS = 1600;
@@ -122,6 +125,12 @@ export function MessageList(p: Props) {
       initialNumToRender={data.length || 20}
       keyExtractor={(item) => (item._type === 'sep' ? item._id : String((item as Message).id))}
       renderItem={renderItem}
+      // Inverted: the "header" sits under the newest message
+      ListHeaderComponent={p.typing.length ? <TypingIndicator label={
+        p.typing.length === 1 ? t('typing-one', { name: p.typing[0] })
+          : p.typing.length === 2 ? t('typing-two', { a: p.typing[0], b: p.typing[1] })
+          : t('typing-many')
+      } /> : null}
       contentContainerStyle={s.list}
     />
   );

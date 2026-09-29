@@ -36,6 +36,10 @@ interface Options {
 
 export type ChatToast = 'muted' | 'dm-blocked' | 'rate-limited' | 'send-failed';
 
+// Typing: send at most this often while typing; forget a typist this long after their last signal
+const TYPING_SEND_MS = 2000;
+const TYPING_SHOW_MS = 4000;
+
 const oldestId = (messages: Message[]) => messages.find((m) => typeof m.id === 'number')?.id;
 
 /**
@@ -54,6 +58,9 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   const [room, setRoom] = useState<RoomInfo>({ code: '', memberCount: 0, isOwner: false, myLevel: 0, hasPassword: !!password });
   const [isTextMuted, setIsTextMuted] = useState(false);
   const [voiceMembers, setVoiceMembers] = useState<VoiceMember[]>([]);
+  // Who else is typing here: username -> display name and when to stop showing it
+  const [typists, setTypists] = useState<Record<string, { screenname: string; until: number }>>({});
+  const lastTypingSent = useRef(0);
 
   const callbacks = useRef({ onRemoved, onJoinFailed, onToast });
   callbacks.current = { onRemoved, onJoinFailed, onToast };
@@ -68,6 +75,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     setHasOlder(false);
     setIsTextMuted(false);
     setVoiceMembers([]);
+    setTypists({});
 
     const join = () => {
       const current = getCached(name);
@@ -106,6 +114,12 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
         if (!mine(data)) return;
         const msg = withOwn(data);
         if (!msg.system) cacheMsg(name, msg);
+        // Their message is here: they're done typing
+        setTypists((t) => {
+          if (!t[msg.username]) return t;
+          const { [msg.username]: _done, ...rest } = t;
+          return rest;
+        });
         // Append rather than reload the cache: older pages loaded by scrolling up live only in state
         setMessages((prev) => (msg.id != null && prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
       },
@@ -146,6 +160,10 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
         if (!mine(data)) return;
         patchCached(name, data.id, { reactions: data.reactions });
         setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, reactions: data.reactions } : m)));
+      },
+      typing: (data) => {
+        if (!mine(data) || data.username === username) return;
+        setTypists((t) => ({ ...t, [data.username]: { screenname: data.screenname, until: Date.now() + TYPING_SHOW_MS } }));
       },
       room_password_changed: (data) => {
         if (mine(data)) setRoom((r) => ({ ...r, hasPassword: data.has_password }));
@@ -204,6 +222,28 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     };
   }, [username, name, isDm]);
 
+  // Drop typists who went quiet
+  const anyTypists = Object.keys(typists).length > 0;
+  useEffect(() => {
+    if (!anyTypists) return;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      setTypists((t) => {
+        const live = Object.fromEntries(Object.entries(t).filter(([, v]) => v.until > now));
+        return Object.keys(live).length === Object.keys(t).length ? t : live;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [anyTypists]);
+
+  /** Call on every keystroke; the others hear about it at most every couple of seconds */
+  const notifyTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingSent.current < TYPING_SEND_MS) return;
+    lastTypingSent.current = now;
+    getSocket().emit('typing', { room: name });
+  }, [name]);
+
   const loadOlder = useCallback(() => {
     const before = oldestId(messages);
     if (!hasOlder || loadingOlder || before == null) return;
@@ -215,6 +255,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   const send = useCallback((text: string, replyTo?: number | null) => {
     const body = text.trim();
     if (body) getSocket().emit('message', { room: name, text: body, ...(replyTo ? { reply_to: replyTo } : {}) });
+    lastTypingSent.current = 0; // the next message starts a fresh "typing" 
   }, [name]);
 
   const recall = useCallback((id: number) => getSocket().emit('recall_message', { id }), []);
@@ -236,6 +277,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   return {
     messages, hasOlder, loadingOlder, loadOlder,
     room, isTextMuted, voiceMembers,
-    send, recall, edit, react, leave, close, setRoomPassword,
+    typing: Object.values(typists).map((v) => v.screenname),
+    send, notifyTyping, recall, edit, react, leave, close, setRoomPassword,
   };
 }

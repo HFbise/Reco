@@ -209,10 +209,11 @@ export function ChatPanel({
           onRecall={(msg) => chat.recall(msg.id)}
           onOpenRoom={openRoom}
           onReply={(msg) => { setEditing(null); setReplyingTo(msg); }}
+          typing={chat.typing}
         />
         <Composer
           input={input}
-          onChangeInput={setInput}
+          onChangeInput={(text) => { setInput(text); if (text.trim()) chat.notifyTyping(); }}
           onSend={send}
           emojiOpen={showInputEmoji}
           onToggleEmoji={() => { setShowInputEmoji((v) => !v); setReactionBar(null); }}

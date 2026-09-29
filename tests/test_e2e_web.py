@@ -168,6 +168,22 @@ def test_reply_quotes_the_message_it_answers(server, browser, shots):
     quote.click()
 
 
+def test_others_see_who_is_typing(server, browser, shots):
+    create_user('pia', screenname='Pia')
+    create_user('quinn', screenname='Quinn')
+    pia, quinn = new_page(browser), new_page(browser)
+    shots.extend([pia, quinn])
+    for page, name in ((pia, 'pia'), (quinn, 'quinn')):
+        log_in(page, name)
+        open_room(page, 'Lobby')
+    box = quinn.get_by_placeholder('Type a message...')
+    box.press_sequentially('on my way', delay=40)
+    pia.get_by_text('Quinn is typing…').wait_for(timeout=10000)
+    box.press('Enter')
+    pia.get_by_text('on my way').wait_for(timeout=10000)
+    pia.get_by_text('Quinn is typing…').wait_for(state='detached')  # the message ends it
+
+
 def test_chinese_browser_gets_chinese_ui(server, browser, shots):
     create_user('carol')
     page = new_page(browser, locale='zh-CN')

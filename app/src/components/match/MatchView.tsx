@@ -4,6 +4,7 @@ import {
 } from 'react-native';
 import { AvatarView } from '../AvatarView';
 import { MessageBubble, type Message } from '../MessageBubble';
+import { TypingIndicator } from '../chat/TypingIndicator';
 import { Button, IconButton } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
 import { FaceRow } from '../ui/FaceRow';
@@ -335,7 +336,7 @@ function MatchMessages({ messages, stranger, typing }: {
     avatar_expression: m.from === 'me' ? undefined : stranger?.expression,
     avatar_color: m.from === 'me' ? undefined : stranger?.color,
   }));
-  const typingRow = typing ? <TypingRow /> : null;
+  const typingRow = typing ? <TypingIndicator label={t('match-typing')} /> : null;
   if (!bubbles.length) {
     return (
       <View style={[s.fill, s.center]}>
@@ -353,19 +354,6 @@ function MatchMessages({ messages, stranger, typing }: {
       ListHeaderComponent={typingRow}
       contentContainerStyle={s.list}
     />
-  );
-}
-
-function TypingRow() {
-  const c = useColors();
-  const t = useT();
-  return (
-    <View style={s.typing}>
-      <View style={[s.dots, { backgroundColor: c.surface }]}>
-        {[0, 1, 2].map((i) => <View key={i} style={[s.dot, { backgroundColor: c.textMuted }]} />)}
-      </View>
-      <Text style={[s.typingText, { color: c.textSub }]}>{t('match-typing')}</Text>
-    </View>
   );
 }
 
@@ -512,10 +500,6 @@ const s = StyleSheet.create({
 
   list: { paddingVertical: Spacing.sm, flexGrow: 1 },
   empty: { textAlign: 'center', fontSize: 14, fontWeight: String(Fonts.semibold) as any },
-  typing: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.lg, paddingVertical: 6 },
-  dots: { flexDirection: 'row', gap: 3, paddingVertical: 8, paddingHorizontal: 10, borderRadius: Radius.full },
-  dot: { width: 6, height: 6, borderRadius: 3 },
-  typingText: { fontSize: 13, fontWeight: String(Fonts.bold) as any },
 
   composerWrap: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 12 },
   composer: {

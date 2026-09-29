@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from datetime import datetime
 
 from flask_socketio import emit
@@ -130,6 +131,38 @@ def handle_message(username, data):
         send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
     except Exception as e:
         log.exception('push notify error: %s', e)
+
+
+TYPING_MIN_GAP = 1.0  # seconds; clients send at most every 2 s, this caps a misbehaving one
+_last_typing: dict[str, float] = {}
+
+
+@socketio.on('typing')
+@authenticated
+def handle_typing(username, data):
+    """ "Someone is typing" for a room or DM, relayed to the others there (never stored)."""
+    room = str_field(data, 'room')
+    if not in_room(room) or room == DEMO_ROOM or moderation.is_muted(room, username):
+        return
+    now = time.monotonic()
+    if now - _last_typing.get(username, 0) < TYPING_MIN_GAP:
+        return
+    _last_typing[username] = now
+    with get_db() as conn:
+        cur = conn.cursor()
+        participants = dm_participants(room)
+        if participants:
+            other = participants[1] if participants[0] == username else participants[0]
+            if moderation.blocked_either_way(cur, username, other):
+                return
+        cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
+        row = cur.fetchone()
+    emit(
+        'typing',
+        {'room': room, 'username': username, 'screenname': row['screenname'] if row else username},
+        to=room,
+        include_self=False,
+    )
 
 
 @socketio.on('load_older')
