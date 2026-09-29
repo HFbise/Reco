@@ -125,8 +125,10 @@ def test_health_check_reports_database_status(monkeypatch):
     import app as app_module
 
     web = app.test_client()
+    monkeypatch.setenv('RENDER_GIT_COMMIT', '0123456789abcdef')
     ok = web.get('/health')
     assert ok.status_code == 200 and ok.get_json()['database'] == 'ok'
+    assert ok.get_json()['commit'] == '0123456'  # which deploy is live
 
     def db_down(*_a, **_k):
         raise OSError('connection refused')

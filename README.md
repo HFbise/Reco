@@ -167,8 +167,9 @@ npm run typecheck && npm run lint && npm test
 ```
 
 The backend tests start a disposable Postgres (via `pgserver`) and drive the real
-Socket.IO server with test clients. The end-to-end tests build nothing: they serve
-the committed web build (`app/dist`) and use Playwright to cover these flows:
+Socket.IO server with test clients. The end-to-end tests serve the production web
+build (`cd app && npx expo export -p web` first) and use Playwright to cover flows
+such as:
 
 - two browsers exchanging messages live
 - the guest demo staying read-only
@@ -179,7 +180,10 @@ server.
 
 ## Deployment
 
-Render runs `gunicorn wsgi:app`, and `gunicorn.conf.py` supplies the settings.
+Render builds with `./build.sh` (backend dependencies, then the web app into
+`app/dist`, which is not committed) and runs `gunicorn wsgi:app`, with
+`gunicorn.conf.py` supplying the settings. CI runs the same production build on
+every push, so a change that wouldn't build never reaches the host.
 `wsgi.py` runs migrations on boot. Flask serves the Expo web build from `app/dist`,
 so the app and the API share one origin. `/health` checks the database for Render's health
 check.
@@ -192,9 +196,6 @@ check.
   The pure `MatchQueue` was written so it can be swapped for a Redis-backed one.
 - **Mesh voice.** Each participant connects to every other participant, which is
   fine for small rooms. Larger rooms would need an SFU such as LiveKit or mediasoup.
-- **Committed web build.** `app/dist` is checked in so the Python-only host needs no
-  Node build step. `build.sh` (checked by CI on every push) is ready to move the build
-  onto the host.
 - **Photos in Postgres.** Images are stored as `BYTEA` next to the messages: no
   extra service or credentials, and plenty at this scale since browsers shrink them
   first. With real traffic they would move to object storage (S3, R2) behind a CDN,

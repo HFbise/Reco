@@ -28,6 +28,14 @@ jobs:
       - run: pip install -r requirements.txt pytest ruff==0.16.9 "python-socketio[client]" playwright==1.63.0
       - name: Browser for end-to-end tests
         run: python -m playwright install --with-deps chromium
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - name: Build the web app the end-to-end tests drive
+        working-directory: app
+        run: npm ci --legacy-peer-deps && npx expo export -p web
       - name: Lint (ruff)
         run: ruff check . && ruff format --check .
       - run: pytest tests -q
