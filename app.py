@@ -82,7 +82,10 @@ def health():
     except Exception as e:
         log.exception('health check failed: %s', e)
         return jsonify(status='error', database='unreachable'), 503
-    return jsonify(status='ok', database='ok', online_users=len(online_users))
+    # Which commit is live (Render sets RENDER_GIT_COMMIT): lets a deploy check wait for its own push
+    return jsonify(
+        status='ok', database='ok', online_users=len(online_users), commit=os.environ.get('RENDER_GIT_COMMIT', '')[:7]
+    )
 
 
 # ── Privacy policy ────────────────────────────────────────────
