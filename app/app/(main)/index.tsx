@@ -15,7 +15,7 @@ import { BrandMark } from '../../src/components/BrandMark';
 import { DisplayText } from '../../src/components/ui/DisplayText';
 import { IconButton } from '../../src/components/ui/Button';
 import { useT } from '../../src/hooks/useT';
-import { Fonts, Radius } from '../../src/theme';
+import { Fonts, HEADER_HEIGHT, Radius } from '../../src/theme';
 
 const IS_WEB = Platform.OS === 'web';
 // CSS ease: cubic-bezier(0.25, 0.1, 0.25, 1.0)
@@ -41,25 +41,38 @@ export default function RoomsScreen() {
 
   const pillUser = voiceMembers.find(m => m.isSpeaking) ?? voiceMembers[0];
 
-  // Swipe right in an open chat to go back to the list. The chat follows the finger;
-  // let go past 30% of the width (or with a flick) to close, otherwise it springs back.
+  // Sideways swipes in an open chat:
+  //  - right: back to the list. The chat follows the finger; let go past 30% of the width
+  //    (or with a flick) to close, otherwise it springs back.
+  //  - left, in a room: pull out the members drawer (DMs have none).
   // Latest values through a ref: the responder is created once.
-  const swipeRef = useRef({ SW, open: false, close: () => {} });
-  swipeRef.current = { SW, open: !!activeRoom, close: () => closeRoom() };
+  const swipeRef = useRef({ SW, open: false, isRoom: false, close: () => {}, openMembers: () => {} });
+  swipeRef.current = {
+    SW,
+    open: !!activeRoom,
+    isRoom: !!activeRoom && !activeDmMeta,
+    close: () => closeRoom(),
+    openMembers: () => setMembersKey((k) => k + 1),
+  };
   const swipeBack = useRef(PanResponder.create({
     // Capture: claim clearly sideways drags before the message list does; vertical ones stay scrolls
     onMoveShouldSetPanResponderCapture: (e, g) => {
-      if (!swipeRef.current.open) return false;
+      const { open, isRoom } = swipeRef.current;
+      if (!open) return false;
       // Dragging inside the text box moves the cursor, not the page
       const target = (e.nativeEvent as any).target as HTMLElement | undefined;
       if (target?.closest?.('input, textarea')) return false;
-      return g.dx > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+      const sideways = Math.abs(g.dx) > Math.abs(g.dy) * 1.5;
+      return sideways && (g.dx > 12 || (isRoom && g.dx < -12));
     },
     onPanResponderTerminationRequest: () => false,
+    // Only the swipe back moves the chat; the drawer slides in by itself once released
     onPanResponderMove: (_e, g) => slideAnim.setValue(-swipeRef.current.SW + Math.max(0, g.dx)),
     onPanResponderRelease: (_e, g) => {
-      if (g.dx > swipeRef.current.SW * 0.3 || g.vx > 0.5) swipeRef.current.close();
-      else Animated.spring(slideAnim, { toValue: -swipeRef.current.SW, bounciness: 0, useNativeDriver: true }).start();
+      const { SW: width, close, openMembers, isRoom } = swipeRef.current;
+      if (g.dx > width * 0.3 || g.vx > 0.5) { close(); return; }
+      Animated.spring(slideAnim, { toValue: -width, bounciness: 0, useNativeDriver: true }).start();
+      if (isRoom && (g.dx < -width * 0.2 || g.vx < -0.5)) openMembers();
     },
     onPanResponderTerminate: () =>
       Animated.spring(slideAnim, { toValue: -swipeRef.current.SW, bounciness: 0, useNativeDriver: true }).start(),
@@ -252,7 +265,7 @@ export default function RoomsScreen() {
 
 const s = StyleSheet.create({
   root: { flex: 1 },
-  topbar: { height: 60, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 12, borderBottomWidth: 1 },
+  topbar: { height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingRight: 12, borderBottomWidth: 1 },
   logo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   wordmark: { fontSize: 26 },
   content: { flex: 1 },

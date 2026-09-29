@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { DisplayText } from './DisplayText';
 import { useColors } from '../../hooks/useColors';
+import { HEADER_HEIGHT } from '../../theme';
 
 /** Title bar for a phone tab (Match, Me): a big friendly title, optional buttons on the right. */
 export function PageHeader({ title, children }: { title: string; children?: ReactNode }) {
@@ -15,7 +16,7 @@ export function PageHeader({ title, children }: { title: string; children?: Reac
 }
 
 const s = StyleSheet.create({
-  bar: { height: 60, flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12 },
+  bar: { height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', paddingLeft: 20, paddingRight: 12 },
   title: { flex: 1, fontSize: 26 },
   actions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
 });

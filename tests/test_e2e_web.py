@@ -363,13 +363,14 @@ def test_touch_gestures_close_a_dm_like_a_message_and_dismiss_panels(server, bro
     _swipe(page, 200, top['y'] - 20, 200, top['y'] + 200)
     sheet_emoji.wait_for(state='detached')
 
-    # The members drawer: push it back to the right to close it
-    page.get_by_label('Members').first.click()
+    # The members drawer: swipe left in the room to pull it out, push it back right to close it
+    _swipe(page, 340, 400, 120, 405)
     join = page.get_by_text('Join Voice', exact=False)
     join.wait_for()
     _wait_until_still(page, join)  # while it slides in, the finger would land on the backdrop
     _swipe(page, 150, 500, 380, 505)
     join.wait_for(state='detached')
+    assert page.get_by_placeholder('Type a message...').is_visible()  # still in the room
 
     # The emoji picker is a bottom sheet on a phone: drag its top strip down to close it
     page.get_by_label('Emoji').first.click()

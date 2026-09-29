@@ -15,9 +15,8 @@ import { ProfileView } from './account/ProfileView';
 import { MatchView } from './match/MatchView';
 import { SettingsModal, useSavedAudioDevices } from './SettingsModal';
 import type { DmMeta } from './chat/types';
-import { HEADER_HEIGHT } from './chat/ChatHeader';
 import { DisplayText } from './ui/DisplayText';
-import { Spacing } from '../theme';
+import { HEADER_HEIGHT, Spacing } from '../theme';
 
 const dmIdWith = (me: string, other: string) => `dm:${[me, other].sort().join(':')}`;
 

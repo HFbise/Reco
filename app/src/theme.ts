@@ -102,6 +102,12 @@ export const Radius = {
   full: 999,
 };
 
+/**
+ * Height of every top bar (chat header, chat list, page titles), so they line up side by side
+ * on desktop and while a phone swipes between screens.
+ */
+export const HEADER_HEIGHT = 64;
+
 export const Spacing = {
   xs: 4,
   sm: 8,

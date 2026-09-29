@@ -7,10 +7,8 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import type { VoiceMember } from '../../hooks/useVoice';
 import type { DmMeta } from './types';
-import { Fonts, Spacing } from '../../theme';
+import { Fonts, HEADER_HEIGHT, Spacing } from '../../theme';
 
-/** Header height, shared with the chat list's header so the two line up */
-export const HEADER_HEIGHT = 64;
 
 interface Props {
   name: string;

@@ -21,7 +21,7 @@ import { useAuthStore } from '../../store/authStore';
 import { leaveDemoToSignUp } from '../GuestBanner';
 import { MAX_TAGS, RELAX_AFTER_MS, TAG_CATEGORIES, knownTags, toggleTag } from '../../lib/matchTags';
 import type { I18nKey } from '../../lib/i18n';
-import { Fonts, Radius, Spacing } from '../../theme';
+import { Fonts, HEADER_HEIGHT, Radius, Spacing } from '../../theme';
 
 interface Props {
   /** Both people chose "keep in touch": open the new DM */
@@ -65,7 +65,7 @@ export function MatchView({ onOpenDm, title }: Props) {
     <View style={[s.fill, { backgroundColor: c.bg }]}>
       {/* who you're talking to: just "Stranger" and what you have in common */}
       <View style={[s.header, { borderBottomColor: c.border, backgroundColor: c.surface }]}>
-        <AvatarView expression={match.stranger?.expression} color={match.stranger?.color} size={44} />
+        <AvatarView expression={match.stranger?.expression} color={match.stranger?.color} size={40} />
         <View style={s.headerText}>
           <DisplayText style={[s.headerName, { color: c.text }]}>{t('stranger')}</DisplayText>
           {match.sharedTags.length > 0 && (
@@ -481,11 +481,11 @@ const s = StyleSheet.create({
 
   // chat
   header: {
-    flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingLeft: 18, paddingRight: 14,
+    height: HEADER_HEIGHT, flexDirection: 'row', alignItems: 'center', gap: 12, paddingLeft: 16, paddingRight: 12,
     borderBottomWidth: 1, zIndex: 10,
   },
-  headerText: { flex: 1, minWidth: 0, gap: 4 },
-  headerName: { fontSize: 19 },
+  headerText: { flex: 1, minWidth: 0, gap: 3 },
+  headerName: { fontSize: 18, lineHeight: 22 },
   sharedTags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   sharedTag: { height: 22, paddingHorizontal: 9, borderRadius: Radius.full, justifyContent: 'center' },
   sharedTagText: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
