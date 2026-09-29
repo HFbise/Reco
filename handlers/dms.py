@@ -3,6 +3,7 @@ import logging
 from flask_socketio import emit, join_room
 
 import history
+import reads
 from auth_session import authenticated, dm_participants, readable
 from db import get_db
 from extensions import socketio
@@ -22,6 +23,7 @@ def last_message_preview(row) -> dict:
         'recalled': bool(row['last_recalled']),
         'system': bool(row['last_system']),
         'meta': row['last_meta'] if row['last_system'] else None,
+        'image': bool((row['last_meta'] or {}).get('image')) and not row['last_recalled'],
     }
 
 
@@ -55,6 +57,7 @@ def handle_get_dms(username, data):
                 (username, username, username),
             )
             rows = cur.fetchall()
+            unread = reads.unread_counts(cur, username, [r['room'] for r in rows])
         dms = []
         for r in rows:
             if username not in (dm_participants(r['room']) or ()):
@@ -69,6 +72,7 @@ def handle_get_dms(username, data):
                     'avatar_color': r.get('avatar_color') or '#5865F2',
                     'online': r['username'] in online_users,
                     'last': last_message_preview(r),
+                    'unread': unread.get(r['room'], 0),
                 }
             )
         emit('dms_list', {'dms': dms})
@@ -111,6 +115,8 @@ def handle_join_dm(username, data):
             messages, reset = history.recent(cur, dm_room, data.get('since'))
             client_oldest = None if reset else data.get('oldest_id')
             has_older = history.has_older(cur, dm_room, history.oldest_shown(messages, client_oldest))
+            reads.mark_read(cur, username, dm_room)
+            conn.commit()
         if reset:
             emit('history_reset', {'room': dm_room})
         for msg in messages:

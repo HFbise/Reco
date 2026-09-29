@@ -184,6 +184,68 @@ def test_others_see_who_is_typing(server, browser, shots):
     pia.get_by_text('Quinn is typing…').wait_for(state='detached')  # the message ends it
 
 
+def test_unread_counts_follow_you_to_another_device(server, browser, shots):
+    create_user('rhea', screenname='Rhea')
+    create_user('sam', screenname='Sam')
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:rhea:sam', 'rhea', 'Rhea', 'ping')"
+        )
+        conn.commit()
+    phone = new_page(browser)
+    shots.append(phone)
+    log_in(phone, 'sam')
+    badge = phone.get_by_label('1', exact=True)
+    badge.wait_for()  # a DM that arrived while away
+
+    phone.get_by_text('Rhea', exact=True).first.click()
+    phone.get_by_text('ping').last.wait_for()
+    # Rhea writes again while Sam is looking at the DM: that one is read too
+    rhea = new_page(browser)
+    shots.append(rhea)
+    log_in(rhea, 'rhea')
+    rhea.get_by_text('Sam', exact=True).first.click()
+    rhea.get_by_placeholder('Type a message...').fill('still there?')
+    rhea.get_by_placeholder('Type a message...').press('Enter')
+    phone.get_by_text('still there?').last.wait_for(timeout=10000)
+    phone.wait_for_timeout(2500)  # read marks are reported every couple of seconds
+
+    laptop = new_page(browser)
+    shots.append(laptop)
+    log_in(laptop, 'sam')
+    laptop.get_by_text('still there?').first.wait_for()  # the DM preview has loaded
+    assert laptop.get_by_label('1', exact=True).count() == 0
+    assert laptop.get_by_label('2', exact=True).count() == 0
+
+
+def test_sending_a_photo(server, browser, shots, tmp_path):
+    from test_images import png
+
+    create_user('tara', screenname='Tara')
+    create_user('uma', screenname='Uma')
+    photo = tmp_path / 'sunset.png'
+    photo.write_bytes(png(40, 30))
+    tara, uma = new_page(browser), new_page(browser)
+    shots.extend([tara, uma])
+    for page, name in ((tara, 'tara'), (uma, 'uma')):
+        log_in(page, name)
+        open_room(page, 'Lobby')
+
+    with tara.expect_file_chooser() as chooser:
+        tara.get_by_label('Send a photo').click()
+    chooser.value.set_files(str(photo))
+
+    # Uma sees it load (shrunk and re-encoded in Tara's browser, stored and served by the server)
+    shown = uma.get_by_label('Photo', exact=True)
+    shown.wait_for(timeout=15000)
+    uma.wait_for_function(
+        "() => [...document.querySelectorAll('img')].some(i => i.src.includes('/img/') && i.naturalWidth > 0)",
+        timeout=15000,
+    )
+    shown.click()  # opens the viewer
+    uma.get_by_label('Close').first.wait_for()
+
+
 def test_chinese_browser_gets_chinese_ui(server, browser, shots):
     create_user('carol')
     page = new_page(browser, locale='zh-CN')

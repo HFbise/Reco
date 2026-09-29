@@ -38,7 +38,12 @@ export type ChatToast = 'muted' | 'dm-blocked' | 'rate-limited' | 'send-failed';
 
 // Typing: send at most this often while typing; forget a typist this long after their last signal
 const TYPING_SEND_MS = 2000;
+// New messages seen while a chat is open are reported (at most) this often
+const MARK_READ_MS = 2000;
+
+const pageVisible = () => typeof document === 'undefined' || document.visibilityState !== 'hidden';
 const TYPING_SHOW_MS = 4000;
+const STALE_TYPING_MS = 1500;
 
 const oldestId = (messages: Message[]) => messages.find((m) => typeof m.id === 'number')?.id;
 
@@ -50,6 +55,7 @@ const oldestId = (messages: Message[]) => messages.find((m) => typeof m.id === '
  */
 export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }: Options) {
   const username = useAuthStore((s) => s.currentUser?.username);
+  const isGuest = useAuthStore((s) => !!s.currentUser?.guest);
   const isDm = name.startsWith('dm:');
 
   const [messages, setMessages] = useState<Message[]>(() => getCached(name));
@@ -61,6 +67,11 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   // Who else is typing here: username -> display name and when to stop showing it
   const [typists, setTypists] = useState<Record<string, { screenname: string; until: number }>>({});
   const lastTypingSent = useRef(0);
+  // When each person's last message arrived: a "typing" that shows up just after it is stale
+  // (the server handles events on several threads, so the two can arrive out of order)
+  const lastMessageAt = useRef<Record<string, number>>({});
+  // Newest message id seen here but not yet reported as read
+  const unreportedRead = useRef(0);
 
   const callbacks = useRef({ onRemoved, onJoinFailed, onToast });
   callbacks.current = { onRemoved, onJoinFailed, onToast };
@@ -114,7 +125,12 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
         if (!mine(data)) return;
         const msg = withOwn(data);
         if (!msg.system) cacheMsg(name, msg);
+        // Seen while the chat is open: read (reported in batches, and only while the page is visible)
+        if (typeof msg.id === 'number' && msg.username !== username) {
+          unreportedRead.current = Math.max(unreportedRead.current, msg.id);
+        }
         // Their message is here: they're done typing
+        lastMessageAt.current[msg.username] = Date.now();
         setTypists((t) => {
           if (!t[msg.username]) return t;
           const { [msg.username]: _done, ...rest } = t;
@@ -163,6 +179,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
       },
       typing: (data) => {
         if (!mine(data) || data.username === username) return;
+        if (Date.now() - (lastMessageAt.current[data.username] ?? 0) < STALE_TYPING_MS) return;
         setTypists((t) => ({ ...t, [data.username]: { screenname: data.screenname, until: Date.now() + TYPING_SHOW_MS } }));
       },
       room_password_changed: (data) => {
@@ -222,6 +239,24 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     };
   }, [username, name, isDm]);
 
+  // Report reading: every couple of seconds, and right away when the page comes back into view
+  useEffect(() => {
+    if (!username || isGuest) return; // demo visitors have nothing to mark
+    const flush = () => {
+      if (!unreportedRead.current || !pageVisible()) return;
+      getSocket().emit('mark_read', { room: name, id: unreportedRead.current });
+      unreportedRead.current = 0;
+    };
+    const timer = setInterval(flush, MARK_READ_MS);
+    const onVisible = () => flush();
+    if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(timer);
+      if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisible);
+      flush(); // leaving the chat: what was on screen has been read
+    };
+  }, [name, username, isGuest]);
+
   // Drop typists who went quiet
   const anyTypists = Object.keys(typists).length > 0;
   useEffect(() => {
@@ -251,10 +286,16 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     getSocket().emit('load_older', { room: name, before_id: before });
   }, [messages, hasOlder, loadingOlder, name]);
 
-  /** Send `text`, optionally as a reply to message `replyTo` (same room; the server checks) */
-  const send = useCallback((text: string, replyTo?: number | null) => {
+  /**
+   * Send `text`, optionally as a reply to message `replyTo` and/or with an uploaded photo
+   * (both checked by the server: same room, the sender's own unused upload).
+   */
+  const send = useCallback((text: string, replyTo?: number | null, imageId?: string) => {
     const body = text.trim();
-    if (body) getSocket().emit('message', { room: name, text: body, ...(replyTo ? { reply_to: replyTo } : {}) });
+    if (!body && !imageId) return;
+    getSocket().emit('message', {
+      room: name, text: body, ...(replyTo ? { reply_to: replyTo } : {}), ...(imageId ? { image: imageId } : {}),
+    });
     lastTypingSent.current = 0; // the next message starts a fresh "typing" 
   }, [name]);
 

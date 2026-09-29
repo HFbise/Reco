@@ -6,7 +6,9 @@ from datetime import datetime
 from flask_socketio import emit
 
 import history
+import images
 import moderation
+import reads
 from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
 from demo import DEMO_ROOM
@@ -27,8 +29,9 @@ MAX_REACTION_KINDS = 20  # distinct emoji per message
 def handle_message(username, data):
     room = str_field(data, 'room')
     text = str_field(data, 'text').strip()[:MAX_MESSAGE_LEN]
+    image_id = data.get('image')  # an upload of the sender's (see images.py); the text is optional then
     # Only sockets that passed the join checks (member / DM participant) are in the room.
-    if not text or not in_room(room) or room == DEMO_ROOM:
+    if not (text or image_id) or not in_room(room) or room == DEMO_ROOM:
         return
     if not check_msg_rate(username):
         emit('message_rate_limited', {'room': room})
@@ -78,12 +81,29 @@ def handle_message(username, data):
                         original['text'],
                         original['recalled'],
                     )
+            # A photo must be the sender's own upload, not sent before
+            image = images.attach(cur, image_id, username, room) if image_id else None
+            if not image and not text:
+                conn.rollback()
+                emit('message_failed', {'room': room})
+                return
+            msg['meta'] = {'image': image} if image else None
             cur.execute(
-                'INSERT INTO messages (room, username, screenname, text, time, reply_to)'
-                ' VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at',
-                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M'), reply_to),
+                'INSERT INTO messages (room, username, screenname, text, time, reply_to, meta)'
+                ' VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at',
+                (
+                    room,
+                    username,
+                    msg['screenname'],
+                    text,
+                    datetime.now().strftime('%H:%M'),
+                    reply_to,
+                    json.dumps(msg['meta']) if image else None,
+                ),
             )
             saved = cur.fetchone()
+            if image:
+                images.link(cur, image['id'], saved['id'], room)
             conn.commit()
         # The stored timestamp, not the clock now: clients resume history from it
         msg['id'], msg['time'] = saved['id'], saved['created_at'].isoformat()
@@ -95,7 +115,7 @@ def handle_message(username, data):
 
     emit('message', msg, to=room)
 
-    preview = text[:100]
+    preview = text[:100] or '📷'
     if recipient:
         if recipient in online_users:
             for sid in list(online_users[recipient]):
@@ -111,6 +131,7 @@ def handle_message(username, data):
                         # so this is the only copy of the first message the list gets
                         'message_id': msg['id'],
                         'text': text[:120],
+                        'image': bool(msg['meta']),
                     },
                     to=sid,
                 )
@@ -131,6 +152,22 @@ def handle_message(username, data):
         send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
     except Exception as e:
         log.exception('push notify error: %s', e)
+
+
+@socketio.on('mark_read')
+@authenticated
+def handle_mark_read(username, data):
+    """The client is looking at `room` and has seen up to message `id` (new arrivals while open)."""
+    room = str_field(data, 'room')
+    upto = data.get('id')
+    if not in_room(room) or not isinstance(upto, int) or isinstance(upto, bool):
+        return
+    try:
+        with get_db() as conn:
+            reads.mark_read(conn.cursor(), username, room, upto)
+            conn.commit()
+    except Exception as e:
+        log.exception('mark_read error: %s', e)
 
 
 TYPING_MIN_GAP = 1.0  # seconds; clients send at most every 2 s, this caps a misbehaving one

@@ -8,6 +8,7 @@ from flask_socketio import emit, join_room
 
 import history
 import moderation
+import reads
 import voice_state
 from auth_session import authenticated, dm_participants, in_room, is_guest, readable
 from db import get_db
@@ -176,6 +177,10 @@ def handle_join(username, data):
                     emit('message', msg)
                 client_oldest = None if reset else data.get('oldest_id')
                 has_older = history.has_older(cur, room, history.oldest_shown(messages, client_oldest))
+                # Opened and shown: everything up to now counts as read (on every device)
+                if not is_guest(username):
+                    reads.mark_read(cur, username, room)
+                    conn.commit()
             else:
                 has_older = False
 
@@ -272,14 +277,17 @@ def handle_get_rooms(username, data):
                     'SELECT name, password, code, owner, admins, members FROM rooms WHERE name = %s OR %s = ANY(members)',
                     (LOBBY, username),
                 )
+            found = cur.fetchall()
+            unread = {} if is_guest(username) else reads.unread_counts(cur, username, [r['name'] for r in found])
             rooms = [
                 {
                     'name': r['name'],
                     'has_password': bool(r['password']),
                     'needs_password': _needs_password(username, r),
                     'code': r.get('code') or '',
+                    'unread': unread.get(r['name'], 0),
                 }
-                for r in cur.fetchall()
+                for r in found
             ]
         lobby = next((r for r in rooms if r['name'] == LOBBY), None)
         if lobby:

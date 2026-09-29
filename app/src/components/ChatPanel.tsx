@@ -10,6 +10,7 @@ import { useT } from '../hooks/useT';
 import { useVoice } from '../hooks/useVoice';
 import { useRoomChat, type ChatToast } from '../hooks/useRoomChat';
 import { loadRecentEmojis, recordRecentEmoji, buildReactionQuickList } from '../lib/recentEmojis';
+import { canSendImages, pickImageFile, uploadImage } from '../lib/images';
 import type { Message } from './MessageBubble';
 import { EmojiPicker, POPOVER_H, POPOVER_W } from './emoji/EmojiPicker';
 import { MembersPanel } from './MembersPanel';
@@ -143,6 +144,37 @@ export function ChatPanel({
     if (input.trim()) setReplyingTo(null);
   }
 
+  // Photos: pick (or paste) → shrink and upload → send as a message (answering the quoted one, if any)
+  const [uploading, setUploading] = useState(false);
+  async function sendImage(file: File) {
+    if (uploading) return;
+    setUploading(true);
+    const result = await uploadImage(file);
+    setUploading(false);
+    if (typeof result === 'string') {
+      showToast(t(result === 'rate_limited' ? 'image_rate_limited' : result));
+      return;
+    }
+    chat.send('', replyingTo?.id, result.id);
+    setReplyingTo(null);
+  }
+  const sendImageRef = useRef(sendImage);
+  sendImageRef.current = sendImage;
+
+  // Desktop: paste a screenshot straight into the chat
+  useEffect(() => {
+    if (!canSendImages || isGuest) return;
+    const onPaste = (e: ClipboardEvent) => {
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.kind === 'file' && i.type.startsWith('image/'));
+      const file = item?.getAsFile();
+      if (!file) return;
+      e.preventDefault();
+      sendImageRef.current(file);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+  }, [isGuest]);
+
   function saveEdit() {
     if (editing) chat.edit(editing.id, editing.text);
     setEditing(null);
@@ -228,6 +260,11 @@ export function ChatPanel({
             text: replyingTo.text,
           } : null}
           onCancelReply={() => setReplyingTo(null)}
+          onAttach={canSendImages && !isGuest ? async () => {
+            const file = await pickImageFile();
+            if (file) sendImage(file);
+          } : undefined}
+          uploading={uploading}
         />
       </KeyboardAvoidingView>
 
