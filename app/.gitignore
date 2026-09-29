@@ -1,4 +1,6 @@
 node_modules/
+# Built on deploy by build.sh (and in CI); never committed
+dist/
 .expo/
 .env
 *.log
