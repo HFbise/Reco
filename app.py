@@ -20,6 +20,7 @@ log = logging.getLogger('app')
 
 from flask import jsonify, request, send_from_directory
 
+import client_errors
 import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
 import images
@@ -34,6 +35,7 @@ from state import LOBBY, online_users
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(images.bp)
+app.register_blueprint(client_errors.bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')

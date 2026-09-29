@@ -10,6 +10,15 @@ import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
 import { useColors } from '../src/hooks/useColors';
 import { getTheme } from '../src/theme';
+import { installErrorReporting } from '../src/lib/errorReporting';
+import { CrashScreen } from '../src/components/CrashScreen';
+
+installErrorReporting();
+
+/** Expo Router shows this when a screen throws: a friendly page instead of a blank one */
+export function ErrorBoundary(props: { error: Error; retry: () => Promise<void> }) {
+  return <CrashScreen {...props} />;
+}
 
 export default function RootLayout() {
   const [ready, setReady] = useState(false);
