@@ -56,6 +56,8 @@ TABLES = [
     'room_restrictions',
     'room_invites',
     'matches',
+    'read_marks',
+    'images',
 ]
 
 

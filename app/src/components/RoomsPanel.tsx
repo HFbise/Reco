@@ -46,6 +46,8 @@ export interface DmPreview {
   recalled: boolean;
   system: boolean;
   meta?: any;
+  /** A photo (its text may be empty) */
+  image?: boolean;
 }
 
 // Keep DmEntry export for callers
@@ -128,7 +130,11 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
     load();
 
-    const onRoomsList = (data: { rooms: { name: string; has_password: boolean; needs_password?: boolean; code?: string }[] }) => {
+    // Counts come from the server (they follow you across devices); the open chat stays at 0
+    const serverUnread = (key: string, n: number | undefined, fallback: number) =>
+      key === selectedRoomRef.current ? 0 : typeof n === 'number' ? n : fallback;
+
+    const onRoomsList = (data: { rooms: { name: string; has_password: boolean; needs_password?: boolean; code?: string; unread?: number }[] }) => {
       setRoomsLoading(false);
       setEntries(prev => {
         const existing = new Map(prev.map(e => [e.key, e]));
@@ -139,7 +145,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           displayName: r.name,
           hasPassword: r.has_password,
           needsPassword: r.needs_password,
-          unread: existing.get(r.name)?.unread ?? 0,
+          unread: serverUnread(r.name, r.unread, existing.get(r.name)?.unread ?? 0),
           lastActivity: existing.get(r.name)?.lastActivity ?? 0,
         }));
         const dmEntries = prev.filter(e => e.type === 'dm');
@@ -196,7 +202,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           otherUsername: d.other_username,
           avatarExpression: d.avatar_expression,
           avatarColor: d.avatar_color,
-          unread: existing.get(d.dm_room)?.unread ?? 0,
+          unread: serverUnread(d.dm_room, d.unread, existing.get(d.dm_room)?.unread ?? 0),
           lastActivity: existing.get(d.dm_room)?.lastActivity ?? 0,
           online: d.online,
           last: d.last,
@@ -208,16 +214,19 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
 
     const onNewDmNotification = (data: {
       dm_room: string; from_username: string; from_screenname: string; avatar_expression?: string; avatar_color?: string;
-      message_id?: number; text?: string;
+      message_id?: number; text?: string; image?: boolean;
     }) => {
       const last: DmPreview | undefined = data.message_id ? {
         id: data.message_id, username: data.from_username, text: data.text ?? '', recalled: false, system: false,
+        image: !!data.image,
       } : undefined;
       setEntries(prev => {
         const existing = prev.find(e => e.key === data.dm_room);
         if (existing) {
+          // Already reading this DM: nothing is unread
+          const open = data.dm_room === selectedRoomRef.current;
           return prev.map(e => e.key === data.dm_room
-            ? { ...e, lastActivity: Date.now(), unread: e.unread + 1, online: true, last: last ?? e.last }
+            ? { ...e, lastActivity: Date.now(), unread: open ? 0 : e.unread + 1, online: true, last: last ?? e.last }
             : e
           );
         }
@@ -270,7 +279,10 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           ...prev[idx],
           unread: isActive ? 0 : prev[idx].unread + 1,
           last: prev[idx].type === 'dm'
-            ? { id: data.id, username: data.username, text: String(data.text ?? '').slice(0, 120), recalled: false, system: false }
+            ? {
+              id: data.id, username: data.username, text: String(data.text ?? '').slice(0, 120),
+              recalled: false, system: false, image: !!data.meta?.image,
+            }
             : prev[idx].last,
         };
         if (idx === 0) return prev.map((e, i) => i === 0 ? updated : e);
@@ -478,7 +490,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     if (!last) return '';
     if (last.recalled) return t('msg-recalled');
     if (last.system) return t.system({ text: last.text, meta: last.meta });
-    const text = last.text.replace(/\s+/g, ' ');
+    const text = last.image && !last.text ? t('photo') : last.text.replace(/\s+/g, ' ');
     return last.username === currentUser?.username ? t('preview-you', { text }) : text;
   }
 

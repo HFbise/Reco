@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
-import { IconBan, IconClose, IconEmoji, IconPencil, IconReply, IconSend } from '../Icon';
+import { IconBan, IconClose, IconEmoji, IconImage, IconPencil, IconReply, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
@@ -23,6 +23,9 @@ interface Props {
   /** Set while answering a message: who wrote it and how it starts */
   replyingTo?: { name: string; text: string } | null;
   onCancelReply?: () => void;
+  /** Pick and send a photo (web); shown as a button next to the emoji one */
+  onAttach?: () => void;
+  uploading?: boolean;
 }
 
 // The message box starts one line tall and grows with what's typed, up to a limit
@@ -97,6 +100,12 @@ export function Composer(p: Props) {
         <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7} accessibilityLabel={t('emoji')}>
           <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textSub} />
         </TouchableOpacity>
+        {p.onAttach && (
+          <TouchableOpacity style={s.emojiBtn} onPress={p.onAttach} disabled={p.uploading} activeOpacity={0.7}
+            accessibilityLabel={p.uploading ? t('uploading') : t('attach-image')}>
+            {p.uploading ? <ActivityIndicator size="small" color={c.accent} /> : <IconImage size={21} color={c.textSub} />}
+          </TouchableOpacity>
+        )}
         <TextInput
           ref={inputRef}
           style={[s.input, { color: c.text, height: inputHeight }]}

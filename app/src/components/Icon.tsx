@@ -382,3 +382,12 @@ export function IconHeart({ size = 20, color = 'currentColor' }: Props) {
 export function IconReply({ size = 18, color = 'currentColor' }: Props) {
   return <Stroke size={size} color={color}><Path d="M9 17 4 12l5-5" /><Path d="M20 18v-2a4 4 0 0 0-4-4H4" /></Stroke>;
 }
+
+export function IconImage({ size = 20, color = 'currentColor' }: Props) {
+  return (
+    <Stroke size={size} color={color}>
+      <Rect width="18" height="18" x="3" y="3" rx="2" ry="2" /><Circle cx="9" cy="9" r="2" />
+      <Path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+    </Stroke>
+  );
+}

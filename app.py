@@ -22,6 +22,8 @@ from flask import jsonify, request, send_from_directory
 
 import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
+import images
+import reads
 import voice_state
 from admin import admin_bp
 from auth_session import verify_token
@@ -31,6 +33,7 @@ from handlers import match as match_handlers
 from state import LOBBY, online_users
 
 app.register_blueprint(admin_bp)
+app.register_blueprint(images.bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
@@ -236,6 +239,8 @@ def _migrate():
                 username TEXT NOT NULL, dm_room TEXT NOT NULL,
                 closed_at TIMESTAMPTZ DEFAULT NOW(), PRIMARY KEY (username, dm_room))""")
             cur.execute('CREATE UNIQUE INDEX IF NOT EXISTS rooms_code_idx ON rooms(code) WHERE code IS NOT NULL')
+            reads.migrate(cur)
+            images.migrate(cur)
 
             # Backfill missing room codes
             import random

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing, Image } from 'react-native';
+import { ImageViewer } from './chat/ImageViewer';
+import { fitImage, imageUrl } from '../lib/images';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
@@ -19,7 +21,7 @@ export interface Message {
   reactions?: Record<string, string[]>;
   isOwn: boolean;
   system?: boolean;
-  meta?: { invite?: { room: string; code: string } } | null;
+  meta?: { invite?: { room: string; code: string }; image?: { id: string; w: number; h: number } } | null;
   avatar_expression?: string;
   avatar_color?: string;
   /** The message this one replies to, as quoted by the server */
@@ -63,6 +65,7 @@ export function MessageBubble({
   const [hovered, setHovered] = useState(false);
   const reactBtnRef = useRef<any>(null);
   const lastTap = useRef(0);
+  const [viewing, setViewing] = useState(false);
   const pop = useRef(new Animated.Value(0)).current;
   const [popped, setPopped] = useState('👍');
   const lastPop = useRef({ emoji: '', at: 0 });
@@ -160,12 +163,22 @@ export function MessageBubble({
     </TouchableOpacity>
   ) : null;
 
+  const image = !msg.recalled ? msg.meta?.image : undefined;
+  const photo = image ? (
+    <TouchableOpacity onPress={() => setViewing(true)} activeOpacity={0.9} accessibilityRole="imagebutton"
+      accessibilityLabel={t('photo')}>
+      <Image source={{ uri: imageUrl(image.id) }} style={[s.photo, fitImage(image.w, image.h), { backgroundColor: c.surface2 }]}
+        resizeMode="cover" />
+    </TouchableOpacity>
+  ) : null;
+
   const bubbleContent = msg.recalled ? (
     <Text style={[s.recalled, { color: isOwn ? 'rgba(255,255,255,0.7)' : c.textMuted }]}>{t('msg-recalled')}</Text>
   ) : (
     <>
       {quote}
-      <Text style={[s.text, { color: isOwn ? c.onAccent : c.text }]}>{msg.text}</Text>
+      {photo}
+      {!!msg.text && <Text style={[s.text, { color: isOwn ? c.onAccent : c.text }, !!photo && s.caption]}>{msg.text}</Text>}
       {msg.edited && <Text style={[s.editedLabel, { color: isOwn ? 'rgba(255,255,255,0.7)' : c.textMuted }]}>{t('msg-edited')}</Text>}
     </>
   );
@@ -225,6 +238,7 @@ export function MessageBubble({
               { backgroundColor: isOwn ? c.bubbleOwn : c.bubbleOther },
               !isOwn && !c.isDark && s.lifted,
               highlighted && { borderWidth: 2, borderColor: c.sunny },
+              image && !msg.text && !reply && s.photoBubble,
             ]}>
               {bubbleContent}
             </View>
@@ -237,6 +251,7 @@ export function MessageBubble({
             }]}>{popped}</Animated.Text>
           </BubbleWrap>
           {hoverActions}
+          {viewing && image && <ImageViewer image={image} onClose={() => setViewing(false)} />}
         </View>
 
         {hasReactions && (
@@ -329,6 +344,9 @@ const s = StyleSheet.create({
   bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%', position: 'relative' },
   pop: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -18, fontSize: 30, lineHeight: 36 },
   bubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, maxWidth: '100%' },
+  photoBubble: { padding: 4 },
+  photo: { borderRadius: 16 },
+  caption: { marginTop: 8 },
   // The corner nearest the sender stays tight, like a speech bubble's tail
   tailOther: { borderBottomLeftRadius: 6 },
   tailOwn: { borderBottomRightRadius: 6 },
