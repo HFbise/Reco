@@ -21,7 +21,7 @@ export function Welcome({ onJoin, onMatch }: Props) {
   return (
     <View style={[s.root, { backgroundColor: c.bg }]}>
       <FaceRow faces={[
-        { expression: 'Angi', color: '#5865F2', size: 56, tilt: -10, lift: -6 },
+        { expression: 'Smile', color: '#5865F2', size: 56, tilt: -10, lift: -6 },
         { expression: 'Laugh', color: '#3BA55C', size: 64, lift: 6 },
         { expression: 'BigLaugh', color: '#1A70D4', size: 80, tilt: 6, lift: 14 },
         { expression: 'Em', color: '#EB459E', size: 64, lift: 6 },

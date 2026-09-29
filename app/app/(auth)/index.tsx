@@ -361,7 +361,7 @@ const DECO = [
   { expression: 'Laugh', size: 64, rotate: '-14deg', pos: { left: -14, top: '14%' } },
   { expression: 'BigLaugh', size: 54, rotate: '12deg', pos: { right: -10, top: '38%' } },
   { expression: 'Em', size: 48, rotate: '8deg', pos: { left: 22, bottom: 36 } },
-  { expression: 'Angi', size: 40, rotate: '-10deg', pos: { right: 30, bottom: 90 } },
+  { expression: 'Smile', size: 40, rotate: '-10deg', pos: { right: 30, bottom: 90 } },
 ] as const;
 
 const s = StyleSheet.create({

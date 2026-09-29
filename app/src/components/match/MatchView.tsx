@@ -303,7 +303,7 @@ function Searching({ tags, since, onCancel }: { tags: string[]; since: number; o
     <View style={[s.fill, s.center, { backgroundColor: c.bg }]}>
       <Animated.View style={{ transform: [{ translateY: bob.interpolate({ inputRange: [0, 1], outputRange: [0, -8] }) }] }}>
         <FaceRow gap={0} faces={[
-          { expression: 'Angi', color: '#5865F2', size: 52, tilt: -12 },
+          { expression: 'Smile', color: '#5865F2', size: 52, tilt: -12 },
           { expression: 'Laugh', color: '#1A70D4', size: 68, overlap: -12, ring: c.bg },
           { expression: 'Em', color: '#EB459E', size: 52, tilt: 12, overlap: -12 },
         ]} />

@@ -21,6 +21,7 @@ import moderation
 from auth_session import authenticated
 from db import get_db
 from extensions import socketio
+from handlers.auth import AVATAR_EXPRESSIONS
 from matching import MODES, MatchQueue, Ticket, normalize_tags
 from replies import fail
 from state import check_msg_rate, emit_system_msg
@@ -33,7 +34,6 @@ SWEEP_EVERY = 2  # seconds
 PURGE_EVERY = 3600  # seconds
 
 # The stranger's face: random per match, never the partner's real avatar
-EXPRESSIONS = ['Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em']
 COLORS = ['#5865F2', '#3BA55C', '#FAA61A', '#ED4245', '#EB459E', '#57F287', '#0099E1', '#9C84EC']
 
 
@@ -119,7 +119,7 @@ def _start(a: Ticket, b: Ticket):
                 'match_id': match_id,
                 'mode': ticket.mode,
                 'shared_tags': shared,
-                'stranger': {'expression': rng.choice(EXPRESSIONS), 'color': rng.choice(COLORS)},
+                'stranger': {'expression': rng.choice(AVATAR_EXPRESSIONS), 'color': rng.choice(COLORS)},
                 # voice: exactly one side makes the WebRTC offer
                 'initiator': initiator,
             },
