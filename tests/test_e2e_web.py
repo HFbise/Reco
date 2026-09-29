@@ -143,6 +143,31 @@ def test_dm_list_shows_last_message_and_online_dot_live(server, browser, shots):
     jack.get_by_label('Online').wait_for(state='detached', timeout=10000)
 
 
+def test_reply_quotes_the_message_it_answers(server, browser, shots):
+    create_user('nora', screenname='Nora')
+    create_user('omar', screenname='Omar')
+    nora, omar = new_page(browser), new_page(browser)
+    shots.extend([nora, omar])
+    for page, name in ((nora, 'nora'), (omar, 'omar')):
+        log_in(page, name)
+        open_room(page, 'Lobby')
+    omar.get_by_placeholder('Type a message...').fill('pizza tonight?')
+    omar.get_by_placeholder('Type a message...').press('Enter')
+
+    original = nora.get_by_text('pizza tonight?')
+    original.hover()
+    nora.get_by_label('Reply', exact=True).click()
+    nora.get_by_text('Replying to Omar').wait_for()
+    nora.get_by_placeholder('Type a message...').fill('yes!')
+    nora.get_by_placeholder('Type a message...').press('Enter')
+    nora.get_by_text('Replying to Omar').wait_for(state='detached')
+
+    # Omar sees the quote of his own message (as "You"), and it jumps back to it when tapped
+    quote = omar.get_by_label('Reply to You: pizza tonight?')
+    quote.wait_for(timeout=10000)
+    quote.click()
+
+
 def test_chinese_browser_gets_chinese_ui(server, browser, shots):
     create_user('carol')
     page = new_page(browser, locale='zh-CN')

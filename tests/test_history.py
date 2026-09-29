@@ -120,3 +120,47 @@ def test_messages_carry_the_senders_avatar():
     assert (live['avatar_expression'], live['avatar_color']) == ('Laugh', '#EB459E')
     history_msgs, _ = open_room(connect_as('alice'), 'club')
     assert history_msgs[-1]['avatar_color'] == '#EB459E'
+
+
+def test_a_reply_quotes_the_message_it_answers_live_and_in_history():
+    create_user('alice')
+    create_user('bob')
+    create_room('club', owner='alice', members=['alice', 'bob'])
+    alice, bob = connect_as('alice'), connect_as('bob')
+    open_room(alice, 'club')
+    open_room(bob, 'club')
+    alice.emit('message', {'room': 'club', 'text': 'pizza tonight?'})
+    original = events(bob, 'message')[0]
+
+    bob.emit('message', {'room': 'club', 'text': 'yes!', 'reply_to': original['id']})
+    live = events(alice, 'message')[-1]  # (her own 'pizza tonight?' is in there too)
+    assert live['reply'] == {
+        'id': original['id'],
+        'username': 'alice',
+        'screenname': 'Alice',
+        'text': 'pizza tonight?',
+        'recalled': False,
+    }
+
+    messages, _ = open_room(connect_as('alice'), 'club')
+    assert messages[-1]['reply']['text'] == 'pizza tonight?'
+    assert messages[0]['reply'] is None
+
+    # Once the original is recalled, the quote keeps its place but loses the text
+    alice.emit('recall_message', {'id': original['id']})
+    messages, _ = open_room(connect_as('bob'), 'club')
+    assert messages[-1]['reply']['recalled'] and messages[-1]['reply']['text'] == ''
+
+
+def test_a_reply_cannot_quote_a_message_from_another_room():
+    create_user('alice')
+    create_room('club', owner='alice', members=['alice'])
+    create_room('secret', owner='alice', members=['alice'])
+    post('secret', 1)
+    hidden = query("SELECT id FROM messages WHERE room = 'secret'")[0]['id']
+    alice = connect_as('alice')
+    open_room(alice, 'club')
+    alice.emit('message', {'room': 'club', 'text': 'hi', 'reply_to': hidden})
+    sent = events(alice, 'message')[0]
+    assert sent['text'] == 'hi' and sent['reply'] is None
+    assert query("SELECT reply_to FROM messages WHERE room = 'club'")[0]['reply_to'] is None

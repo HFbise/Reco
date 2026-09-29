@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
-import { IconBan, IconEmoji, IconPencil, IconSend } from '../Icon';
+import { IconBan, IconClose, IconEmoji, IconPencil, IconReply, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
@@ -20,6 +20,9 @@ interface Props {
   onCancelEdit: () => void;
   isMuted: boolean;
   isGuest: boolean;
+  /** Set while answering a message: who wrote it and how it starts */
+  replyingTo?: { name: string; text: string } | null;
+  onCancelReply?: () => void;
 }
 
 // The message box starts one line tall and grows with what's typed, up to a limit
@@ -31,6 +34,9 @@ export function Composer(p: Props) {
   const c = useColors();
   const t = useT();
   const [inputHeight, setInputHeight] = useState(MIN_INPUT);
+  const inputRef = useRef<TextInput>(null);
+  // Picking "Reply" puts the cursor in the box, ready to type
+  useEffect(() => { if (p.replyingTo) inputRef.current?.focus(); }, [p.replyingTo]);
 
   if (p.editText !== null) {
     return (
@@ -73,10 +79,26 @@ export function Composer(p: Props) {
   return (
     <View style={[s.inputArea, { backgroundColor: c.bg }]}>
       <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }, !c.isDark && s.cardLifted]}>
+        {p.replyingTo && (
+          <View style={[s.replyBar, { backgroundColor: c.surface2 }]}>
+            <IconReply size={16} color={c.accent} />
+            <View style={s.replyText}>
+              <Text style={[s.replyName, { color: c.accentText }]} numberOfLines={1}>
+                {t('replying-to', { name: p.replyingTo.name })}
+              </Text>
+              <Text style={[s.replySnippet, { color: c.textSub }]} numberOfLines={1}>{p.replyingTo.text}</Text>
+            </View>
+            <TouchableOpacity onPress={p.onCancelReply} hitSlop={8} accessibilityLabel={t('cancel-reply')} style={s.replyClose}>
+              <IconClose size={12} color={c.textSub} />
+            </TouchableOpacity>
+          </View>
+        )}
+        <View style={s.row}>
         <TouchableOpacity style={s.emojiBtn} onPress={p.onToggleEmoji} activeOpacity={0.7} accessibilityLabel={t('emoji')}>
           <IconEmoji size={22} color={p.emojiOpen ? c.accent : c.textSub} />
         </TouchableOpacity>
         <TextInput
+          ref={inputRef}
           style={[s.input, { color: c.text, height: inputHeight }]}
           numberOfLines={1}
           onContentSizeChange={(e) =>
@@ -101,6 +123,7 @@ export function Composer(p: Props) {
           onPress={p.onSend} activeOpacity={0.8} accessibilityLabel={t('send')}>
           <IconSend size={18} color={c.onAccent} />
         </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -109,7 +132,13 @@ export function Composer(p: Props) {
 const s = StyleSheet.create({
   inputArea: { paddingHorizontal: Spacing.lg, paddingTop: 8, paddingBottom: 16 },
   // One card holds the emoji button, the text and the send button
-  card: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: 20, borderWidth: 1, padding: 6, paddingLeft: 6 },
+  card: { borderRadius: 20, borderWidth: 1, padding: 6, gap: 6 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  replyBar: { flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 14, paddingVertical: 7, paddingLeft: 12, paddingRight: 8 },
+  replyText: { flex: 1, minWidth: 0 },
+  replyName: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
+  replySnippet: { fontSize: 13 },
+  replyClose: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   cardLifted: { shadowColor: '#161A23', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   emojiBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   input: { flex: 1, paddingHorizontal: 6, paddingVertical: 10, fontSize: 15, lineHeight: 20, outlineStyle: 'none' } as any,

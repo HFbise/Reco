@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform, Animated, Easing } from 'react-native';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
-import { IconEmoji, IconPencil, IconTrash } from './Icon';
+import { IconEmoji, IconPencil, IconReply, IconTrash } from './Icon';
 import { Fonts, Spacing } from '../theme';
 import { getAvatarColor, nameColor } from '../lib/avatar';
 export { getAvatarColor } from '../lib/avatar';
@@ -22,6 +22,8 @@ export interface Message {
   meta?: { invite?: { room: string; code: string } } | null;
   avatar_expression?: string;
   avatar_color?: string;
+  /** The message this one replies to, as quoted by the server */
+  reply?: { id: number; username: string; screenname: string; text: string; recalled: boolean } | null;
 }
 
 interface Props {
@@ -38,6 +40,12 @@ interface Props {
   onReactionBtnPress?: (pageX: number, pageY: number, btnH: number) => void;
   /** Touch screens: a double tap on the bubble (a quick 👍) */
   onDoubleTap?: () => void;
+  /** Start a reply to this message (desktop: a hover button; phones use the long-press sheet) */
+  onReply?: () => void;
+  /** The quote was tapped: jump to the message it quotes */
+  onQuotePress?: (id: number) => void;
+  /** Briefly highlighted after a jump to it */
+  highlighted?: boolean;
 }
 
 const DOUBLE_TAP_MS = 300;
@@ -46,6 +54,7 @@ const AVATAR = 36;
 
 export function MessageBubble({
   msg, currentUsername, cont, onLongPress, onReactionPress, isDesktop, onEdit, onRecall, onReactionBtnPress, onDoubleTap,
+  onReply, onQuotePress, highlighted,
 }: Props) {
   const c = useColors();
   const t = useT();
@@ -125,10 +134,37 @@ export function MessageBubble({
     }
   }
 
+  // The message this one answers: a tinted strip with who said it and how it started
+  const reply = msg.reply;
+  const quoteName = reply
+    ? (reply.username === currentUsername ? t('you') : reply.screenname)
+    : '';
+  const quoteColor = reply ? nameColor(getAvatarColor(reply.username), c.isDark, isOwn ? c.bubbleOwn : c.bubbleOther) : '';
+  const quote = reply && !msg.recalled ? (
+    <TouchableOpacity
+      onPress={() => onQuotePress?.(reply.id)}
+      activeOpacity={0.7}
+      disabled={!onQuotePress}
+      accessibilityRole="button"
+      accessibilityLabel={`${t('reply-to', { name: quoteName })}: ${reply.recalled ? t('msg-recalled') : reply.text}`}
+      style={[s.quote, {
+        backgroundColor: isOwn ? 'rgba(255,255,255,0.14)' : c.surface2,
+        borderLeftColor: isOwn ? c.onAccent : quoteColor,
+      }]}
+    >
+      <Text style={[s.quoteName, { color: isOwn ? c.onAccent : quoteColor }]} numberOfLines={1}>{quoteName}</Text>
+      <Text style={[s.quoteText, { color: isOwn ? 'rgba(255,255,255,0.85)' : c.textSub }, reply.recalled && s.quoteRecalled]}
+        numberOfLines={2}>
+        {reply.recalled ? t('msg-recalled') : reply.text}
+      </Text>
+    </TouchableOpacity>
+  ) : null;
+
   const bubbleContent = msg.recalled ? (
     <Text style={[s.recalled, { color: isOwn ? 'rgba(255,255,255,0.7)' : c.textMuted }]}>{t('msg-recalled')}</Text>
   ) : (
     <>
+      {quote}
       <Text style={[s.text, { color: isOwn ? c.onAccent : c.text }]}>{msg.text}</Text>
       {msg.edited && <Text style={[s.editedLabel, { color: isOwn ? 'rgba(255,255,255,0.7)' : c.textMuted }]}>{t('msg-edited')}</Text>}
     </>
@@ -138,6 +174,11 @@ export function MessageBubble({
   // Clicking react measures its position and hands off to ChatPanel for the popup
   const hoverActions = showHoverActions ? (
     <View style={[s.hoverActions, { backgroundColor: c.surface, borderColor: c.border }]}>
+      {onReply && (
+        <TouchableOpacity style={s.hoverBtn} onPress={onReply} activeOpacity={0.7} accessibilityLabel={t('reply')}>
+          <IconReply size={17} color={c.textSub} />
+        </TouchableOpacity>
+      )}
       <TouchableOpacity ref={reactBtnRef} style={s.hoverBtn} onPress={handleReactBtnPress} activeOpacity={0.7}
         accessibilityLabel={t('emoji')}>
         <IconEmoji size={17} color={c.textSub} />
@@ -171,19 +212,19 @@ export function MessageBubble({
         )}
 
         <View style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}>
-          <TouchableOpacity
+          {/* Touchable only when there's something to do with the bubble itself (phones).
+              A disabled button around it would make the quote inside count as disabled too. */}
+          <BubbleWrap
+            interactive={!!(onLongPress || onDoubleTap)}
             onLongPress={onLongPress}
             {...(onDoubleTap ? { onTouchStart, onTouchEnd } : null)}
-            delayLongPress={350}
-            activeOpacity={0.85}
-            disabled={!onLongPress && !onDoubleTap}
-            style={s.bubbleTouch}
           >
             <View style={[
               s.bubble,
               isOwn ? s.tailOwn : s.tailOther,
               { backgroundColor: isOwn ? c.bubbleOwn : c.bubbleOther },
               !isOwn && !c.isDark && s.lifted,
+              highlighted && { borderWidth: 2, borderColor: c.sunny },
             ]}>
               {bubbleContent}
             </View>
@@ -194,7 +235,7 @@ export function MessageBubble({
                 { translateY: pop.interpolate({ inputRange: [0, 1], outputRange: [0, -18] }) },
               ],
             }]}>{popped}</Animated.Text>
-          </TouchableOpacity>
+          </BubbleWrap>
           {hoverActions}
         </View>
 
@@ -217,6 +258,18 @@ export function MessageBubble({
         )}
       </View>
     </View>
+  );
+}
+
+/** The bubble's frame: a long-pressable touchable on phones, a plain box otherwise. */
+function BubbleWrap({ interactive, children, ...touch }: {
+  interactive: boolean; children: ReactNode; onLongPress?: () => void; onTouchStart?: (e: any) => void; onTouchEnd?: (e: any) => void;
+}) {
+  if (!interactive) return <View style={s.bubbleTouch}>{children}</View>;
+  return (
+    <TouchableOpacity {...touch} delayLongPress={350} activeOpacity={0.85} style={s.bubbleTouch}>
+      {children}
+    </TouchableOpacity>
   );
 }
 
@@ -287,6 +340,10 @@ const s = StyleSheet.create({
   text: { fontSize: 15, lineHeight: 22, ...(Platform.OS === 'web' ? { wordBreak: 'break-word' } : {}) } as any,
   editedLabel: { fontSize: 11, marginTop: 2 },
   recalled: { fontSize: 14, fontStyle: 'italic' },
+  quote: { borderLeftWidth: 3, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 9, marginBottom: 6, gap: 1 },
+  quoteName: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
+  quoteText: { fontSize: 13, lineHeight: 17 },
+  quoteRecalled: { fontStyle: 'italic' },
 
   reactionsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   reactionsRowOwn: { justifyContent: 'flex-end' },

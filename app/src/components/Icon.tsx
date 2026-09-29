@@ -378,3 +378,7 @@ export function IconHeart({ size = 20, color = 'currentColor' }: Props) {
     </Stroke>
   );
 }
+
+export function IconReply({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M9 17 4 12l5-5" /><Path d="M20 18v-2a4 4 0 0 0-4-4H4" /></Stroke>;
+}

@@ -89,3 +89,14 @@ export function patchCached(room: string, id: number, patch: Partial<Message>) {
     scheduleSave();
   }
 }
+
+/** Keep the quotes of message `id` (in replies to it) in step with an edit or recall. */
+export function patchCachedQuotes(room: string, id: number, patch: Partial<NonNullable<Message['reply']>>) {
+  const msgs = cache.get(room);
+  if (!msgs) return;
+  let changed = false;
+  for (const m of msgs) {
+    if (m.reply?.id === id) { m.reply = { ...m.reply, ...patch }; changed = true; }
+  }
+  if (changed) scheduleSave();
+}

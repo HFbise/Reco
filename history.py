@@ -2,11 +2,29 @@
 
 PAGE_SIZE = 50
 
-# Messages with their sender's current avatar (deleted/system senders have none)
+QUOTE_LEN = 140  # a reply shows the start of the message it answers
+
+# Messages with their sender's current avatar (deleted/system senders have none) and,
+# for replies, the message they answer (only ever from the same room)
 _SELECT = (
-    'SELECT m.*, u.avatar_expression, u.avatar_color FROM messages m'
-    ' LEFT JOIN users u ON u.username = m.username WHERE m.room = %s'
+    'SELECT m.*, u.avatar_expression, u.avatar_color,'
+    ' r.username AS reply_username, r.screenname AS reply_screenname,'
+    ' r.text AS reply_text, r.recalled AS reply_recalled FROM messages m'
+    ' LEFT JOIN users u ON u.username = m.username'
+    ' LEFT JOIN messages r ON r.id = m.reply_to AND r.room = m.room'
+    ' WHERE m.room = %s'
 )
+
+
+def quote(msg_id: int, username: str, screenname: str, text: str, recalled: bool) -> dict:
+    """What a reply shows of the message it answers. A recalled message's text is never sent."""
+    return {
+        'id': msg_id,
+        'username': username,
+        'screenname': screenname,
+        'text': '' if recalled else (text or '')[:QUOTE_LEN],
+        'recalled': bool(recalled),
+    }
 
 
 def serialize(msg: dict) -> dict:
@@ -25,6 +43,11 @@ def serialize(msg: dict) -> dict:
         'meta': dict(msg['meta']) if msg.get('meta') else None,
         'avatar_expression': msg.get('avatar_expression'),
         'avatar_color': msg.get('avatar_color'),
+        'reply': quote(
+            msg['reply_to'], msg['reply_username'], msg['reply_screenname'], msg['reply_text'], msg['reply_recalled']
+        )
+        if msg.get('reply_to') and msg.get('reply_username')
+        else None,
     }
 
 

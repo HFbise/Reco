@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSocket } from '../lib/socket';
-import { cacheMsg, getCached, getLastTs, patchCached, resetRoom } from '../lib/messageCache';
+import { cacheMsg, getCached, getLastTs, patchCached, patchCachedQuotes, resetRoom } from '../lib/messageCache';
+
 import { useAuthStore } from '../store/authStore';
 import type { Message } from '../components/MessageBubble';
 import type { VoiceMember } from './useVoice';
+
+/** How much of a message a reply quotes (matches the server's history.QUOTE_LEN) */
+const QUOTE_LEN = 140;
+
+/** `m` with its quote of message `id` updated, if it quotes that message */
+function patchQuote(m: Message, id: number, patch: Partial<NonNullable<Message['reply']>>): Message {
+  return m.reply && m.reply.id === id ? { ...m, reply: { ...m.reply, ...patch } } : m;
+}
 
 export interface RoomInfo {
   code: string;
@@ -115,15 +124,23 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
           return [...data.messages.filter((m: Message) => !known.has(m.id)).map(withOwn), ...prev];
         });
       },
+      // Edits and recalls reach the message and every reply quoting it
       message_recalled: (data) => {
         if (!mine(data)) return;
         patchCached(name, data.id, { recalled: true });
-        setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, recalled: true } : m)));
+        patchCachedQuotes(name, data.id, { recalled: true, text: '' });
+        setMessages((prev) => prev.map((m) => (
+          m.id === data.id ? { ...m, recalled: true } : patchQuote(m, data.id, { recalled: true, text: '' })
+        )));
       },
       message_edited: (data) => {
         if (!mine(data)) return;
+        const quoteText = String(data.text).slice(0, QUOTE_LEN);
         patchCached(name, data.id, { text: data.text, edited: true });
-        setMessages((prev) => prev.map((m) => (m.id === data.id ? { ...m, text: data.text, edited: true } : m)));
+        patchCachedQuotes(name, data.id, { text: quoteText });
+        setMessages((prev) => prev.map((m) => (
+          m.id === data.id ? { ...m, text: data.text, edited: true } : patchQuote(m, data.id, { text: quoteText })
+        )));
       },
       reaction_updated: (data) => {
         if (!mine(data)) return;
@@ -194,9 +211,10 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     getSocket().emit('load_older', { room: name, before_id: before });
   }, [messages, hasOlder, loadingOlder, name]);
 
-  const send = useCallback((text: string) => {
+  /** Send `text`, optionally as a reply to message `replyTo` (same room; the server checks) */
+  const send = useCallback((text: string, replyTo?: number | null) => {
     const body = text.trim();
-    if (body) getSocket().emit('message', { room: name, text: body });
+    if (body) getSocket().emit('message', { room: name, text: body, ...(replyTo ? { reply_to: replyTo } : {}) });
   }, [name]);
 
   const recall = useCallback((id: number) => getSocket().emit('recall_message', { id }), []);

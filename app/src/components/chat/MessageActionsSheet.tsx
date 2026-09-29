@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import type { Message } from '../MessageBubble';
 import { useColors } from '../../hooks/useColors';
-import { IconPencil, IconPlus, IconTrash } from '../Icon';
+import { IconPencil, IconPlus, IconReply, IconTrash } from '../Icon';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -19,6 +19,7 @@ interface Props {
   onMoreEmojis: () => void;
   onEdit: () => void;
   onRecall: () => void;
+  onReply: () => void;
 }
 
 /** Mobile long-press menu: quick reactions, more emojis, edit, unsend. */
@@ -60,8 +61,11 @@ export function MessageActionsSheet(p: Props) {
               <IconPlus size={20} color={c.textSub} />
             </TouchableOpacity>
           </View>
-          {(p.canEdit || p.canRecall) && (
-            <View style={[s.actions, { backgroundColor: c.surface2 }]}>
+          <View style={[s.actions, { backgroundColor: c.surface2 }]}>
+            <Action label={t('reply')} color={c.text} icon={<IconReply size={18} color={c.text} />} onPress={p.onReply} />
+            {(p.canEdit || p.canRecall) && <View style={[s.divider, { backgroundColor: c.border }]} />}
+            {(p.canEdit || p.canRecall) && (
+              <>
               {p.canEdit && (
                 <Action label={t('edit')} color={c.text} icon={<IconPencil size={18} color={c.text} />} onPress={p.onEdit} />
               )}
@@ -69,8 +73,9 @@ export function MessageActionsSheet(p: Props) {
               {p.canRecall && (
                 <Action label={t('recall')} color={c.danger} icon={<IconTrash size={18} color={c.danger} />} onPress={p.onRecall} />
               )}
-            </View>
-          )}
+              </>
+            )}
+          </View>
         </Animated.View>
       </View>
     </Modal>

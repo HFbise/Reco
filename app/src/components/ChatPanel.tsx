@@ -59,6 +59,8 @@ export function ChatPanel({
   // ── transient UI state ──
   const [input, setInput] = useState('');
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
+  // The message being answered (shown above the message box until sent or cancelled)
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [actionTarget, setActionTarget] = useState<{ msg: Message; at: number } | null>(null);
   const [showRoomInfo, setShowRoomInfo] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -136,8 +138,9 @@ export function ChatPanel({
 
   function send() {
     lastSentRef.current = input;
-    chat.send(input);
+    chat.send(input, replyingTo?.id);
     setInput('');
+    if (input.trim()) setReplyingTo(null);
   }
 
   function saveEdit() {
@@ -205,6 +208,7 @@ export function ChatPanel({
           onEdit={(msg) => setEditing({ id: msg.id, text: msg.text })}
           onRecall={(msg) => chat.recall(msg.id)}
           onOpenRoom={openRoom}
+          onReply={(msg) => { setEditing(null); setReplyingTo(msg); }}
         />
         <Composer
           input={input}
@@ -218,6 +222,11 @@ export function ChatPanel({
           onCancelEdit={() => setEditing(null)}
           isMuted={chat.isTextMuted}
           isGuest={isGuest}
+          replyingTo={replyingTo ? {
+            name: replyingTo.isOwn ? t('you') : replyingTo.screenname,
+            text: replyingTo.text,
+          } : null}
+          onCancelReply={() => setReplyingTo(null)}
         />
       </KeyboardAvoidingView>
 
@@ -274,6 +283,7 @@ export function ChatPanel({
         onMoreEmojis={() => { if (target) setReactionPicker({ msgId: target.id }); setActionTarget(null); }}
         onEdit={() => { if (target) setEditing({ id: target.id, text: target.text }); setActionTarget(null); }}
         onRecall={() => { if (target) chat.recall(target.id); setActionTarget(null); }}
+        onReply={() => { if (target) { setEditing(null); setReplyingTo(target); } setActionTarget(null); }}
       />
 
       <RoomInfoModal

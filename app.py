@@ -199,6 +199,7 @@ def _migrate():
             cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS edited BOOLEAN DEFAULT FALSE')
             cur.execute("ALTER TABLE messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb")
             cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS system BOOLEAN DEFAULT FALSE')
+            cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_to INTEGER')
             cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_expression TEXT')
             cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_color TEXT')
             cur.execute('ALTER TABLE users DROP COLUMN IF EXISTS is_admin')

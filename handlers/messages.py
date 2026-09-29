@@ -57,10 +57,30 @@ def handle_message(username, data):
                 msg['screenname'] = row['screenname']
                 msg['avatar_expression'] = row.get('avatar_expression')
                 msg['avatar_color'] = row.get('avatar_color')
+            # A reply may only quote a real (non-system) message from this same room;
+            # anything else is sent as a plain message
+            reply_to, msg['reply'] = None, None
+            wanted = data.get('reply_to')
+            if isinstance(wanted, int) and not isinstance(wanted, bool):
+                cur.execute(
+                    'SELECT id, username, screenname, text, recalled FROM messages'
+                    ' WHERE id = %s AND room = %s AND NOT COALESCE(system, FALSE)',
+                    (wanted, room),
+                )
+                original = cur.fetchone()
+                if original:
+                    reply_to = original['id']
+                    msg['reply'] = history.quote(
+                        original['id'],
+                        original['username'],
+                        original['screenname'],
+                        original['text'],
+                        original['recalled'],
+                    )
             cur.execute(
-                'INSERT INTO messages (room, username, screenname, text, time)'
-                ' VALUES (%s, %s, %s, %s, %s) RETURNING id, created_at',
-                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M')),
+                'INSERT INTO messages (room, username, screenname, text, time, reply_to)'
+                ' VALUES (%s, %s, %s, %s, %s, %s) RETURNING id, created_at',
+                (room, username, msg['screenname'], text, datetime.now().strftime('%H:%M'), reply_to),
             )
             saved = cur.fetchone()
             conn.commit()

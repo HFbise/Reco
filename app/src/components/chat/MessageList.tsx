@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { MessageBubble, type Message } from '../MessageBubble';
 import { buildFeed, type FeedItem } from '../../lib/feed';
@@ -26,13 +26,31 @@ interface Props {
   onEdit: (msg: Message) => void;
   onRecall: (msg: Message) => void;
   onOpenRoom: (room: string) => void;
+  onReply: (msg: Message) => void;
 }
+
+const HIGHLIGHT_MS = 1600;
 
 export function MessageList(p: Props) {
   const c = useColors();
   const t = useT();
   // Inverted list: newest at the bottom, so feed it newest-first
   const data = useMemo(() => [...buildFeed(p.messages, t.monthDay)].reverse(), [p.messages, t.monthDay]);
+  const list = useRef<FlatList<FeedItem>>(null);
+  const [highlighted, setHighlighted] = useState<number | null>(null);
+  useEffect(() => {
+    if (highlighted == null) return;
+    const timer = setTimeout(() => setHighlighted(null), HIGHLIGHT_MS);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
+
+  /** A quote was tapped: bring the message it quotes into view and flash it (if it's loaded) */
+  function jumpTo(id: number) {
+    const index = data.findIndex((item) => item._type !== 'sep' && (item as Message).id === id);
+    if (index === -1) return;
+    list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    setHighlighted(id);
+  }
 
   function renderItem({ item }: { item: FeedItem }) {
     if (item._type === 'sep') {
@@ -77,14 +95,20 @@ export function MessageList(p: Props) {
         onDoubleTap={isTouchScreen && !p.readOnly && !msg.recalled ? () => {
           if (!msg.reactions?.[QUICK_REACTION]?.includes(p.currentUsername ?? '')) p.onReact(msg.id, QUICK_REACTION);
         } : undefined}
+        onReply={desktopActions ? () => p.onReply(msg) : undefined}
+        onQuotePress={jumpTo}
+        highlighted={highlighted === msg.id}
       />
     );
   }
 
   return (
     <FlatList
+      ref={list}
       data={data}
       inverted
+      // Everything loaded is rendered (initialNumToRender), so this only covers odd layouts
+      onScrollToIndexFailed={({ index }) => setTimeout(() => list.current?.scrollToIndex({ index, viewPosition: 0.5 }), 100)}
       // In an inverted list the "end" is the top of the chat
       onEndReached={p.onLoadOlder}
       onEndReachedThreshold={0.2}
