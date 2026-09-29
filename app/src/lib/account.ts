@@ -20,9 +20,13 @@ export function request<T = any>(event: string, payload: object, resultEvent: st
 }
 
 export async function logout() {
-  unregisterPushToken();
-  getSocket().emit('user_offline', {});
-  await endSession();
+  // Best-effort goodbyes: signing out must happen even if one of these fails
+  try {
+    unregisterPushToken();
+    getSocket().emit('user_offline', {});
+  } finally {
+    await endSession();
+  }
 }
 
 export async function changePassword(oldPassword: string, newPassword: string) {

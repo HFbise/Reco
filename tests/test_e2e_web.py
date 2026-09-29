@@ -652,3 +652,25 @@ def test_a_cancelled_github_sign_in_says_so_on_the_login_screen(server, browser,
     page.goto(f'{URL}/oauth#error=oauth_cancelled')
     page.get_by_text('Sign-in was cancelled').wait_for()
     assert page.get_by_placeholder('Password').is_visible()
+
+
+def test_every_log_out_button_signs_out(server, browser, shots):
+    create_user('lou')
+    desktop, phone = new_page(browser), _phone(browser)
+    shots.extend([desktop, phone])
+
+    log_in(desktop, 'lou')
+    desktop.get_by_label('Log out').first.click()  # the nav rail's
+    desktop.get_by_placeholder('Password').wait_for()
+
+    log_in(desktop, 'lou')
+    desktop.goto(f'{URL}/me')
+    desktop.get_by_text('Log out', exact=True).click()  # the profile's
+    desktop.get_by_placeholder('Password').wait_for()
+    desktop.reload()  # and the session is really gone
+    desktop.get_by_placeholder('Password').wait_for()
+
+    log_in(phone, 'lou')
+    phone.goto(f'{URL}/me')
+    phone.get_by_text('Log out', exact=True).click()
+    phone.get_by_placeholder('Password').wait_for()
