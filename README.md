@@ -25,9 +25,17 @@ free instance sleeps when idle, so the first load can take up to a minute.
 
 ## Features
 
-- **Rooms and DMs:** public or password-protected rooms, invites, unread badges,
-  edits, recalls, emoji reactions and online presence. The DM list shows each
+- **Rooms and DMs:** public or password-protected rooms, invites, edits, recalls,
+  emoji reactions, replies that quote the message they answer (tap the quote to jump
+  back to it), "… is typing" and online presence. The DM list shows each
   conversation's last message and an online dot, kept live over the socket.
+- **Unread counts that follow you:** the server keeps a read mark per person and room,
+  so a badge cleared on the phone is cleared on the laptop too. Marks move when a
+  chat is opened and while new messages arrive on screen, never backwards.
+- **Photos:** pick a file or paste a screenshot. The browser shrinks it to 1600 px
+  and re-encodes it as JPEG (which drops EXIF, location included) before upload; the
+  server checks the type and size from the file's own bytes, caps it at 2 MB, and
+  serves it only once sent, until the message is recalled.
 - **Message history:** the most recent page loads on join, and older messages load on
   demand. Clients that reconnect after missing more than a page get a clean reset
   instead of a gap.
@@ -56,9 +64,15 @@ free instance sleeps when idle, so the first load can take up to a minute.
   (kick, text and voice restrictions, recall), reports with match transcripts, and
   feedback.
 - **Polish:** English and Chinese UI (server errors are sent as codes and translated
-  on the client), dark mode that follows the system, a responsive layout (nav rail
-  plus three columns on desktop, tabs on mobile), and push notifications for offline
-  users on native.
+  on the client), a quiet dark mode, a responsive layout (nav rail plus three columns
+  on desktop, tabs on mobile), touch gestures on phones (swipe back, swipe for the
+  member list, slide a DM away, double-tap to 👍, drag sheets down), an emoji picker
+  with search and recents, installable as a home-screen app, and push notifications
+  for offline users on native.
+- **Error reporting:** uncaught browser errors are posted to the backend, which sends
+  them to the same Sentry project as server errors (tagged `side: web`), so the page
+  ships no Sentry SDK. A crashed screen shows a friendly reload page instead of a
+  blank one.
 
 ## Architecture
 
@@ -179,7 +193,15 @@ check.
 - **Mesh voice.** Each participant connects to every other participant, which is
   fine for small rooms. Larger rooms would need an SFU such as LiveKit or mediasoup.
 - **Committed web build.** `app/dist` is checked in so the Python-only host needs no
-  Node build step. With a CI deploy pipeline, the build would move there.
+  Node build step. `build.sh` (checked by CI on every push) is ready to move the build
+  onto the host.
+- **Photos in Postgres.** Images are stored as `BYTEA` next to the messages: no
+  extra service or credentials, and plenty at this scale since browsers shrink them
+  first. With real traffic they would move to object storage (S3, R2) behind a CDN,
+  with the database keeping only the key.
+- **Unread counts by read mark, not per message.** One row per person and room
+  (`last_read_id`) keeps writes to one upsert per chat opened, instead of a receipt
+  per message per reader; the cost is no "seen by" list.
 - **Relay-only voice for strangers** costs TURN bandwidth. It is the price of not
   exposing IP addresses to anonymous partners.
 - **Retention.** Match transcripts exist only so reports can be reviewed. A
