@@ -60,3 +60,5 @@ jobs:
       - run: npm run typecheck
       - run: npm run lint
       - run: npm test
+      - name: Production web build (what build.sh runs on Render)
+        run: npx expo export -p web && test -f dist/index.html
