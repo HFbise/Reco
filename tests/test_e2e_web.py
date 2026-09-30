@@ -590,24 +590,31 @@ def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
         page.get_by_text('Close', exact=True).last.click()
         page.get_by_label('Chats', exact=True).click()  # back to the room (voice stays connected)
 
+    def louder_than(level):
+        """Hugo's output level once a volume change has taken effect (on a slow machine that can
+        lag the slider by a moment), then checked to be about 1.5x the level before."""
+        deadline = time.time() + 3
+        while True:
+            now = hugo.evaluate(_OUTPUT_LEVEL)
+            if now / level > 1.35 or time.time() > deadline:
+                break
+            hugo.wait_for_timeout(200)
+        assert 1.35 < now / level < 1.65, now / level
+        return now
+
     level = hugo.evaluate(_OUTPUT_LEVEL)
     assert level > 0.001  # Hugo hears Gina
 
     settings_slider(gina, 0)  # Gina's microphone
-    louder = hugo.evaluate(_OUTPUT_LEVEL)
-    assert 1.35 < louder / level < 1.65
-    level = louder
+    level = louder_than(level)
 
     settings_slider(hugo, 1)  # Hugo's speaker
-    louder = hugo.evaluate(_OUTPUT_LEVEL)
-    assert 1.35 < louder / level < 1.65
-    level = louder
+    level = louder_than(level)
 
     hugo.get_by_text('Gina', exact=True).first.click()  # Gina's volume, for Hugo only
     hugo.get_by_text('User volume').wait_for()
     to_max(hugo, hugo.get_by_role('slider').last)
-    louder = hugo.evaluate(_OUTPUT_LEVEL)
-    assert 1.35 < louder / level < 1.65
+    louder_than(level)
     b.close()
 
 
