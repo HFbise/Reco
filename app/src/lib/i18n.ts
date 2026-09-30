@@ -443,6 +443,30 @@ const zh = {
   'push-status-off': '已关闭',
   'push-status-denied': '已被浏览器屏蔽，可以在网站设置里允许',
   'push-status-install': '先把 Reco 添加到主屏幕',
+
+  // Chat card, list actions
+  'pin': '置顶',
+  'unpin': '取消置顶',
+  'pinned': '已置顶',
+  'mute-chat': '免打扰',
+  'unmute-chat': '取消免打扰',
+  'muted-chat': '已免打扰',
+  'mark-read': '标记为已读',
+  'more-options': '更多',
+  'invite': '邀请',
+  'search': '搜索',
+  'photos': '相册',
+  'pin-chat': '置顶聊天',
+  'pin-chat-hint': '在列表里始终排在最上面',
+  'mute-notifications': '消息免打扰',
+  'mute-notifications-hint': '不推送、不响铃，未读数照常显示',
+  'owner-settings': '房主设置',
+  'search-messages': '搜索聊天记录',
+  'search-hint': '输入文字，找这里说过的话',
+  'search-none': '没有找到',
+  'photos-none': '这里还没有人发过图片',
+  'message-too-old': '这条消息太早了，往上翻翻看',
+  'chat-info': '聊天信息',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -888,6 +912,30 @@ const en: Record<keyof typeof zh, string> = {
   'push-status-off': 'Off',
   'push-status-denied': 'Blocked in this browser. Allow it in the site settings',
   'push-status-install': 'Add Reco to your Home Screen first',
+
+  // Chat card, list actions
+  'pin': 'Pin',
+  'unpin': 'Unpin',
+  'pinned': 'Pinned',
+  'mute-chat': 'Mute',
+  'unmute-chat': 'Unmute',
+  'muted-chat': 'Muted',
+  'mark-read': 'Mark as read',
+  'more-options': 'More',
+  'invite': 'Invite',
+  'search': 'Search',
+  'photos': 'Photos',
+  'pin-chat': 'Pin to top',
+  'pin-chat-hint': 'Keep it at the top of your list',
+  'mute-notifications': 'Mute notifications',
+  'mute-notifications-hint': 'No notifications or sounds; unread counts still show',
+  'owner-settings': 'Owner settings',
+  'search-messages': 'Search messages',
+  'search-hint': 'Type to find something said here',
+  'search-none': 'Nothing found',
+  'photos-none': 'No photos here yet',
+  'message-too-old': 'That message is further back; scroll up to find it',
+  'chat-info': 'Chat info',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };

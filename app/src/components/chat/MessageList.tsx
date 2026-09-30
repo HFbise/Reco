@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { MessageBubble, type Message } from '../MessageBubble';
 import { TypingIndicator } from './TypingIndicator';
@@ -34,7 +34,12 @@ interface Props {
 
 const HIGHLIGHT_MS = 1600;
 
-export function MessageList(p: Props) {
+export interface MessageListHandle {
+  /** Scroll to a loaded message and flash it; false if it isn't loaded */
+  jumpTo: (id: number) => boolean;
+}
+
+export const MessageList = forwardRef<MessageListHandle, Props>(function MessageList(p, ref) {
   const c = useColors();
   const t = useT();
   // Inverted list: newest at the bottom, so feed it newest-first
@@ -47,13 +52,15 @@ export function MessageList(p: Props) {
     return () => clearTimeout(timer);
   }, [highlighted]);
 
-  /** A quote was tapped: bring the message it quotes into view and flash it (if it's loaded) */
+  /** A quote (or a search result) was tapped: bring the message into view and flash it, if it's loaded */
   function jumpTo(id: number) {
     const index = data.findIndex((item) => item._type !== 'sep' && (item as Message).id === id);
-    if (index === -1) return;
+    if (index === -1) return false;
     list.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
     setHighlighted(id);
+    return true;
   }
+  useImperativeHandle(ref, () => ({ jumpTo }));
 
   function renderItem({ item }: { item: FeedItem }) {
     if (item._type === 'sep') {
@@ -134,7 +141,7 @@ export function MessageList(p: Props) {
       contentContainerStyle={s.list}
     />
   );
-}
+});
 
 const s = StyleSheet.create({
   list: { paddingTop: Spacing.sm, paddingBottom: Spacing.lg },

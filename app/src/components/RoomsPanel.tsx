@@ -11,7 +11,7 @@ import { getSocket } from '../lib/socket';
 import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { AvatarView } from './AvatarView';
-import { IconSearch, IconPlus, IconLock, IconHash, IconClose } from './Icon';
+import { IconSearch, IconPlus, IconLock, IconHash, IconClose, IconPin, IconBellOff, IconMore, IconCheck } from './Icon';
 import { DisplayText } from './ui/DisplayText';
 import { TextField } from './ui/TextField';
 import { SwipeRow } from './ui/SwipeRow';
@@ -37,6 +37,9 @@ interface Entry {
   /** DMs: whether the other person is online, and the newest message for the preview line */
   online?: boolean;
   last?: DmPreview;
+  /** This person's own settings for the chat (chat_prefs on the server, same on every device) */
+  pinned?: boolean;
+  muted?: boolean;
 }
 
 /** The newest message of a DM, as the server sends it in dms_list */
@@ -61,6 +64,8 @@ export interface DmEntry {
   unread?: number;
   online?: boolean;
   last?: DmPreview;
+  pinned?: boolean;
+  muted?: boolean;
 }
 
 interface Props {
@@ -114,6 +119,9 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
   const selectedRoomRef = useRef(selectedRoom);
   useEffect(() => { selectedRoomRef.current = selectedRoom; }, [selectedRoom]);
   const soundEnabledRef = useRef(soundEnabled);
+  // Read by socket handlers, which are set up once
+  const entriesRef = useRef(entries);
+  entriesRef.current = entries;
   useEffect(() => { soundEnabledRef.current = soundEnabled; }, [soundEnabled]);
   const onRoomSelectRef = useRef(onRoomSelect);
   useEffect(() => { onRoomSelectRef.current = onRoomSelect; }, [onRoomSelect]);
@@ -135,7 +143,9 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const serverUnread = (key: string, n: number | undefined, fallback: number) =>
       key === selectedRoomRef.current ? 0 : typeof n === 'number' ? n : fallback;
 
-    const onRoomsList = (data: { rooms: { name: string; has_password: boolean; needs_password?: boolean; code?: string; unread?: number }[] }) => {
+    const onRoomsList = (data: { rooms: {
+      name: string; has_password: boolean; needs_password?: boolean; code?: string; unread?: number; pinned?: boolean; muted?: boolean;
+    }[] }) => {
       setRoomsLoading(false);
       setEntries(prev => {
         const existing = new Map(prev.map(e => [e.key, e]));
@@ -148,6 +158,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           needsPassword: r.needs_password,
           unread: serverUnread(r.name, r.unread, existing.get(r.name)?.unread ?? 0),
           lastActivity: existing.get(r.name)?.lastActivity ?? 0,
+          pinned: !!r.pinned,
+          muted: !!r.muted,
         }));
         const dmEntries = prev.filter(e => e.type === 'dm');
         return [...roomEntries, ...dmEntries];
@@ -207,6 +219,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           lastActivity: existing.get(d.dm_room)?.lastActivity ?? 0,
           online: d.online,
           last: d.last,
+          pinned: !!d.pinned,
+          muted: !!d.muted,
         }));
         const roomEntries = prev.filter(e => e.type === 'room');
         return [...roomEntries, ...dmEntries];
@@ -269,7 +283,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       const msgRoom = data.room as string;
       const isLoading = loadingHistoryRef.current.has(msgRoom);
       const isActive = msgRoom === selectedRoomRef.current;
-      if (!isLoading && !isActive && data.username !== currentUser?.username && soundEnabledRef.current) {
+      const muted = entriesRef.current.find(e => e.key === msgRoom)?.muted;
+      if (!isLoading && !isActive && !muted && data.username !== currentUser?.username && soundEnabledRef.current) {
         playNotifSound();
       }
       if (isLoading) return;
@@ -301,7 +316,14 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     const onOnlineStatus = (data: { username: string; online: boolean }) => setEntries(prev => prev.map(e =>
       e.type === 'dm' && e.otherUsername === data.username ? { ...e, online: data.online } : e));
 
+    const onChatPref = (data: { room: string; pinned: boolean; muted: boolean }) => setEntries(prev => prev.map(e =>
+      e.key === data.room ? { ...e, pinned: data.pinned, muted: data.muted } : e));
+    const onChatRead = (data: { room: string }) => setEntries(prev => prev.map(e =>
+      e.key === data.room ? { ...e, unread: 0 } : e));
+
     socket.on('connect', load);
+    socket.on('chat_pref', onChatPref);
+    socket.on('chat_read', onChatRead);
     socket.on('blocked_users_list', onBlockedList);
     socket.on('rooms_list', onRoomsList);
     socket.on('new_room_created', onNewRoomCreated);
@@ -328,6 +350,8 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
 
     return () => {
       socket.off('connect', load);
+      socket.off('chat_pref', onChatPref);
+      socket.off('chat_read', onChatRead);
       socket.off('blocked_users_list', onBlockedList);
       socket.off('rooms_list', onRoomsList);
       socket.off('new_room_created', onNewRoomCreated);
@@ -347,8 +371,30 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     };
   }, [currentUser, setBlocked, t]);
 
-  // Server order (lobby first), with each room moved to the top when a message arrives (see onMessage)
+  // Server order (lobby first), with each room moved to the top when a message arrives (see onMessage);
+  // pinned chats stay above the rest of their section
   const sorted = entries.filter(e => e.displayName.toLowerCase().includes(search.toLowerCase()));
+  const pinnedFirst = (list: Entry[]) => [...list.filter(e => e.pinned), ...list.filter(e => !e.pinned)];
+
+  /** Pin / mute a chat (the server tells every device, this one included) */
+  function setPref(entry: Entry, patch: { pinned?: boolean; muted?: boolean }) {
+    setEntries(prev => prev.map(e => e.key === entry.key ? { ...e, ...patch } : e));
+    getSocket().emit('set_chat_pref', { room: entry.key, ...patch });
+  }
+
+  function markRead(entry: Entry) {
+    setEntries(prev => prev.map(e => e.key === entry.key ? { ...e, unread: 0 } : e));
+    getSocket().emit('mark_chat_read', { room: entry.key });
+  }
+
+  // Mouse screens: the ⋯ on a hovered row opens these (touch screens swipe instead)
+  const [rowMenu, setRowMenu] = useState<{ entry: Entry; top: number; left: number } | null>(null);
+  const rowMenuItems = (entry: Entry) => [
+    { label: entry.pinned ? t('unpin') : t('pin'), icon: IconPin, run: () => setPref(entry, { pinned: !entry.pinned }) },
+    { label: entry.muted ? t('unmute-chat') : t('mute-chat'), icon: IconBellOff, run: () => setPref(entry, { muted: !entry.muted }) },
+    ...(entry.unread > 0 ? [{ label: t('mark-read'), icon: IconCheck, run: () => markRead(entry) }] : []),
+    ...(entry.type === 'dm' ? [{ label: t('close-dm'), icon: IconClose, run: () => closeDm(entry) }] : []),
+  ];
 
   function navigateTo(entry: Entry, password?: string) {
     loadingHistoryRef.current.add(entry.key);
@@ -465,6 +511,25 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
     </Modal>
   );
 
+  const rowMenuView = (
+    <Modal visible={!!rowMenu} transparent animationType="none" onRequestClose={() => setRowMenu(null)}>
+      <TouchableOpacity style={{ flex: 1 }} onPress={() => setRowMenu(null)} activeOpacity={1}>
+        {rowMenu && (
+          <View style={[s.dropdown, { position: 'absolute', top: rowMenu.top, left: rowMenu.left, backgroundColor: c.surface, borderColor: c.border }]}
+            accessibilityRole="menu">
+            {rowMenuItems(rowMenu.entry).map(({ label, icon: ItemIcon, run }) => (
+              <TouchableOpacity key={label} style={s.dropdownItem} activeOpacity={0.8} accessibilityRole="menuitem"
+                onPress={() => { setRowMenu(null); run(); }}>
+                <View style={[s.dropdownIcon, { backgroundColor: c.surface2 }]}><ItemIcon size={15} color={c.textSub} /></View>
+                <Text style={[s.dropdownText, { color: c.text }]}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </TouchableOpacity>
+    </Modal>
+  );
+
   const searchBar = (
     <View style={[s.searchWrap, { backgroundColor: c.bg }]}>
       <IconSearch size={16} color={c.textMuted} />
@@ -497,7 +562,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
 
   const row = (entry: Entry) => {
     const isActive = entry.key === selectedRoom;
-    const showClose = entry.type === 'dm' && hoveredKey === entry.key;
+    const hovered = hoveredKey === entry.key && !isTouchScreen;
     const preview = entry.type === 'dm' ? previewText(entry.last) : '';
     const item = (
       <Pressable
@@ -508,8 +573,6 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           if (swipedKey) { setSwipedKey(null); return; }
           handlePress(entry);
         }}
-        onHoverIn={() => setHoveredKey(entry.key)}
-        onHoverOut={() => setHoveredKey(k => (k === entry.key ? null : k))}
         onLongPress={entry.type === 'dm' && Platform.OS !== 'web' ? () => confirmCloseDm(entry) : undefined}
         accessibilityRole="button"
         accessibilityState={{ selected: isActive }}
@@ -534,9 +597,13 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           </View>
         )}
         <View style={s.rowText}>
-          <Text style={[s.roomName, { color: isActive ? c.accentText : c.text }, isActive && s.roomNameActive]} numberOfLines={1}>
-            {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
-          </Text>
+          <View style={s.nameLine}>
+            <Text style={[s.roomName, { color: isActive ? c.accentText : c.text }, isActive && s.roomNameActive]} numberOfLines={1}>
+              {entry.type === 'room' ? t.room(entry.displayName) : entry.displayName}
+            </Text>
+            {entry.pinned && <View accessibilityLabel={t('pinned')}><IconPin size={12} color={c.textMuted} /></View>}
+            {entry.muted && <View accessibilityLabel={t('muted-chat')}><IconBellOff size={12} color={c.textMuted} /></View>}
+          </View>
           {preview && (
             <Text style={[s.preview, { color: entry.unread > 0 ? c.text : c.textSub }, entry.unread > 0 && s.previewUnread]}
               numberOfLines={1}>
@@ -545,44 +612,79 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
           )}
         </View>
         {entry.type === 'room' && entry.hasPassword && <IconLock size={13} color={c.textMuted} />}
-        {showClose ? (
-          <Pressable
-            style={({ hovered }: any) => [s.closeBtn, hovered && { backgroundColor: c.surface2 }]}
-            onPress={() => closeDm(entry)}
-            hitSlop={6}
-            accessibilityLabel={t('close-dm')}
-          >
-            <IconClose size={12} color={c.textSub} />
-          </Pressable>
-        ) : entry.unread > 0 && (
-          <View style={[s.badge, { backgroundColor: c.unread }]} accessibilityLabel={`${entry.unread}`}>
-            <Text style={[s.badgeText, { color: c.unreadText }]}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
+        {entry.unread > 0 && (
+          // Muted chats still count, quietly
+          <View style={[s.badge, { backgroundColor: entry.muted ? c.surface2 : c.unread }]} accessibilityLabel={`${entry.unread}`}>
+            <Text style={[s.badgeText, { color: entry.muted ? c.textSub : c.unreadText }]}>{entry.unread > 99 ? '99+' : entry.unread}</Text>
           </View>
         )}
       </Pressable>
     );
-    if (entry.type !== 'dm') return item;
-    // Touch screens: slide a DM left to close it (mouse screens have the hover button above)
+    // Mouse screens: hovering a row shows ⋯ (and × on a DM) over its right end. They sit beside the
+    // row, not inside it: the row is a <button>, and a button inside a button never gets the click
+    const hoverable = (
+      <View key={entry.key}
+        {...({
+          // (react-native-web passes mouse events through on a plain View)
+          onMouseEnter: () => setHoveredKey(entry.key),
+          onMouseLeave: () => setHoveredKey((k: string | null) => (k === entry.key ? null : k)),
+        } as any)}>
+        {item}
+        {hovered && (
+          <View style={[s.hoverTools, { backgroundColor: isActive ? c.accentBg : c.surface }]}>
+            <Pressable
+              style={({ hovered: h }: any) => [s.closeBtn, h && { backgroundColor: c.surface2 }]}
+              onPress={(e) => setRowMenu({ entry, top: e.nativeEvent.pageY + 12, left: e.nativeEvent.pageX - 8 })}
+              accessibilityRole="button"
+              accessibilityLabel={t('more-options')}
+            >
+              <IconMore size={14} color={c.textSub} />
+            </Pressable>
+            {entry.type === 'dm' && (
+              <Pressable
+                style={({ hovered: h }: any) => [s.closeBtn, h && { backgroundColor: c.surface2 }]}
+                onPress={() => closeDm(entry)}
+                accessibilityRole="button"
+                accessibilityLabel={t('close-dm')}
+              >
+                <IconClose size={12} color={c.textSub} />
+              </Pressable>
+            )}
+          </View>
+        )}
+      </View>
+    );
+    // Touch screens: slide a row left to pin, mute or (a DM) close it
+    const swiped = (run: () => void) => () => { setSwipedKey(null); run(); };
     return (
       <SwipeRow
         key={entry.key}
         enabled={isTouchScreen}
         open={swipedKey === entry.key}
         onOpenChange={(o) => setSwipedKey(o ? entry.key : null)}
-        actionLabel={t('close')}
-        actionIcon={<IconClose size={16} color={c.onAccent} />}
-        actionColor={c.danger}
-        actionTextColor={c.onAccent}
         background={c.surface}
-        onAction={() => { setSwipedKey(null); closeDm(entry); }}
+        actions={[
+          {
+            label: entry.pinned ? t('unpin') : t('pin'), icon: <IconPin size={16} color={c.onAccent} />,
+            color: c.accent, textColor: c.onAccent, onPress: swiped(() => setPref(entry, { pinned: !entry.pinned })),
+          },
+          {
+            label: entry.muted ? t('unmute-chat') : t('mute-chat'), icon: <IconBellOff size={16} color={c.sunnyText} />,
+            color: c.sunny, textColor: c.sunnyText, onPress: swiped(() => setPref(entry, { muted: !entry.muted })),
+          },
+          ...(entry.type === 'dm' ? [{
+            label: t('close'), icon: <IconClose size={16} color={c.onAccent} />,
+            color: c.danger, textColor: c.onAccent, onPress: swiped(() => closeDm(entry)),
+          }] : []),
+        ]}
       >
-        {item}
+        {hoverable}
       </SwipeRow>
     );
   };
 
-  const rooms = sorted.filter((e) => e.type === 'room');
-  const dms = sorted.filter((e) => e.type === 'dm');
+  const rooms = pinnedFirst(sorted.filter((e) => e.type === 'room'));
+  const dms = pinnedFirst(sorted.filter((e) => e.type === 'dm'));
   const section = (label: string, list: Entry[]) => list.length > 0 && (
     <View style={s.section}>
       <Text style={[s.sectionLabel, { color: c.textMuted }]}>{label}</Text>
@@ -613,6 +715,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
       {roomsLoading && (
         <ActivityIndicator size="small" color={c.accent} style={{ marginTop: 24 }} />
       )}
+      {rowMenuView}
       <ScrollView contentContainerStyle={s.scrollContent}>
         <PushPrompt />
         {section(t('section-rooms'), rooms)}
@@ -729,7 +832,8 @@ const s = StyleSheet.create({
   },
   roomIcon: { width: 36, height: 36, borderRadius: 12, flexShrink: 0, alignItems: 'center', justifyContent: 'center' },
   rowText: { flex: 1, minWidth: 0, gap: 1 },
-  roomName: { fontSize: 15, fontWeight: String(Fonts.bold) as any },
+  nameLine: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  roomName: { fontSize: 15, fontWeight: String(Fonts.bold) as any, flexShrink: 1 },
   preview: { fontSize: 13 },
   previewUnread: { fontWeight: String(Fonts.bold) as any },
   onlineDot: { position: 'absolute', right: -1, bottom: -1, width: 13, height: 13, borderRadius: 7, borderWidth: 2.5 },
@@ -740,6 +844,9 @@ const s = StyleSheet.create({
   },
   badgeText: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
   closeBtn: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  hoverTools: {
+    position: 'absolute', right: 8, top: 0, bottom: 0, flexDirection: 'row', alignItems: 'center', gap: 2, paddingLeft: 6,
+  },
 
 
 });

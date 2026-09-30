@@ -65,9 +65,8 @@ export function ChatHeader({
           <Text style={[s.voicePillCount, { color: c.accentText }]}>{voicePillMembers.length}</Text>
         </TouchableOpacity>
       )}
-      {!isDm && (
-        <IconButton label={t('room-info')} onPress={onOpenInfo} icon={(color) => <IconInfo size={20} color={color} />} />
-      )}
+      <IconButton label={isDm ? t('chat-info') : t('room-info')} onPress={onOpenInfo}
+        icon={(color) => <IconInfo size={20} color={color} />} />
       {showMembersButton && !isDm && (
         <IconButton label={t('members')} variant="tinted" onPress={onOpenMembers} icon={(color) => <IconUsers size={20} color={color} />} />
       )}

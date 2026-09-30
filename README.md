@@ -34,6 +34,12 @@ free instance sleeps when idle, so the first load can take up to a minute.
   emoji reactions, replies that quote the message they answer (tap the quote to jump
   back to it), "… is typing" and online presence. The DM list shows each
   conversation's last message and an online dot, kept live over the socket.
+- **Chat cards:** every room and DM has a card (like a QQ group's settings or a Discord
+  server's sheet): pin it to the top of your list, mute its notifications (no push, no
+  sound, a quiet grey badge), search its history (tapping a result loads older pages
+  until the message is on screen) and browse its photos. Pins and mutes live on the
+  server, so every device agrees. On phones the list's rows slide left to pin, mute or
+  close; on desktop a ⋯ on hover does the same.
 - **Unread counts that follow you:** the server keeps a read mark per person and room,
   so a badge cleared on the phone is cleared on the laptop too. Marks move when a
   chat is opened and while new messages arrive on screen, never backwards.
@@ -222,6 +228,9 @@ check.
   extra service or credentials, and plenty at this scale since browsers shrink them
   first. With real traffic they would move to object storage (S3, R2) behind a CDN,
   with the database keeping only the key.
+- **Search is a plain `ILIKE`** over one chat's messages (wildcards escaped), newest
+  first, 30 at a time. Fine for chats of this size; with real volume it would move to
+  Postgres full-text search or a `pg_trgm` index.
 - **Unread counts by read mark, not per message.** One row per person and room
   (`last_read_id`) keeps writes to one upsert per chat opened, instead of a receipt
   per message per reader; the cost is no "seen by" list.

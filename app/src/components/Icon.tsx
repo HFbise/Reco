@@ -395,3 +395,11 @@ export function IconImage({ size = 20, color = 'currentColor' }: Props) {
 export function IconBell({ size = 18, color = 'currentColor' }: Props) {
   return <Stroke size={size} color={color}><Path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></Stroke>;
 }
+
+export function IconBellOff({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5" /><Path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7" /><Path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /><Path d="m2 2 20 20" /></Stroke>;
+}
+
+export function IconPin({ size = 18, color = 'currentColor' }: Props) {
+  return <Stroke size={size} color={color}><Path d="M12 17v5" /><Path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></Stroke>;
+}

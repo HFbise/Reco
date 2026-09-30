@@ -15,9 +15,9 @@ import type { Message } from './MessageBubble';
 import { EmojiPicker, POPOVER_H, POPOVER_W } from './emoji/EmojiPicker';
 import { MembersPanel } from './MembersPanel';
 import { ChatHeader } from './chat/ChatHeader';
-import { MessageList } from './chat/MessageList';
+import { MessageList, type MessageListHandle } from './chat/MessageList';
 import { Composer } from './chat/Composer';
-import { RoomInfoModal } from './chat/RoomInfoModal';
+import { ChatCard } from './chat/ChatCard';
 import { MessageActionsSheet } from './chat/MessageActionsSheet';
 import { ReactionQuickBar } from './chat/ReactionQuickBar';
 import { RightDrawer } from './chat/RightDrawer';
@@ -26,6 +26,7 @@ import type { DmMeta, ExternalVoice } from './chat/types';
 export type { DmMeta, ExternalVoice } from './chat/types';
 
 const REACTION_BAR_H = 54;
+const MAX_JUMP_PAGES = 20; // older pages to load looking for a search result's message
 const TOAST_TEXT = {
   'muted': 'you-are-muted',
   'dm-blocked': 'dm-blocked',
@@ -119,6 +120,28 @@ export function ChatPanel({
   });
 
   useEffect(() => { loadRecentEmojis().then(setRecentEmojis); }, []);
+
+  // A search result was picked: show that message, loading older pages until it's there
+  const messageList = useRef<MessageListHandle>(null);
+  const [jumpTarget, setJumpTarget] = useState<{ id: number; pages: number } | null>(null);
+  useEffect(() => {
+    if (!jumpTarget) return;
+    if (chat.messages.some((m) => m.id === jumpTarget.id)) {
+      // (after the list has rendered the page that brought it)
+      const timer = setTimeout(() => messageList.current?.jumpTo(jumpTarget.id), 50);
+      setJumpTarget(null);
+      return () => clearTimeout(timer);
+    }
+    if (chat.loadingOlder) return;
+    if (!chat.hasOlder || jumpTarget.pages >= MAX_JUMP_PAGES) {
+      setJumpTarget(null);
+      showToast(t('message-too-old'));
+      return;
+    }
+    chat.loadOlder();
+    setJumpTarget({ ...jumpTarget, pages: jumpTarget.pages + 1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [jumpTarget, chat.messages, chat.loadingOlder, chat.hasOlder]);
   useEffect(() => { if (membersKey) setShowMembers(true); }, [membersKey]);
 
   function joinVoiceHere() {
@@ -222,6 +245,7 @@ export function ChatPanel({
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <MessageList
+          ref={messageList}
           messages={visible}
           currentUsername={currentUser?.username}
           isDesktop={isDesktop}
@@ -324,10 +348,13 @@ export function ChatPanel({
         onReply={() => { if (target) { setEditing(null); setReplyingTo(target); } setActionTarget(null); }}
       />
 
-      <RoomInfoModal
+      <ChatCard
         visible={showRoomInfo}
         name={name}
+        dmMeta={dmMeta}
         room={chat.room}
+        isGuest={isGuest}
+        onJumpTo={(id) => setJumpTarget({ id, pages: 0 })}
         onClose={() => setShowRoomInfo(false)}
         onLeave={() => { setShowRoomInfo(false); chat.leave(); handleBack(); }}
         onCloseRoom={() => { setShowRoomInfo(false); chat.close(); }}

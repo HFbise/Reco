@@ -6,6 +6,7 @@ from datetime import datetime
 
 from flask_socketio import emit
 
+import chat_prefs
 import history
 import images
 import moderation
@@ -119,6 +120,8 @@ def handle_message(username, data):
 
     preview = text[:100] or '📷'
     if recipient:
+        with get_db() as conn:
+            muted = bool(chat_prefs.muted_by(conn.cursor(), room, [recipient]))
         if recipient in online_users:
             for sid in list(online_users[recipient]):
                 socketio.emit(
@@ -137,9 +140,9 @@ def handle_message(username, data):
                     },
                     to=sid,
                 )
-        else:
+        elif not muted:
             send_push(tokens_for([recipient]), msg['screenname'], preview, {'room': room})
-        if not is_watching(recipient):
+        if not muted and not is_watching(recipient):
             # Opens this DM, with what the chat header shows about the sender
             query = urllib.parse.urlencode(
                 {
@@ -163,6 +166,8 @@ def handle_message(username, data):
                 (room, username, username),
             )
             offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users]
+            muted = chat_prefs.muted_by(cur, room, offline)
+            offline = [u for u in offline if u not in muted]
         send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
     except Exception as e:
         log.exception('push notify error: %s', e)

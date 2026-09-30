@@ -20,6 +20,7 @@ log = logging.getLogger('app')
 
 from flask import jsonify, request, send_from_directory
 
+import chat_prefs
 import client_errors
 import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
@@ -252,6 +253,7 @@ def _migrate():
             images.migrate(cur)
             oauth.migrate(cur)
             webpush.migrate(cur)
+            chat_prefs.migrate(cur)
 
             # Backfill missing room codes
             import random

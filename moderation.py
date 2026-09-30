@@ -85,6 +85,7 @@ def close_room(room: str):
         cur.execute('DELETE FROM messages WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_invites WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_restrictions WHERE room = %s', (room,))
+        cur.execute('DELETE FROM chat_prefs WHERE room = %s', (room,))
         conn.commit()
     socketio.emit('room_closed', {'room': room}, to=room)
     voice_state.close(room)
@@ -240,6 +241,7 @@ def delete_account(cur, username: str):
     cur.execute('DELETE FROM room_invites WHERE username = %s', (username,))
     cur.execute('DELETE FROM oauth_accounts WHERE username = %s', (username,))
     cur.execute('DELETE FROM web_push_subscriptions WHERE username = %s', (username,))
+    cur.execute('DELETE FROM chat_prefs WHERE username = %s', (username,))
     cur.execute('DELETE FROM users WHERE username = %s', (username,))
     cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
@@ -278,6 +280,7 @@ def rename_user(old: str, new: str):
             cur.execute('UPDATE messages SET room = %s WHERE room = %s', (new_room, row['room']))
             cur.execute('UPDATE dm_closed SET dm_room = %s WHERE dm_room = %s', (new_room, row['room']))
             cur.execute('UPDATE matches SET dm_room = %s WHERE dm_room = %s', (new_room, row['room']))
+            cur.execute('UPDATE chat_prefs SET room = %s WHERE room = %s', (new_room, row['room']))
         cur.execute('UPDATE dm_closed SET username = %s WHERE username = %s', (new, old))
 
         cur.execute('UPDATE blocks SET blocker = %s WHERE blocker = %s', (new, old))
@@ -293,6 +296,7 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE room_invites SET invited_by = %s WHERE invited_by = %s', (new, old))
         cur.execute('UPDATE oauth_accounts SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE web_push_subscriptions SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE chat_prefs SET username = %s WHERE username = %s', (new, old))
         cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (old,))
         conn.commit()
 

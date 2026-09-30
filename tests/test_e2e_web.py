@@ -14,7 +14,7 @@ import pytest
 
 sync_api = pytest.importorskip('playwright.sync_api')
 
-from conftest import ROOT, create_user, get_db  # noqa: E402
+from conftest import ROOT, create_room, create_user, get_db  # noqa: E402
 
 import demo  # noqa: E402
 
@@ -746,3 +746,106 @@ def test_a_notification_link_opens_that_dm(server, browser, shots):
         page.get_by_placeholder('Type a message...').wait_for()  # the DM is open
         page.get_by_text('see you').last.wait_for()
         assert page.get_by_text('Olga').first.is_visible()
+
+
+def _dms_in_order(page):
+    """Names in the list's DIRECT MESSAGES section, top to bottom."""
+    return page.evaluate(
+        """(names) => names
+            .map((n) => [n, [...document.querySelectorAll('div[dir=auto]')].find((e) => e.textContent === n)])
+            .filter(([, el]) => el)
+            .sort((a, b) => a[1].getBoundingClientRect().top - b[1].getBoundingClientRect().top)
+            .map(([n]) => n)""",
+        ['Rae', 'Sol'],
+    )
+
+
+def test_pinning_and_muting_chats_from_the_list(server, browser, shots):
+    create_user('quin')
+    create_user('rae', screenname='Rae')
+    create_user('sol', screenname='Sol')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'INSERT INTO messages (room, username, screenname, text, created_at)'
+            " VALUES ('dm:quin:rae', 'rae', 'Rae', 'old news', NOW() - INTERVAL '1 hour')"
+        )
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:quin:sol', 'sol', 'Sol', 'newer')"
+        )
+        conn.commit()
+    desktop, phone = new_page(browser), _phone(browser)
+    shots.extend([desktop, phone])
+    log_in(desktop, 'quin')
+    desktop.get_by_text('old news').wait_for()
+    assert _dms_in_order(desktop) == ['Sol', 'Rae']
+
+    # Mouse: hover a row, ⋯, Pin: Rae goes to the top, here and on the phone
+    desktop.get_by_text('Rae', exact=True).hover()
+    desktop.get_by_label('More', exact=True).click()
+    desktop.get_by_text('Pin', exact=True).click()
+    desktop.get_by_label('Pinned').wait_for()
+    assert _dms_in_order(desktop) == ['Rae', 'Sol']
+    log_in(phone, 'quin')
+    phone.get_by_label('Pinned').wait_for()
+    assert _dms_in_order(phone) == ['Rae', 'Sol']
+
+    # Touch: slide Sol's row left, Mute; the desktop hears about it too
+    row = phone.get_by_text('newer').bounding_box()
+    y = row['y'] + row['height'] / 2
+    _swipe(phone, 300, y, 60, y + 4)
+    phone.get_by_role('button', name='Mute', exact=True).click()  # (closed rows hide theirs)
+    phone.get_by_label('Muted', exact=True).wait_for()
+    desktop.get_by_label('Muted', exact=True).wait_for()
+
+
+def test_searching_a_room_jumps_to_the_message(server, browser, shots):
+    create_user('tara', screenname='Tara')
+    create_room('trivia', 'tara', members=['tara'])
+    with get_db() as conn:
+        cur = conn.cursor()
+        # Far enough back that the chat has to load older pages to reach it
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('trivia', 'tara', 'Tara', 'the capital is Canberra')"
+        )
+        for i in range(120):
+            cur.execute(
+                "INSERT INTO messages (room, username, screenname, text) VALUES ('trivia', 'tara', 'Tara', %s)",
+                (f'filler {i}',),
+            )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'tara')
+    open_room(page, 'trivia')
+    page.get_by_text('filler 119').wait_for()
+    assert page.get_by_text('the capital is Canberra').count() == 0  # not loaded yet
+    page.get_by_label('Room info').click()
+    page.get_by_label('Search', exact=True).click()
+    page.get_by_placeholder('Search messages').fill('canberra')
+    page.get_by_text('the capital is', exact=False).last.click()
+    page.get_by_text('the capital is Canberra').wait_for()
+    page.wait_for_timeout(800)
+    assert page.get_by_text('the capital is Canberra').is_visible()  # scrolled into view
+
+
+def test_a_dm_card_mutes_the_chat_and_shows_its_photos(server, browser, shots):
+    create_user('uma', screenname='Uma')
+    create_user('vic', screenname='Vic')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:uma:vic', 'vic', 'Vic', 'hey')"
+        )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'uma')
+    page.get_by_text('hey').first.click()
+    page.get_by_placeholder('Type a message...').wait_for()
+    page.get_by_label('Chat info').click()
+    page.get_by_text('Mute notifications').wait_for()
+    page.get_by_label('Mute notifications').click()
+    page.get_by_label('Muted', exact=True).first.wait_for()  # the list row shows it
+    page.get_by_label('Photos', exact=True).click()
+    page.get_by_text('No photos here yet').wait_for()

@@ -2,6 +2,7 @@ import logging
 
 from flask_socketio import emit, join_room
 
+import chat_prefs
 import history
 import reads
 from auth_session import authenticated, dm_participants, readable
@@ -58,6 +59,7 @@ def handle_get_dms(username, data):
             )
             rows = cur.fetchall()
             unread = reads.unread_counts(cur, username, [r['room'] for r in rows])
+            prefs = chat_prefs.for_user(cur, username, [r['room'] for r in rows])
         dms = []
         for r in rows:
             if username not in (dm_participants(r['room']) or ()):
@@ -73,6 +75,7 @@ def handle_get_dms(username, data):
                     'online': r['username'] in online_users,
                     'last': last_message_preview(r),
                     'unread': unread.get(r['room'], 0),
+                    **prefs.get(r['room'], chat_prefs.DEFAULT),
                 }
             )
         emit('dms_list', {'dms': dms})

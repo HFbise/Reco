@@ -73,6 +73,7 @@ TABLES = [
     'images',
     'oauth_accounts',
     'web_push_subscriptions',
+    'chat_prefs',
 ]
 
 

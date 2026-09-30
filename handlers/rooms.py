@@ -6,6 +6,7 @@ from datetime import datetime
 
 from flask_socketio import emit, join_room
 
+import chat_prefs
 import history
 import moderation
 import reads
@@ -278,7 +279,9 @@ def handle_get_rooms(username, data):
                     (LOBBY, username),
                 )
             found = cur.fetchall()
-            unread = {} if is_guest(username) else reads.unread_counts(cur, username, [r['name'] for r in found])
+            names = [r['name'] for r in found]
+            unread = {} if is_guest(username) else reads.unread_counts(cur, username, names)
+            prefs = {} if is_guest(username) else chat_prefs.for_user(cur, username, names)
             rooms = [
                 {
                     'name': r['name'],
@@ -286,6 +289,7 @@ def handle_get_rooms(username, data):
                     'needs_password': _needs_password(username, r),
                     'code': r.get('code') or '',
                     'unread': unread.get(r['name'], 0),
+                    **prefs.get(r['name'], chat_prefs.DEFAULT),
                 }
                 for r in found
             ]
