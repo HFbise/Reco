@@ -40,6 +40,10 @@ free instance sleeps when idle, so the first load can take up to a minute.
   until the message is on screen) and browse its photos. Pins and mutes live on the
   server, so every device agrees. On phones the list's rows slide left to pin, mute or
   close; on desktop a ⋯ on hover does the same.
+- **Room settings for owners and admins:** a description and an announcement (posted
+  in the chat when it changes), who can join (anyone with the code, code and password,
+  or invited only), a ban list with undo, and a moderation log of every kick, mute,
+  promotion and recall, including the site admin's actions from `/admin`.
 - **Unread counts that follow you:** the server keeps a read mark per person and room,
   so a badge cleared on the phone is cleared on the laptop too. Marks move when a
   chat is opened and while new messages arrive on screen, never backwards.

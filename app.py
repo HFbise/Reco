@@ -27,6 +27,7 @@ import handlers  # noqa: F401  (side effect: registers every Socket.IO event han
 import images
 import oauth
 import reads
+import room_log
 import voice_state
 import webpush
 from admin import admin_bp
@@ -254,6 +255,13 @@ def _migrate():
             oauth.migrate(cur)
             webpush.migrate(cur)
             chat_prefs.migrate(cur)
+            room_log.migrate(cur)
+            # The room card: shown to everyone, edited by the owner and admins
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS description TEXT')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS announcement TEXT')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS announcement_by TEXT')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS announcement_at TIMESTAMPTZ')
+            cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS invite_only BOOLEAN NOT NULL DEFAULT FALSE')
 
             # Backfill missing room codes
             import random

@@ -56,6 +56,11 @@ utils.generate_password_hash = functools.partial(utils.generate_password_hash, m
 
 app_module._migrate()
 
+# No background matching sweeps in tests: pairing happens on enqueue, which is what they check
+# (the sweep's rules are unit-tested in test_matching_queue.py). A sweep thread outliving one
+# test could otherwise write a stale match into the next test's state.
+match_handlers._loop_started = True
+
 TABLES = [
     'messages',
     'rooms',
@@ -74,6 +79,7 @@ TABLES = [
     'oauth_accounts',
     'web_push_subscriptions',
     'chat_prefs',
+    'room_log',
 ]
 
 

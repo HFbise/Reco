@@ -308,17 +308,10 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   /** Owner only: delete the room for everyone */
   const close = useCallback(() => getSocket().emit('close_room', { room: name }), [name]);
 
-  /** Set (or clear, with null) the room password; resolves with the server's error text key, if any. */
-  const setRoomPassword = useCallback((pw: string | null) => new Promise<any>((resolve) => {
-    const socket = getSocket();
-    socket.once('set_room_password_result', resolve);
-    socket.emit('set_room_password', { room: name, password: pw });
-  }), [name]);
-
   return {
     messages, hasOlder, loadingOlder, loadOlder,
     room, isTextMuted, voiceMembers,
     typing: Object.values(typists).map((v) => v.screenname),
-    send, notifyTyping, recall, edit, react, leave, close, setRoomPassword,
+    send, notifyTyping, recall, edit, react, leave, close,
   };
 }

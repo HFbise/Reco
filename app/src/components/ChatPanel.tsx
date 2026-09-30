@@ -358,7 +358,6 @@ export function ChatPanel({
         onClose={() => setShowRoomInfo(false)}
         onLeave={() => { setShowRoomInfo(false); chat.leave(); handleBack(); }}
         onCloseRoom={() => { setShowRoomInfo(false); chat.close(); }}
-        onSetPassword={chat.setRoomPassword}
         onCopied={() => showToast(t('copied'))}
       />
 

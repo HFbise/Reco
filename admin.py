@@ -7,6 +7,7 @@ from urllib.parse import quote
 from flask import Blueprint, redirect, request, session, url_for
 
 import moderation
+import room_log
 from db import get_db
 from moderation import delete_account
 from state import LOBBY, check_login_rate, online_users, record_login_fail, reset_login_attempts
@@ -687,6 +688,7 @@ def _form_user():
 def kick_member(room_name):
     u = _form_user()
     moderation.kick(room_name, u)
+    room_log.record(room_name, room_log.SITE_ADMIN, 'kick', u)
     return _back(ok=f'已把 {u} 踢出 {room_name}')
 
 
@@ -695,6 +697,7 @@ def kick_member(room_name):
 def unkick_member(room_name):
     u = _form_user()
     moderation.unkick(room_name, u)
+    room_log.record(room_name, room_log.SITE_ADMIN, 'unkick', u)
     return _back(ok=f'{u} 可以重新加入 {room_name} 了')
 
 
@@ -710,7 +713,11 @@ def _form_kind():
 @login_required
 def restrict_member(room_name):
     u, kind = _form_user(), _form_kind()
-    moderation.restrict(room_name, u, kind, int(request.form.get('duration', 0)))
+    duration = int(request.form.get('duration', 0))
+    moderation.restrict(room_name, u, kind, duration)
+    room_log.record(
+        room_name, room_log.SITE_ADMIN, 'mute' if kind == moderation.TEXT else 'voice_ban', u, duration=duration
+    )
     return _back(ok=f'已对 {u} {RESTRICTION_LABELS[kind]}')
 
 
@@ -719,6 +726,7 @@ def restrict_member(room_name):
 def lift_restriction(room_name):
     u, kind = _form_user(), _form_kind()
     moderation.lift(room_name, u, kind)
+    room_log.record(room_name, room_log.SITE_ADMIN, 'unmute' if kind == moderation.TEXT else 'voice_unban', u)
     return _back(ok=f'已解除 {u} 的{RESTRICTION_LABELS[kind]}')
 
 

@@ -86,6 +86,7 @@ def close_room(room: str):
         cur.execute('DELETE FROM room_invites WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_restrictions WHERE room = %s', (room,))
         cur.execute('DELETE FROM chat_prefs WHERE room = %s', (room,))
+        cur.execute('DELETE FROM room_log WHERE room = %s', (room,))
         conn.commit()
     socketio.emit('room_closed', {'room': room}, to=room)
     voice_state.close(room)
@@ -297,6 +298,9 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE oauth_accounts SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE web_push_subscriptions SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE chat_prefs SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE room_log SET actor = %s WHERE actor = %s', (new, old))
+        cur.execute('UPDATE room_log SET target = %s WHERE target = %s', (new, old))
+        cur.execute('UPDATE rooms SET announcement_by = %s WHERE announcement_by = %s', (new, old))
         cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (old,))
         conn.commit()
 

@@ -10,6 +10,7 @@ import chat_prefs
 import history
 import moderation
 import reads
+import room_log
 import voice_state
 from auth_session import authenticated, dm_participants, in_room, is_guest, readable
 from db import get_db
@@ -66,6 +67,13 @@ MAX_REPORT_LEN = 500
 def _needs_password(username: str, room_data: dict, invited: bool = False) -> bool:
     """Owner, room admins, existing members and invited users never need the room password."""
     if not room_data.get('password') or invited:
+        return False
+    return username not in (room_data.get('members') or []) and get_level(username, room_data) == 0
+
+
+def _invite_only_for(username: str, room_data: dict) -> bool:
+    """An invite-only room turns away everyone but its members, owner and admins (and the invited)."""
+    if not room_data.get('invite_only'):
         return False
     return username not in (room_data.get('members') or []) and get_level(username, room_data) == 0
 
@@ -134,6 +142,13 @@ def handle_join(username, data):
             if username in kicked:
                 fail('join_result', 'kicked_from_room', room=room)
                 return
+
+            if _invite_only_for(username, room_data):
+                if not _is_invited(cur, room, username):
+                    fail('join_result', 'invite_only', room=room)
+                    return
+                cur.execute('DELETE FROM room_invites WHERE room = %s AND username = %s', (room, username))
+                conn.commit()
 
             if _needs_password(username, room_data):
                 if _is_invited(cur, room, username):
@@ -332,6 +347,7 @@ def handle_kick_member(requester, data):
             fail('kick_result', 'no_permission')
             return
         moderation.kick(room, target)
+        room_log.record(room, requester, 'kick', target)
         emit('kick_result', {'success': True})
     except Exception as e:
         log.exception('kick_member error: %s', e)
@@ -367,6 +383,7 @@ def handle_set_admin(requester, data):
             row = cur.fetchone()
             target_screen = row['screenname'] if row else target
         emit('set_admin_result', {'success': True, 'target': target, 'remove': remove})
+        room_log.record(room, requester, 'admin_remove' if remove else 'admin_add', target)
         emit_system_msg(room, 'admin_removed' if remove else 'admin_added', name=target_screen)
     except Exception as e:
         log.exception('set_admin error: %s', e)
@@ -391,6 +408,7 @@ def handle_set_room_password(requester, data):
             )
             conn.commit()
         emit('set_room_password_result', {'success': True})
+        room_log.record(room, requester, 'join_mode', mode='password' if password else 'open')
         socketio.emit('room_password_changed', {'room': room, 'has_password': bool(password)}, to=room)
     except Exception as e:
         log.exception('set_room_password error: %s', e)
@@ -428,11 +446,16 @@ def handle_find_room(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT name, password, code, owner, admins, members FROM rooms WHERE code = %s', (code,))
+            cur.execute(
+                'SELECT name, password, code, owner, admins, members, invite_only FROM rooms WHERE code = %s', (code,)
+            )
             room = cur.fetchone()
             invited = bool(room) and _is_invited(cur, room['name'], username)
         if not room:
             fail('find_room_result', 'room_code_not_found')
+            return
+        if _invite_only_for(username, room) and not invited:
+            fail('find_room_result', 'invite_only')
             return
         emit(
             'find_room_result',
@@ -548,7 +571,9 @@ def handle_invite_to_room(inviter, data):
 def handle_text_mute(requester, data):
     room, target = str_field(data, 'room'), str_field(data, 'target')
     if moderation.can_moderate(room, requester, target):
-        moderation.mute(room, target, int_field(data, 'duration_seconds'))
+        duration = int_field(data, 'duration_seconds')
+        moderation.mute(room, target, duration)
+        room_log.record(room, requester, 'mute', target, duration=duration)
 
 
 @socketio.on('text_unmute')
@@ -557,6 +582,7 @@ def handle_text_unmute(requester, data):
     room, target = str_field(data, 'room'), str_field(data, 'target')
     if moderation.can_moderate(room, requester, target):
         moderation.unmute(room, target)
+        room_log.record(room, requester, 'unmute', target)
 
 
 # ── Block / Report ────────────────────────────────────────────

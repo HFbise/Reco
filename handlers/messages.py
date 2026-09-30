@@ -11,6 +11,7 @@ import history
 import images
 import moderation
 import reads
+import room_log
 import webpush
 from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
@@ -244,7 +245,7 @@ def handle_recall_message(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username, room, recalled FROM messages WHERE id = %s', (msg_id,))
+            cur.execute('SELECT username, room, recalled, text FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
             if not msg or msg['recalled']:
                 return
@@ -255,6 +256,8 @@ def handle_recall_message(username, data):
                 if not room_data or get_level(username, room_data) < 1:
                     return
         moderation.recall(msg_id)
+        if msg['username'] != username:  # someone else's message: a moderation step
+            room_log.record(room, username, 'recall', msg['username'], text=(msg['text'] or '')[:80])
     except Exception as e:
         log.exception('recall_message error: %s', e)
 

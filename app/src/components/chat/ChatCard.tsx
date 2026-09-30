@@ -14,9 +14,10 @@ import { Button, IconButton } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
 import { TextField } from '../ui/TextField';
 import { ImageViewer } from './ImageViewer';
+import { BansView, InfoView, JOIN_MODE_LABEL, JoinView, LogView, type RoomDetails } from './RoomAdminViews';
 import {
-  IconBell, IconBellOff, IconChevronLeft, IconClose, IconHash, IconImage, IconLock, IconLogout, IconPin, IconSearch,
-  IconTrash, IconUnlock, IconUserPlus,
+  IconBan, IconBell, IconBellOff, IconChevronLeft, IconClose, IconFlag, IconHash, IconImage, IconInfo, IconLock,
+  IconLogout, IconPin, IconSearch, IconShield, IconTrash, IconUserPlus,
 } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
@@ -24,7 +25,7 @@ import type { RoomInfo } from '../../hooks/useRoomChat';
 import type { DmMeta } from './types';
 import { Fonts, Radius, Spacing } from '../../theme';
 
-type CardView = 'main' | 'search' | 'photos';
+type CardView = 'main' | 'search' | 'photos' | 'info' | 'join' | 'bans' | 'log';
 
 interface SearchHit { id: number; username: string; screenname: string; text: string; time: string }
 interface Photo { message_id: number; image: { id: string; w: number; h: number }; username: string; screenname: string; time: string }
@@ -40,8 +41,6 @@ interface Props {
   onLeave: () => void;
   /** Owner only: delete the room for everyone */
   onCloseRoom: () => void;
-  /** Resolves with the server reply; null clears the password */
-  onSetPassword: (pw: string | null) => Promise<any>;
   onCopied: () => void;
   /** A search result was chosen: show that message in the chat */
   onJumpTo: (messageId: number) => void;
@@ -56,6 +55,7 @@ export function ChatCard(p: Props) {
   const isDm = p.name.startsWith('dm:');
   const [view, setView] = useState<CardView>('main');
   const [prefs, setPrefs] = useState({ pinned: false, muted: false });
+  const [details, setDetails] = useState<RoomDetails | null>(null);
 
   useEffect(() => {
     if (!p.visible) return;
@@ -64,10 +64,16 @@ export function ChatCard(p: Props) {
     const onPref = (data: { room: string; pinned: boolean; muted: boolean }) => {
       if (data.room === p.name) setPrefs({ pinned: data.pinned, muted: data.muted });
     };
+    const onDetails = (data: RoomDetails) => { if (data.room === p.name) setDetails(data); };
     socket.on('chat_pref', onPref);
+    socket.on('room_details', onDetails);
     if (!p.isGuest) socket.emit('get_chat_pref', { room: p.name });
-    return () => { socket.off('chat_pref', onPref); };
-  }, [p.visible, p.name, p.isGuest]);
+    if (!isDm) socket.emit('get_room_details', { room: p.name });
+    return () => {
+      socket.off('chat_pref', onPref);
+      socket.off('room_details', onDetails);
+    };
+  }, [p.visible, p.name, p.isGuest, isDm]);
 
   function setPref(patch: Partial<typeof prefs>) {
     setPrefs((cur) => ({ ...cur, ...patch }));
@@ -77,13 +83,17 @@ export function ChatCard(p: Props) {
   return (
     <Sheet visible={p.visible} onClose={p.onClose} accessibilityLabel={t('close')}>
       {view === 'main' && (
-        <Main {...p} isDm={isDm} prefs={prefs} setPref={setPref} openView={setView} />
+        <Main {...p} isDm={isDm} prefs={prefs} setPref={setPref} openView={setView} details={details} />
       )}
       {view === 'search' && (
         <SearchView room={p.name} onBack={() => setView('main')}
           onPick={(id) => { p.onClose(); p.onJumpTo(id); }} />
       )}
       {view === 'photos' && <PhotosView room={p.name} onBack={() => setView('main')} />}
+      {view === 'info' && <InfoView room={p.name} details={details} onBack={() => setView('main')} />}
+      {view === 'join' && <JoinView room={p.name} details={details} onBack={() => setView('main')} />}
+      {view === 'bans' && <BansView room={p.name} onBack={() => setView('main')} />}
+      {view === 'log' && <LogView room={p.name} onBack={() => setView('main')} />}
     </Sheet>
   );
 }
@@ -95,11 +105,14 @@ function Main(p: Props & {
   prefs: { pinned: boolean; muted: boolean };
   setPref: (patch: { pinned?: boolean; muted?: boolean }) => void;
   openView: (v: CardView) => void;
+  details: RoomDetails | null;
 }) {
   const c = useColors();
   const t = useT();
   const isLobby = p.name === LOBBY_ID;
   const isOwner = p.room.myLevel >= 2;
+  const isAdmin = p.room.myLevel >= 1;
+  const announcement = p.details?.announcement;
 
   function copyCode() {
     if (Platform.OS === 'web') navigator.clipboard?.writeText(p.room.code);
@@ -136,6 +149,24 @@ function Main(p: Props & {
         <IconButton label={t('close')} onPress={p.onClose} size={40} round icon={(color) => <IconClose size={16} color={color} />} />
       </View>
 
+      {!!p.details?.description && (
+        <Text style={[s.description, { color: c.text }]}>{p.details.description}</Text>
+      )}
+      {announcement && (
+        <View style={[s.announcement, { backgroundColor: c.accentBg }]} accessibilityLabel={t('announcement')}>
+          <View style={s.announcementHead}>
+            <IconFlag size={14} color={c.accentText} />
+            <Text style={[s.announcementTitle, { color: c.accentText }]}>{t('announcement')}</Text>
+          </View>
+          <Text style={[s.announcementText, { color: c.text }]}>{announcement.text}</Text>
+          {!!announcement.by && (
+            <Text style={[s.announcementMeta, { color: c.textSub }]}>
+              {announcement.by}{announcement.time ? ` · ${formatMsgTime(announcement.time, t.monthDay)}` : ''}
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* One tap for the common things */}
       <View style={s.quick}>
         {!p.isDm && !p.isGuest && !!p.room.code && (
@@ -160,7 +191,23 @@ function Main(p: Props & {
         </View>
       )}
 
-      {!p.isDm && isOwner && !isLobby && <PasswordSection {...p} />}
+      {!p.isDm && isAdmin && (
+        <View style={[s.group, { backgroundColor: c.surface2 }]}>
+          <Text style={[s.groupTitle, s.groupTitleInset, { color: c.textSub }]}>{t('room-settings')}</Text>
+          <NavRow label={t('info-edit')} icon={<IconInfo size={17} color={c.textSub} />} onPress={() => p.openView('info')} />
+          {isOwner && !isLobby && (
+            <>
+              <View style={[s.divider, { backgroundColor: c.border }]} />
+              <NavRow label={t('join-mode')} value={p.details ? t(JOIN_MODE_LABEL[p.details.join_mode]) : ''}
+                icon={<IconLock size={16} color={c.textSub} />} onPress={() => p.openView('join')} />
+            </>
+          )}
+          <View style={[s.divider, { backgroundColor: c.border }]} />
+          <NavRow label={t('ban-list')} icon={<IconBan size={17} color={c.textSub} />} onPress={() => p.openView('bans')} />
+          <View style={[s.divider, { backgroundColor: c.border }]} />
+          <NavRow label={t('mod-log')} icon={<IconShield size={17} color={c.textSub} />} onPress={() => p.openView('log')} />
+        </View>
+      )}
 
       {!p.isDm && !p.isGuest && !isLobby && (
         <TouchableOpacity style={[s.dangerRow, { backgroundColor: c.dangerBg }]} activeOpacity={0.8} accessibilityRole="button"
@@ -200,42 +247,15 @@ function ToggleRow({ label, hint, icon, value, onChange }: {
   );
 }
 
-function PasswordSection(p: Props) {
+function NavRow({ label, value, icon, onPress }: { label: string; value?: string; icon: ReactNode; onPress: () => void }) {
   const c = useColors();
-  const t = useT();
-  const [editing, setEditing] = useState(false);
-  const [pw, setPw] = useState('');
-  const [error, setError] = useState('');
-
-  async function toggle() {
-    if (p.room.hasPassword) { await p.onSetPassword(null); return; }
-    setEditing((v) => !v);
-    setError('');
-  }
-
-  async function submit() {
-    if (!pw.trim()) { setError(t('err-pw-required')); return; }
-    const reply = await p.onSetPassword(pw.trim());
-    if (!reply?.success) { setError(t.server(reply, 'err-save-failed')); return; }
-    setEditing(false);
-    setPw('');
-    setError('');
-  }
-
   return (
-    <View style={[s.group, s.groupPad, { backgroundColor: c.surface2 }]}>
-      <Text style={[s.groupTitle, { color: c.textSub }]}>{t('owner-settings')}</Text>
-      <Button variant="quiet" onPress={toggle}
-        label={p.room.hasPassword ? t('remove-room-pw') : t('set-room-pw')}
-        icon={(color) => (p.room.hasPassword ? <IconUnlock size={16} color={color} /> : <IconLock size={16} color={color} />)} />
-      {editing && (
-        <>
-          <TextField placeholder={t('ph-set-room-pw')} value={pw} onChangeText={setPw} secureTextEntry onSubmitEditing={submit} />
-          {!!error && <Text style={{ color: c.danger, fontSize: 13 }}>{error}</Text>}
-          <Button label={t('confirm-set-pw')} onPress={submit} />
-        </>
-      )}
-    </View>
+    <TouchableOpacity style={s.row} onPress={onPress} activeOpacity={0.7} accessibilityRole="button" accessibilityLabel={label}>
+      <View style={[s.rowIcon, { backgroundColor: c.surface }]}>{icon}</View>
+      <Text style={[s.rowLabel, s.rowText, { color: c.text }]}>{label}</Text>
+      {!!value && <Text style={[s.rowValue, { color: c.textSub }]}>{value}</Text>}
+      <View style={{ transform: [{ rotate: '180deg' }] }}><IconChevronLeft size={16} color={c.textMuted} /></View>
+    </TouchableOpacity>
   );
 }
 
@@ -413,6 +433,14 @@ const s = StyleSheet.create({
   group: { borderRadius: Radius.xl, paddingVertical: 4 },
   groupPad: { padding: 14, gap: 10 },
   groupTitle: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
+  groupTitleInset: { paddingHorizontal: 14, paddingTop: 10, paddingBottom: 2 },
+  rowValue: { fontSize: 13 },
+  description: { fontSize: 15, lineHeight: 22 },
+  announcement: { borderRadius: Radius.lg, padding: 14, gap: 6 },
+  announcementHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  announcementTitle: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
+  announcementText: { fontSize: 15, lineHeight: 22 },
+  announcementMeta: { fontSize: 12 },
   divider: { height: 1, marginLeft: 60 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 12, paddingVertical: 10 },
   rowIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },

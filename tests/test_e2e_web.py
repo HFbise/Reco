@@ -849,3 +849,46 @@ def test_a_dm_card_mutes_the_chat_and_shows_its_photos(server, browser, shots):
     page.get_by_label('Muted', exact=True).first.wait_for()  # the list row shows it
     page.get_by_label('Photos', exact=True).click()
     page.get_by_text('No photos here yet').wait_for()
+
+
+def test_an_owner_posts_an_announcement_and_makes_the_room_invite_only(server, browser, shots):
+    create_user('wren', screenname='Wren')
+    create_user('xavi', screenname='Xavi')
+    create_user('yara', screenname='Yara')
+    create_room('garden', 'wren', members=['wren', 'xavi'])
+    code = query_code('garden')
+    owner, member, stranger = new_page(browser), new_page(browser), new_page(browser)
+    shots.extend([owner, member, stranger])
+
+    log_in(owner, 'wren')
+    open_room(owner, 'garden')
+    owner.get_by_label('Room info').click()
+    owner.get_by_label('Description and announcement', exact=True).click()
+    owner.get_by_label('Announcement', exact=True).fill('Seed swap on Saturday')
+    owner.get_by_text('Save', exact=True).click()
+    owner.get_by_text('Seed swap on Saturday').wait_for()  # back on the card
+    owner.get_by_label('Who can join', exact=True).click()
+    owner.get_by_label('Invited only', exact=True).click()
+    owner.get_by_text('Save', exact=True).click()
+    owner.get_by_text('Invited only').wait_for()
+
+    log_in(member, 'xavi')
+    open_room(member, 'garden')
+    member.get_by_text('Wren updated the announcement').wait_for()
+    member.get_by_label('Room info').click()
+    member.get_by_text('Seed swap on Saturday').wait_for()
+    assert member.get_by_text('Room settings').count() == 0  # members don't get the admin pages
+
+    log_in(stranger, 'yara')
+    stranger.get_by_label('Create Room / Find Room').click()
+    stranger.get_by_text('Find Room', exact=True).click()
+    stranger.get_by_placeholder('Enter 6-digit room code').fill(code)
+    stranger.get_by_placeholder('Enter 6-digit room code').press('Enter')
+    stranger.get_by_text('This room is invite-only').wait_for()
+
+
+def query_code(room):
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT code FROM rooms WHERE name = %s', (room,))
+        return cur.fetchone()['code']

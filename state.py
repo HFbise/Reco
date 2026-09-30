@@ -81,6 +81,7 @@ SYSTEM_TEXT_ZH = {
     'admin_removed': '{name} 被取消了管理员',
     'room_closed': '房间已被关闭',
     'match_connected': '你们通过随机匹配认识了，打个招呼吧',
+    'announcement_updated': '{name} 更新了公告',
 }
 
 

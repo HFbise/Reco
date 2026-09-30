@@ -4,6 +4,7 @@ from flask import request
 from flask_socketio import emit
 
 import moderation
+import room_log
 import voice_state
 from auth_session import authenticated, in_room
 from db import get_db
@@ -112,7 +113,9 @@ def handle_ping_check(data=None):
 def handle_voice_ban(requester, data):
     room, target = str_field(data, 'room'), str_field(data, 'target')
     if moderation.can_moderate(room, requester, target):
-        moderation.restrict(room, target, moderation.VOICE, int_field(data, 'duration_seconds'))
+        duration = int_field(data, 'duration_seconds')
+        moderation.restrict(room, target, moderation.VOICE, duration)
+        room_log.record(room, requester, 'voice_ban', target, duration=duration)
 
 
 @socketio.on('voice_unban')
@@ -121,6 +124,7 @@ def handle_voice_unban(requester, data):
     room, target = str_field(data, 'room'), str_field(data, 'target')
     if moderation.can_moderate(room, requester, target):
         moderation.lift(room, target, moderation.VOICE)
+        room_log.record(room, requester, 'voice_unban', target)
 
 
 @socketio.on('stream_start')
