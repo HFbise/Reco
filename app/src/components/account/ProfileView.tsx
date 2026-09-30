@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-nati
 import { AvatarView, ExprSvg } from '../AvatarView';
 import { Button } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
-import { IconChat, IconLock, IconLogout, IconPencil, IconSettings, IconTrash } from '../Icon';
+import { IconBell, IconChat, IconLock, IconLogout, IconPencil, IconSettings, IconTrash } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { useAuthStore } from '../../store/authStore';
@@ -11,6 +11,7 @@ import { logout, request } from '../../lib/account';
 import { showAlert } from '../../lib/alert';
 import { connectProvider, OAUTH_SUPPORTED, PROVIDER_NAMES, type Provider } from '../../lib/oauth';
 import { ProviderMark } from '../BrandIcons';
+import { disablePush, enablePush, pushStatus, type PushStatus } from '../../lib/webPush';
 import { getAvatarColor, tint } from '../../lib/avatar';
 import { ChangePasswordModal, DeleteAccountModal, EditProfileModal, FeedbackModal } from './AccountModals';
 import { Fonts, Radius, Spacing } from '../../theme';
@@ -31,6 +32,23 @@ export function ProfileView({ onOpenSettings }: { onOpenSettings?: () => void } 
   const [methods, setMethods] = useState<SignInMethods | null>(null);
   const [pending, setPending] = useState<Provider | null>(null);
   const hasPassword = methods?.has_password ?? true;
+  const [push, setPush] = useState<PushStatus>('unsupported');
+  const [pushBusy, setPushBusy] = useState(false);
+  useEffect(() => { pushStatus().then(setPush); }, []);
+
+  async function togglePush() {
+    setPushBusy(true);
+    if (push === 'on') {
+      await disablePush();
+      setPush('off');
+    } else {
+      setPush(await enablePush());
+    }
+    setPushBusy(false);
+  }
+  const pushText: Partial<Record<PushStatus, string>> = {
+    on: t('push-status-on'), off: t('push-status-off'), denied: t('push-status-denied'), 'needs-install': t('push-status-install'),
+  };
 
   const loadMethods = useCallback(() => {
     request('get_sign_in_methods', {}, 'sign_in_methods').then((data) => { if (data.success) setMethods(data); });
@@ -106,6 +124,16 @@ export function ProfileView({ onOpenSettings }: { onOpenSettings?: () => void } 
         </View>
 
         <View style={[s.list, { backgroundColor: c.surface }]}>
+          {pushText[push] && (
+            <>
+              {/* Browser notifications (the web only; the phone apps use their own) */}
+              <MethodRow label={t('notifications')} icon={<IconBell size={17} color={c.textSub} />}
+                status={pushText[push]!} busy={pushBusy}
+                action={push === 'on' || push === 'off' ? (push === 'on' ? t('push-turn-off') : t('push-turn-on')) : undefined}
+                onAction={togglePush} />
+              <View style={[s.divider, { backgroundColor: c.border }]} />
+            </>
+          )}
           {onOpenSettings && (
             <>
               <Row label={t('settings')} icon={<IconSettings size={18} color={c.textSub} />} onPress={onOpenSettings} />
@@ -142,7 +170,7 @@ function Row({ label, icon, onPress, danger }: { label: string; icon: ReactNode;
 
 /** A way to sign in: what it is, whether it's on, and the one thing you can do about it. */
 function MethodRow({ label, icon, status, action, onAction, busy }: {
-  label: string; icon: ReactNode; status: string; action: string; onAction: () => void; busy?: boolean;
+  label: string; icon: ReactNode; status: string; action?: string; onAction: () => void; busy?: boolean;
 }) {
   const c = useColors();
   return (
@@ -152,8 +180,10 @@ function MethodRow({ label, icon, status, action, onAction, busy }: {
         <Text style={[s.rowText, { color: c.text }]}>{label}</Text>
         <Text style={[s.rowSub, { color: c.textMuted }]}>{status}</Text>
       </View>
-      <Button label={action} variant="quiet" onPress={onAction} busy={busy} style={s.rowAction}
-        accessibilityLabel={`${action} ${label}`} />
+      {action && (
+        <Button label={action} variant="quiet" onPress={onAction} busy={busy} style={s.rowAction}
+          accessibilityLabel={`${action} ${label}`} />
+      )}
     </View>
   );
 }

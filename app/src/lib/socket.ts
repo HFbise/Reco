@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { io, Socket } from 'socket.io-client';
 import { router } from 'expo-router';
 import { SERVER_URL } from './config';
@@ -7,6 +8,13 @@ import { t } from './i18n';
 import { showAlert } from './alert';
 
 let socket: Socket | null = null;
+
+/** Tell the server whether this tab is in the background: a DM then also becomes a push
+ *  notification (state.is_watching), since a background tab can't be seen. */
+function reportVisibility() {
+  if (Platform.OS === 'web' && socket?.connected) socket.emit('page_visibility', { hidden: document.visibilityState === 'hidden' });
+}
+if (Platform.OS === 'web' && typeof document !== 'undefined') document.addEventListener('visibilitychange', reportVisibility);
 
 /** Sign out locally and go to the login screen. */
 export async function endSession() {
@@ -30,6 +38,7 @@ export function getSocket(): Socket {
       endSession();
       if (wasSignedIn) showAlert(tr('session-expired-title'), tr('session-expired-msg'));
     });
+    socket.on('connect', reportVisibility);
     // Demo visitors tried something that needs an account
     socket.on('guest_read_only', () => showAlert(tr('srv-guest_read_only')));
     socket.on('auth_required', () => {

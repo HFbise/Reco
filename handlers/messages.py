@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import urllib.parse
 from datetime import datetime
 
 from flask_socketio import emit
@@ -9,12 +10,13 @@ import history
 import images
 import moderation
 import reads
+import webpush
 from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
 from demo import DEMO_ROOM
 from extensions import socketio
 from handlers.push import send_push, tokens_for
-from state import check_msg_rate, get_level, online_users
+from state import check_msg_rate, get_level, is_watching, online_users
 from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
@@ -137,6 +139,18 @@ def handle_message(username, data):
                 )
         else:
             send_push(tokens_for([recipient]), msg['screenname'], preview, {'room': room})
+        if not is_watching(recipient):
+            # Opens this DM, with what the chat header shows about the sender
+            query = urllib.parse.urlencode(
+                {
+                    'otherUsername': username,
+                    'displayName': msg['screenname'],
+                    'avatarExpression': msg.get('avatar_expression') or '',
+                    'avatarColor': msg.get('avatar_color') or '',
+                }
+            )
+            url = f'/room/{urllib.parse.quote(room, safe="")}?{query}'
+            webpush.notify([recipient], msg['screenname'], preview, url, tag=room)
         return
 
     # Room message: push to offline members, except anyone who has blocked the sender

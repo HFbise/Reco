@@ -16,6 +16,7 @@ LOBBY = '大厅'
 rooms_voice: dict = {}  # { room: { voice_members } }
 rooms_stream: dict = {}  # { room: { username: screenname } }
 online_users: dict = {}  # { username: set of sids }
+hidden_sids: set = set()  # sockets whose page is in the background (web tabs report it)
 sid_to_voice: dict = {}  # { sid: (username, room) }
 message_rate: dict = {}  # { username: [timestamps] }
 login_attempts: dict = {}  # { username: {'count': N, 'until': float} }
@@ -117,3 +118,9 @@ def emit_system_msg(room: str, code: str, **params):
         )
     except Exception as e:
         log.exception('emit_system_msg failed: %s', e)
+
+
+def is_watching(username) -> bool:
+    """Has Reco on screen somewhere: a socket whose page isn't hidden. If not, the web
+    gets a push notification even though a background tab is still connected."""
+    return any(sid not in hidden_sids for sid in online_users.get(username, ()))

@@ -18,13 +18,14 @@ from flask import request
 from flask_socketio import emit
 
 import moderation
+import webpush
 from auth_session import authenticated
 from db import get_db
 from extensions import socketio
 from handlers.auth import LOGO_EXPRESSIONS
 from matching import MODES, MatchQueue, Ticket, normalize_tags
 from replies import fail
-from state import check_msg_rate, emit_system_msg
+from state import check_msg_rate, emit_system_msg, hidden_sids
 
 log = logging.getLogger(__name__)
 
@@ -125,6 +126,8 @@ def _start(a: Ticket, b: Ticket):
             },
             to=ticket.sid,
         )
+        if ticket.sid in hidden_sids:  # waiting in a background tab
+            webpush.notify([ticket.username], 'Reco', '', '/match', tag='match', code='match_found')
 
 
 def _end(username: str, reason: str):

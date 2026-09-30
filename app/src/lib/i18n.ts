@@ -428,6 +428,21 @@ const zh = {
   'connect': '连接',
   'disconnect': '断开',
   'confirm-delete-msg-username': '此操作不可撤销，你的账号和所有数据将永久删除。请输入你的用户名 {username} 确认。',
+
+  // Browser notifications
+  'push-prompt-title': '开启消息通知？',
+  'push-prompt-body': '有人私信你、或者匹配到人时，就算 Reco 不在前台也会提醒你。',
+  'push-turn-on': '开启',
+  'push-turn-off': '关闭',
+  'not-now': '以后再说',
+  'push-ios-title': '在 iPhone 上接收通知',
+  'push-ios-body': '点浏览器的分享按钮，选“添加到主屏幕”，再从主屏幕打开 Reco，就能开启通知了。',
+  'got-it': '知道了',
+  'notifications': '通知',
+  'push-status-on': '私信和匹配会通知你',
+  'push-status-off': '已关闭',
+  'push-status-denied': '已被浏览器屏蔽，可以在网站设置里允许',
+  'push-status-install': '先把 Reco 添加到主屏幕',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -858,6 +873,21 @@ const en: Record<keyof typeof zh, string> = {
   'connect': 'Connect',
   'disconnect': 'Disconnect',
   'confirm-delete-msg-username': 'This cannot be undone. Your account and all data will be permanently deleted. Type your username, {username}, to confirm.',
+
+  // Browser notifications
+  'push-prompt-title': 'Turn on notifications?',
+  'push-prompt-body': 'Get a heads-up when someone messages you or a match is found, even when Reco isn’t open.',
+  'push-turn-on': 'Turn on',
+  'push-turn-off': 'Turn off',
+  'not-now': 'Not now',
+  'push-ios-title': 'Notifications on iPhone',
+  'push-ios-body': 'Tap Share, choose “Add to Home Screen”, then open Reco from your Home Screen to turn notifications on.',
+  'got-it': 'Got it',
+  'notifications': 'Notifications',
+  'push-status-on': 'You’ll hear about DMs and matches',
+  'push-status-off': 'Off',
+  'push-status-denied': 'Blocked in this browser. Allow it in the site settings',
+  'push-status-install': 'Add Reco to your Home Screen first',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };

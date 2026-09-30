@@ -74,6 +74,13 @@ free instance sleeps when idle, so the first load can take up to a minute.
   member list, slide a DM away, double-tap to 👍, drag sheets down), an emoji picker
   with search and recents, installable as a home-screen app, and push notifications
   for offline users on native.
+- **Browser notifications** (web push): a DM, or a match found while you wait in
+  another tab, shows up as a system notification, and clicking it opens that chat.
+  The app asks in its own words first and only then triggers the browser's permission
+  prompt (a blocked prompt can't be asked again). A notification goes out only when
+  none of your tabs has Reco on screen. Endpoints are accepted only at the real push
+  services, since the server POSTs to whatever is stored (no SSRF). On iPhone it
+  explains Add to Home Screen, which iOS requires for web push.
 - **Error reporting:** uncaught browser errors are posted to the backend, which sends
   them to the same Sentry project as server errors (tagged `side: web`), so the page
   ships no Sentry SDK. A crashed screen shows a friendly reload page instead of a
@@ -163,6 +170,7 @@ The schema is created and migrated automatically on startup.
 | `SENTRY_DSN` | Error reporting (optional) |
 | `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | Sign in with GitHub (optional; callback `<site>/auth/github/callback`) |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign in with Google (optional; callback `<site>/auth/google/callback`) |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | Browser notifications (optional; a P-256 key pair, base64url) |
 | `PUBLIC_URL` | The site's address for OAuth callbacks (Render's `RENDER_EXTERNAL_URL` is used when unset) |
 | `APP_URL` | Where OAuth sends the browser back, if the web app runs elsewhere (local Expo dev: `http://localhost:8081`) |
 | `CORS_ORIGINS` | Allowed origins for Socket.IO (default `*`) |

@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 import { showAlert } from '../lib/alert';
 import { router } from 'expo-router';
+import { PushPrompt } from './notifications/PushPrompt';
 import { useAuthStore } from '../store/authStore';
 import { getSocket } from '../lib/socket';
 import { useColors } from '../hooks/useColors';
@@ -613,6 +614,7 @@ export const RoomsPanel = forwardRef<RoomsPanelHandle, Props>(function RoomsPane
         <ActivityIndicator size="small" color={c.accent} style={{ marginTop: 24 }} />
       )}
       <ScrollView contentContainerStyle={s.scrollContent}>
+        <PushPrompt />
         {section(t('section-rooms'), rooms)}
         {section(t('section-dms'), dms)}
       </ScrollView>

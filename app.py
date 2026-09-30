@@ -27,6 +27,7 @@ import images
 import oauth
 import reads
 import voice_state
+import webpush
 from admin import admin_bp
 from auth_session import verify_token
 from db import get_db
@@ -38,6 +39,7 @@ app.register_blueprint(admin_bp)
 app.register_blueprint(images.bp)
 app.register_blueprint(client_errors.bp)
 app.register_blueprint(oauth.bp)
+app.register_blueprint(webpush.bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
@@ -249,6 +251,7 @@ def _migrate():
             reads.migrate(cur)
             images.migrate(cur)
             oauth.migrate(cur)
+            webpush.migrate(cur)
 
             # Backfill missing room codes
             import random

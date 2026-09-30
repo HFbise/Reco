@@ -29,7 +29,15 @@ os.environ.setdefault('TURN_SECRET', 'test-turn')
 os.environ.setdefault('TURN_HOST', 'turn.test')
 # app.py loads the developer's .env, which must not switch real services on in tests (Sentry
 # would receive every deliberate test error). dotenv never overrides a variable already set.
-for _name in ('SENTRY_DSN', 'GITHUB_CLIENT_ID', 'GITHUB_CLIENT_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET'):
+for _name in (
+    'SENTRY_DSN',
+    'GITHUB_CLIENT_ID',
+    'GITHUB_CLIENT_SECRET',
+    'GOOGLE_CLIENT_ID',
+    'GOOGLE_CLIENT_SECRET',
+    'VAPID_PUBLIC_KEY',
+    'VAPID_PRIVATE_KEY',
+):
     os.environ[_name] = ''
 os.environ['PUBLIC_URL'] = os.environ['APP_URL'] = ''
 
@@ -64,6 +72,7 @@ TABLES = [
     'read_marks',
     'images',
     'oauth_accounts',
+    'web_push_subscriptions',
 ]
 
 
@@ -76,6 +85,7 @@ def clean_state():
         conn.commit()
     for d in (
         state.online_users,
+        state.hidden_sids,
         state.login_attempts,
         state.message_rate,
         state.rooms_voice,

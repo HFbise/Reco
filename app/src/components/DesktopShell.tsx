@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { View, StyleSheet, SafeAreaView } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, SafeAreaView, Platform } from 'react-native';
 import { usePathname } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useColors } from '../hooks/useColors';
@@ -53,6 +53,52 @@ export function DesktopShell() {
     setDmMeta(meta);
     setSection('chats');
   }
+
+  /** Go to an app address: '/room/<name>?otherUsername=..' (a chat), '/match' or '/me'.
+   *  Returns false for anything else. */
+  function openPath(path: string): boolean {
+    const url = new URL(path, 'https://reco.invalid');
+    const chat = url.pathname.match(/^\/room\/(.+)$/);
+    if (chat) {
+      let name = chat[1];
+      try { name = decodeURIComponent(name); } catch { /* already plain */ }
+      if (name.startsWith('dm:')) {
+        const q = url.searchParams;
+        const other = q.get('otherUsername') || name.split(':').slice(1).find((u) => u !== currentUser?.username) || '';
+        openDm(name, {
+          username: other,
+          screenname: q.get('displayName') || other,
+          avatarExpression: q.get('avatarExpression') || undefined,
+          avatarColor: q.get('avatarColor') || undefined,
+        });
+      } else {
+        openRoom(name);
+      }
+      return true;
+    }
+    if (url.pathname === '/match' || url.pathname === '/me') {
+      setSection(url.pathname === '/match' ? 'match' : 'me');
+      return true;
+    }
+    return false;
+  }
+
+  // A notification clicked while Reco is open (see usePushNotifications.web). Navigating would
+  // remount this whole layout, so the desktop takes the request itself; a new window starts
+  // at the address instead (below).
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const onOpen = (event: Event) => {
+      if (openPath((event as CustomEvent<string>).detail)) event.preventDefault();
+    };
+    window.addEventListener('reco-open', onOpen);
+    return () => window.removeEventListener('reco-open', onOpen);
+  });
+  useEffect(() => {
+    if (Platform.OS === 'web') openPath(window.location.pathname + window.location.search);
+    // Once, for the address the window opened at
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const closeRoom = () => setRoom(null);
   const showChat = section === 'chats' && room;

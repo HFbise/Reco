@@ -25,7 +25,15 @@ URL = f'http://127.0.0.1:{PORT}'
 @pytest.fixture(scope='module')
 def server():
     # GitHub credentials make the server offer 'Continue with GitHub' (github.com itself is stubbed)
-    env = dict(os.environ, PORT=str(PORT), SECRET_KEY='e2e', GITHUB_CLIENT_ID='e2e-gh', GITHUB_CLIENT_SECRET='e2e')
+    env = dict(
+        os.environ,
+        PORT=str(PORT),
+        SECRET_KEY='e2e',
+        GITHUB_CLIENT_ID='e2e-gh',
+        GITHUB_CLIENT_SECRET='e2e',
+        VAPID_PUBLIC_KEY='e2e-push-key',
+        VAPID_PRIVATE_KEY='e2e',
+    )
     proc = subprocess.Popen(
         [sys.executable, 'app.py'], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -674,3 +682,67 @@ def test_every_log_out_button_signs_out(server, browser, shots):
     phone.goto(f'{URL}/me')
     phone.get_by_text('Log out', exact=True).click()
     phone.get_by_placeholder('Password').wait_for()
+
+
+# The browser's notification permission, as a page script sees it. Headless Chromium can't
+# grant it, and a real subscription needs Google's push service (tests/test_webpush.py fakes
+# that side); this covers what the page does with the answer.
+_NOTIFICATION_STUB = """
+window.Notification = class {
+  static get permission() { return sessionStorage.getItem('stubPermission') || 'default'; }
+  static async requestPermission() {
+    sessionStorage.setItem('asked', '1');
+    sessionStorage.setItem('stubPermission', 'denied');
+    return 'denied';
+  }
+};
+"""
+
+
+def test_notifications_are_offered_in_the_app_before_the_browser_asks(server, browser, shots):
+    create_user('nia')
+    page = new_page(browser)
+    shots.append(page)
+    page.add_init_script(_NOTIFICATION_STUB)
+    log_in(page, 'nia')
+    page.get_by_text('Turn on notifications?').wait_for()
+    assert not page.evaluate("sessionStorage.getItem('asked')")  # nothing until asked
+    page.get_by_text('Turn on', exact=True).click()
+    page.get_by_text('Turn on notifications?').wait_for(state='detached')
+    assert page.evaluate("sessionStorage.getItem('asked')")
+    page.goto(f'{URL}/me')
+    page.get_by_text('Blocked in this browser', exact=False).wait_for()
+
+
+def test_not_now_keeps_the_notification_card_away(server, browser, shots):
+    create_user('noa')
+    page = new_page(browser)
+    shots.append(page)
+    page.add_init_script(_NOTIFICATION_STUB)
+    log_in(page, 'noa')
+    page.get_by_text('Not now', exact=True).click()
+    page.get_by_text('Turn on notifications?').wait_for(state='detached')
+    page.reload()
+    page.get_by_text('Lobby').first.wait_for()
+    page.wait_for_timeout(1000)
+    assert page.get_by_text('Turn on notifications?').count() == 0
+
+
+def test_a_notification_link_opens_that_dm(server, browser, shots):
+    create_user('olga', screenname='Olga')
+    create_user('pete', screenname='Pete')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:olga:pete', 'olga', 'Olga', 'see you')"
+        )
+        conn.commit()
+    link = '/room/dm%3Aolga%3Apete?otherUsername=olga&displayName=Olga'  # as webpush.notify builds it
+    desktop, phone = new_page(browser), _phone(browser)
+    shots.extend([desktop, phone])
+    for page in (desktop, phone):
+        log_in(page, 'pete')
+        page.goto(URL + link)
+        page.get_by_placeholder('Type a message...').wait_for()  # the DM is open
+        page.get_by_text('see you').last.wait_for()
+        assert page.get_by_text('Olga').first.is_visible()

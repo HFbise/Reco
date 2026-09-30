@@ -22,7 +22,7 @@ from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
 from db import get_db
 from extensions import app, socketio
-from state import online_users
+from state import hidden_sids, online_users
 
 log = logging.getLogger(__name__)
 
@@ -103,6 +103,7 @@ def bind(username: str):
 def unbind(sid: str):
     """Detach the socket; returns the username it belonged to (or None)."""
     username = sid_users.pop(sid, None)
+    hidden_sids.discard(sid)
     socketio.server.leave_room(sid, MEMBERS_ROOM, namespace='/')
     if username and username in online_users:
         online_users[username].discard(sid)

@@ -6,6 +6,7 @@ from flask_socketio import emit
 import voice_state
 from auth_session import bind, new_guest, readable, unbind, verify_token
 from extensions import socketio
+from state import hidden_sids
 
 log = logging.getLogger(__name__)
 
@@ -36,6 +37,17 @@ def handle_guest_login(data=None):
     guest, token = new_guest()
     bind(guest)
     emit('guest_login_result', {'success': True, 'username': guest, 'token': token})
+
+
+@socketio.on('page_visibility')
+def handle_page_visibility(data=None):
+    """The web app went to the background or came back: decides whether a DM also
+    becomes a push notification (see state.is_watching). Any socket may say so (no
+    auth_required reply, which would sign the page out); unbind() forgets it."""
+    if isinstance(data, dict) and data.get('hidden') is True:
+        hidden_sids.add(request.sid)
+    else:
+        hidden_sids.discard(request.sid)
 
 
 @socketio.on('user_offline')
