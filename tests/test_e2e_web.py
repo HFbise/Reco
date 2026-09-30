@@ -892,3 +892,34 @@ def query_code(room):
         cur = conn.cursor()
         cur.execute('SELECT code FROM rooms WHERE name = %s', (room,))
         return cur.fetchone()['code']
+
+
+def test_a_long_chinese_message_fills_its_bubble_and_the_box_shrinks_back(server, browser, shots):
+    create_user('zhou', screenname='Zhou')
+    page = new_page(browser, locale='zh-CN')
+    shots.append(page)
+    page.goto(URL)
+    page.get_by_placeholder('用户名').fill('zhou')
+    page.get_by_placeholder('密码').fill('secret123')
+    page.get_by_placeholder('密码').press('Enter')
+    page.get_by_text('大厅', exact=True).first.click()
+    box = page.get_by_placeholder('输入消息...')
+    box.wait_for()
+    text = '这本书我读了两遍，第一次觉得节奏太慢，第二次才发现每一章其实都在为结尾铺垫，越想越有意思。'
+    box.fill(text)
+    assert box.bounding_box()['height'] > 50  # grew to fit
+    box.press('Enter')
+    bubble = page.get_by_text(text).last
+    bubble.wait_for()
+    # Chinese may break between any two characters: a bubble narrower than it should be showed up as
+    # early wrapping, down to one character a line. It should use the room it has (72% of the row).
+    assert bubble.bounding_box()['width'] > 350
+    page.wait_for_timeout(300)
+    assert box.bounding_box()['height'] < 45  # back to one line once sent
+
+    # A sentence that fits on one line stays on one line (it used to wrap at 85% of its own width)
+    short = '周日下午四点见，记得带零食过来'
+    box.fill(short)
+    box.press('Enter')
+    page.get_by_text(short).last.wait_for()
+    assert page.get_by_text(short).last.bounding_box()['height'] < 30

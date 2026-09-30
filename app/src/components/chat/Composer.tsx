@@ -37,6 +37,9 @@ export function Composer(p: Props) {
   const c = useColors();
   const t = useT();
   const [inputHeight, setInputHeight] = useState(MIN_INPUT);
+  // The box grows with its text, but on the web the measured height never drops below the box's
+  // own, so it can't shrink by itself: start over at one line once it's empty (sent or cleared)
+  useEffect(() => { if (!p.input) setInputHeight(MIN_INPUT); }, [p.input]);
   const inputRef = useRef<TextInput>(null);
   // Picking "Reply" puts the cursor in the box, ready to type
   useEffect(() => { if (p.replyingTo) inputRef.current?.focus(); }, [p.replyingTo]);

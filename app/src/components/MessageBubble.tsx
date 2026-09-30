@@ -186,7 +186,7 @@ export function MessageBubble({
   // Desktop hover actions: [react] [edit?] [recall?]
   // Clicking react measures its position and hands off to ChatPanel for the popup
   const hoverActions = showHoverActions ? (
-    <View style={[s.hoverActions, { backgroundColor: c.surface, borderColor: c.border }]}>
+    <View style={[s.hoverActions, isOwn && s.hoverActionsOwn, { backgroundColor: c.surface, borderColor: c.border }]}>
       {onReply && (
         <TouchableOpacity style={s.hoverBtn} onPress={onReply} activeOpacity={0.7} accessibilityLabel={t('reply')}>
           <IconReply size={17} color={c.textSub} />
@@ -228,6 +228,7 @@ export function MessageBubble({
           {/* Touchable only when there's something to do with the bubble itself (phones).
               A disabled button around it would make the quote inside count as disabled too. */}
           <BubbleWrap
+            own={isOwn}
             interactive={!!(onLongPress || onDoubleTap)}
             onLongPress={onLongPress}
             {...(onDoubleTap ? { onTouchStart, onTouchEnd } : null)}
@@ -277,12 +278,14 @@ export function MessageBubble({
 }
 
 /** The bubble's frame: a long-pressable touchable on phones, a plain box otherwise. */
-function BubbleWrap({ interactive, children, ...touch }: {
-  interactive: boolean; children: ReactNode; onLongPress?: () => void; onTouchStart?: (e: any) => void; onTouchEnd?: (e: any) => void;
+function BubbleWrap({ interactive, own, children, ...touch }: {
+  interactive: boolean; own: boolean; children: ReactNode;
+  onLongPress?: () => void; onTouchStart?: (e: any) => void; onTouchEnd?: (e: any) => void;
 }) {
-  if (!interactive) return <View style={s.bubbleTouch}>{children}</View>;
+  const style = [s.bubbleTouch, !own && s.bubbleTouchOther];
+  if (!interactive) return <View style={style}>{children}</View>;
   return (
-    <TouchableOpacity {...touch} delayLongPress={350} activeOpacity={0.85} style={s.bubbleTouch}>
+    <TouchableOpacity {...touch} delayLongPress={350} activeOpacity={0.85} style={style}>
       {children}
     </TouchableOpacity>
   );
@@ -340,10 +343,15 @@ const s = StyleSheet.create({
 
   name: { fontSize: 13, fontWeight: String(Fonts.heavy) as any },
 
-  // Without shrink the bubble grows to the text's full length instead of wrapping
-  bubbleTouch: { flexShrink: 1, minWidth: 0, maxWidth: '85%', position: 'relative' },
+  // Without shrink the bubble grows to the text's full length instead of wrapping.
+  // Width caps are percentages of something with a known width: the row for your own messages
+  // (bodyOwn), the column for others'. A percentage of a box that is itself sized by its text is
+  // circular: the browser settles it narrower than the text, so Chinese, which may break
+  // between any two characters, wrapped early (down to one character a line).
+  bubbleTouch: { flexShrink: 1, minWidth: 0, position: 'relative' },
+  bubbleTouchOther: { maxWidth: '85%' },
   pop: { position: 'absolute', alignSelf: 'center', top: '50%', marginTop: -18, fontSize: 30, lineHeight: 36 },
-  bubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10, maxWidth: '100%' },
+  bubble: { borderRadius: 20, paddingHorizontal: 15, paddingVertical: 10 },
   photoBubble: { padding: 4 },
   photo: { borderRadius: 16 },
   caption: { marginTop: 8 },
@@ -373,5 +381,7 @@ const s = StyleSheet.create({
   reactionCount: { fontSize: 12, fontWeight: String(Fonts.heavy) as any },
 
   hoverActions: { flexDirection: 'row', alignItems: 'center', gap: 2, flexShrink: 0, padding: 2, borderRadius: 10, borderWidth: 1 },
+  // Beside your bubble, not in its row: showing them must not squeeze the text
+  hoverActionsOwn: { position: 'absolute', right: '100%', marginRight: 6 },
   hoverBtn: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
 });
