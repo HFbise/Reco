@@ -229,3 +229,8 @@ check.
   exposing IP addresses to anonymous partners.
 - **Retention.** Match transcripts exist only so reports can be reviewed. A
   background job deletes them after 7 days.
+
+## License
+
+© 2026 HFbise. All rights reserved. The source is public for portfolio review;
+no license is granted to use, copy, modify or distribute it.
