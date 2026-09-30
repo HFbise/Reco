@@ -923,3 +923,34 @@ def test_a_long_chinese_message_fills_its_bubble_and_the_box_shrinks_back(server
     box.press('Enter')
     page.get_by_text(short).last.wait_for()
     assert page.get_by_text(short).last.bounding_box()['height'] < 30
+
+
+def test_create_a_room_with_a_password_and_join_it_by_code(server, browser, shots):
+    create_user('abby')
+    create_user('ben')
+    owner, guest = new_page(browser), new_page(browser)
+    shots.extend([owner, guest])
+    codes = []
+    owner.on('dialog', lambda d: (codes.append(d.message), d.accept()))  # "Room code: 123456"
+    log_in(owner, 'abby')
+    owner.get_by_label('Create Room / Find Room').click()
+    owner.get_by_text('Create Room', exact=True).last.click()
+    owner.get_by_placeholder('Room name').fill('darkroom')
+    owner.get_by_placeholder('Password (optional)').fill('shutter')
+    owner.get_by_placeholder('Password (optional)').press('Enter')
+    owner.get_by_placeholder('Type a message...').wait_for()  # the creator is let straight in
+    code = codes[0].split(':')[-1].strip()
+
+    log_in(guest, 'ben')
+    guest.get_by_label('Create Room / Find Room').click()
+    guest.get_by_text('Find Room', exact=True).click()
+    guest.get_by_placeholder('Enter 6-digit room code').fill(code)
+    guest.get_by_placeholder('Enter 6-digit room code').press('Enter')
+    guest.get_by_placeholder('Password', exact=True).fill('wrong')
+    with guest.expect_event('dialog') as refused:  # "Wrong password": listed, but not let in
+        guest.get_by_placeholder('Password', exact=True).press('Enter')
+    refused.value.dismiss()
+    guest.get_by_text('darkroom', exact=True).first.click()
+    guest.get_by_placeholder('Password', exact=True).fill('shutter')
+    guest.get_by_placeholder('Password', exact=True).press('Enter')
+    guest.get_by_placeholder('Type a message...').wait_for()

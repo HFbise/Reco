@@ -5,7 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../src/hooks/useColors';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMobileVoice } from '../../src/context/VoiceContext';
-import { RoomsPanel, type RoomsPanelHandle, type DmEntry } from '../../src/components/RoomsPanel';
+import { ChatList, type ChatListHandle } from '../../src/components/chatList/ChatList';
 import { ChatPanel, type DmMeta } from '../../src/components/ChatPanel';
 import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { AvatarView } from '../../src/components/AvatarView';
@@ -28,7 +28,7 @@ export default function RoomsScreen() {
   const { currentUser } = useAuthStore();
   const { voice, setRoom, voiceRoom, leaveAndSwitchRoom } = useMobileVoice();
   const { inVoice, voiceMembers } = voice;
-  const roomsPanelRef = useRef<RoomsPanelHandle>(null);
+  const chatListRef = useRef<ChatListHandle>(null);
   const plusBtnRef = useRef<View>(null);
 
   const [activeRoom, setActiveRoom] = useState<string | null>(null);
@@ -103,28 +103,23 @@ export default function RoomsScreen() {
     }
   }
 
-  function openDm(dm: DmEntry) {
+  function openDm(key: string, meta: DmMeta) {
     if (IS_WEB) {
       const wasOpen = !!activeRoom;
       setMembersKey(0);
-      setActiveRoom(dm.dm_room);
+      setActiveRoom(key);
       setActiveRoomPw(undefined);
-      setActiveDmMeta({
-        screenname: dm.other_screenname,
-        username: dm.other_username,
-        avatarExpression: dm.avatar_expression,
-        avatarColor: dm.avatar_color,
-      });
+      setActiveDmMeta(meta);
       if (!wasOpen) slideIn();
     } else {
       router.push({
         pathname: '/(main)/room/[name]',
         params: {
-          name: dm.dm_room,
-          displayName: dm.other_screenname,
-          otherUsername: dm.other_username,
-          ...(dm.avatar_expression ? { avatarExpression: dm.avatar_expression } : {}),
-          ...(dm.avatar_color ? { avatarColor: dm.avatar_color } : {}),
+          name: key,
+          displayName: meta.screenname,
+          otherUsername: meta.username,
+          ...(meta.avatarExpression ? { avatarExpression: meta.avatarExpression } : {}),
+          ...(meta.avatarColor ? { avatarColor: meta.avatarColor } : {}),
         },
       });
     }
@@ -155,7 +150,7 @@ export default function RoomsScreen() {
   function handlePlusPress() {
     plusBtnRef.current?.measure((_fx, _fy, w, h, px, py) => {
       const sw = Dimensions.get('window').width;
-      roomsPanelRef.current?.openDropdown({ top: py + h + 4, right: sw - px - w });
+      chatListRef.current?.openNewChatMenu({ top: py + h + 4, right: sw - px - w });
     });
   }
 
@@ -214,11 +209,12 @@ export default function RoomsScreen() {
             {/* Left panel: Rooms */}
             <View style={[s.slidePanel, { width: SW, backgroundColor: c.surface }]}>
               {topbar}
-              <RoomsPanel
-                ref={roomsPanelRef}
-                onRoomSelect={openRoom}
-                onDmSelect={openDm}
-                onDmClose={(dmRoom) => { if (activeRoom === dmRoom) closeRoom(); }}
+              <ChatList
+                ref={chatListRef}
+                selected={activeRoom}
+                onOpenRoom={openRoom}
+                onOpenDm={openDm}
+                onDmClosed={(key) => { if (activeRoom === key) closeRoom(); }}
               />
               <BottomTabBar />
             </View>
@@ -252,11 +248,7 @@ export default function RoomsScreen() {
       <ConnectionBanner />
       {topbar}
       <View style={s.content}>
-        <RoomsPanel
-          ref={roomsPanelRef}
-          onRoomSelect={openRoom}
-          onDmSelect={openDm}
-        />
+        <ChatList ref={chatListRef} onOpenRoom={openRoom} onOpenDm={openDm} />
       </View>
       <BottomTabBar />
     </SafeAreaView>

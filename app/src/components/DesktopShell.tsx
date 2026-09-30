@@ -6,7 +6,7 @@ import { useColors } from '../hooks/useColors';
 import { useT } from '../hooks/useT';
 import { useVoice } from '../hooks/useVoice';
 import { NavRail, type Section } from './NavRail';
-import { RoomsPanel, type DmEntry, type RoomsPanelHandle } from './RoomsPanel';
+import { ChatList, type ChatListHandle } from './chatList/ChatList';
 import { Welcome } from './Welcome';
 import { ChatPanel } from './ChatPanel';
 import { MembersPanel } from './MembersPanel';
@@ -34,7 +34,7 @@ export function DesktopShell() {
   const [roomPassword, setRoomPassword] = useState<string | undefined>();
   const [dmMeta, setDmMeta] = useState<DmMeta | null>(null);
   const [showSettings, setShowSettings] = useState(false);
-  const roomsPanel = useRef<RoomsPanelHandle>(null);
+  const chatList = useRef<ChatListHandle>(null);
   const isGuest = !!currentUser?.guest;
 
   // Voice follows the open room; DMs have no voice
@@ -111,18 +111,13 @@ export function DesktopShell() {
 
         {section === 'chats' && (
           <View style={[s.sidebar, { backgroundColor: c.surface, borderRightColor: c.border }]}>
-            <RoomsPanel
-              ref={roomsPanel}
-              onRoomSelect={openRoom}
-              onDmSelect={(dm: DmEntry) => openDm(dm.dm_room, {
-                screenname: dm.other_screenname,
-                username: dm.other_username,
-                avatarExpression: dm.avatar_expression,
-                avatarColor: dm.avatar_color,
-              })}
-              onDmClose={(dmRoom) => { if (room === dmRoom) closeRoom(); }}
-              selectedRoom={room}
-              showSidebarHeader
+            <ChatList
+              ref={chatList}
+              selected={room}
+              onOpenRoom={openRoom}
+              onOpenDm={openDm}
+              onDmClosed={(key) => { if (room === key) closeRoom(); }}
+              sidebarHeader
             />
           </View>
         )}
@@ -148,7 +143,7 @@ export function DesktopShell() {
 
           {section === 'chats' && !room && (
             <Welcome
-              onJoin={isGuest ? undefined : () => roomsPanel.current?.openDropdown()}
+              onJoin={isGuest ? undefined : () => chatList.current?.openNewChatMenu()}
               onMatch={() => setSection('match')}
             />
           )}
