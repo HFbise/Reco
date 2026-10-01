@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { useAuthStore } from '../src/store/authStore';
 import { useThemeStore } from '../src/store/themeStore';
 import { useLangStore } from '../src/store/langStore';
-import { useSoundStore } from '../src/store/soundStore';
+import { adoptLegacySoundSetting } from '../src/store/prefsStore';
 import { useVolumeStore } from '../src/store/volumeStore';
 import { connectSocket } from '../src/lib/socket';
 import { usePushNotifications } from '../src/hooks/usePushNotifications';
@@ -26,7 +26,6 @@ export default function RootLayout() {
   const { loadUser } = useAuthStore();
   const { load: loadTheme } = useThemeStore();
   const { load: loadLang } = useLangStore();
-  const { load: loadSound } = useSoundStore();
   const loadVolumes = useVolumeStore((s) => s.load);
 
   useEffect(() => {
@@ -72,10 +71,10 @@ export default function RootLayout() {
       loadUser().then((user) => { if (user) connectSocket(); }),
       loadTheme(),
       loadLang(),
-      loadSound(),
+      adoptLegacySoundSetting(),
       loadVolumes(),
     ]).then(() => setReady(true));
-  }, [loadUser, loadTheme, loadLang, loadSound, loadVolumes]);
+  }, [loadUser, loadTheme, loadLang, loadVolumes]);
 
   if (!ready) return <View style={{ flex: 1, backgroundColor: getTheme(scheme === 'dark').bg }} />;
 

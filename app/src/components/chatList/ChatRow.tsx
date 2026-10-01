@@ -7,7 +7,7 @@ import { isTouchScreen } from '../../lib/pointer';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius } from '../../theme';
-import { useDisplayName } from '../../store/nicknameStore';
+import { useDisplayName } from '../../store/peopleStore';
 import { preview, type ChatEntry } from './model';
 
 interface Props {

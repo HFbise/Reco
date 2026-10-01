@@ -5,7 +5,7 @@ import { Group, Row, ToggleRow } from './parts';
 import { useT } from '../../hooks/useT';
 import type { useAccountSettings } from '../../hooks/useAccountSettings';
 import { disablePush, enablePush, pushStatus, type PushStatus } from '../../lib/webPush';
-import { useSoundStore } from '../../store/soundStore';
+import { usePrefsStore } from '../../store/prefsStore';
 
 type Account = ReturnType<typeof useAccountSettings>;
 
@@ -13,7 +13,8 @@ type Account = ReturnType<typeof useAccountSettings>;
 export function NotificationSettings({ account }: { account: Account }) {
   const t = useT();
   const { settings, change } = account;
-  const { soundEnabled, toggle: toggleSound } = useSoundStore();
+  const soundEnabled = usePrefsStore((p) => p.soundEnabled);
+  const setPrefs = usePrefsStore((p) => p.set);
   const [push, setPush] = useState<PushStatus>('unsupported');
   const [busy, setBusy] = useState(false);
   useEffect(() => { pushStatus().then(setPush); }, []);
@@ -54,7 +55,7 @@ export function NotificationSettings({ account }: { account: Account }) {
           disabled={!settings} onChange={(v) => change({ push_matches: v })} />
       </Group>
       <Group>
-        <ToggleRow label={t('settings-sounds')} hint={t('settings-sounds-hint')} value={soundEnabled} onChange={toggleSound} />
+        <ToggleRow label={t('settings-sounds')} hint={t('settings-sounds-hint')} value={soundEnabled} onChange={(v) => setPrefs({ soundEnabled: v })} />
       </Group>
     </>
   );

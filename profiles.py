@@ -1,5 +1,10 @@
-"""What a person's card shows about them, and the names you give people.
+"""Everything about a person beyond their name and face, kept on the server.
 
+Their own settings, the same on every device: who may message them first, whether others see
+them online, which notifications they get. (Settings for one device, like theme or text size,
+stay on that device.)
+
+What their card shows (card()):
 - When they signed up (users.created_at; accounts from before it was recorded have none).
 - When they were last online, as you could see it: the last time they were online while
   showing it (users.last_seen), or their last DM to you, whichever is later. Someone who hides
@@ -11,13 +16,21 @@
 
 from datetime import datetime
 
-from moderation import dm_room_id
 from state import LOBBY, appears_online, get_level
+
+# Who may start a DM with you. An existing conversation always carries on.
+DM_FROM = ('everyone', 'rooms', 'nobody')
+
+DEFAULTS = {'dm_from': 'everyone', 'show_online': True, 'push_dms': True, 'push_mentions': True, 'push_matches': True}
+_FLAGS = ('show_online', 'push_dms', 'push_mentions', 'push_matches')
 
 MAX_NICKNAME_LEN = 32
 
 
 def migrate(cur):
+    cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS dm_from TEXT NOT NULL DEFAULT 'everyone'")
+    for flag in _FLAGS:
+        cur.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS {flag} BOOLEAN NOT NULL DEFAULT TRUE')
     # Added without a default first: existing accounts get no made-up sign-up date
     cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ')
     cur.execute('ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW()')
@@ -26,6 +39,82 @@ def migrate(cur):
         'CREATE TABLE IF NOT EXISTS user_nicknames (owner TEXT NOT NULL, target TEXT NOT NULL,'
         ' nickname TEXT NOT NULL, PRIMARY KEY (owner, target))'
     )
+
+
+def _dm_room(a: str, b: str) -> str:
+    # moderation.dm_room_id, which can't be imported here: auth_session imports this module
+    return 'dm:' + ':'.join(sorted([a, b]))
+
+
+# ── settings ──────────────────────────────────────────────────
+
+
+def get(cur, username: str) -> dict:
+    cur.execute(f'SELECT dm_from, {", ".join(_FLAGS)} FROM users WHERE username = %s', (username,))
+    row = cur.fetchone()
+    return {key: row[key] for key in DEFAULTS} if row else dict(DEFAULTS)
+
+
+def clean(data) -> dict:
+    """The valid changes in `data`; anything else is dropped."""
+    if not isinstance(data, dict):
+        return {}
+    changes = {flag: data[flag] for flag in _FLAGS if isinstance(data.get(flag), bool)}
+    if data.get('dm_from') in DM_FROM:
+        changes['dm_from'] = data['dm_from']
+    return changes
+
+
+def update(cur, username: str, changes: dict) -> dict:
+    """Apply `changes` (already clean()ed); returns every setting."""
+    if changes:
+        columns = ', '.join(f'{key} = %s' for key in changes)
+        cur.execute(f'UPDATE users SET {columns} WHERE username = %s', (*changes.values(), username))
+    return get(cur, username)
+
+
+def wants_push(cur, usernames, kind: str) -> list[str]:
+    """Which of `usernames` get push notifications of `kind` ('dms', 'mentions' or 'matches')."""
+    usernames = list(usernames)
+    if not usernames:
+        return []
+    column = {'dms': 'push_dms', 'mentions': 'push_mentions', 'matches': 'push_matches'}[kind]
+    cur.execute(f'SELECT username FROM users WHERE username = ANY(%s) AND {column}', (usernames,))
+    return [r['username'] for r in cur.fetchall()]
+
+
+def touch_last_seen(cur, username: str):
+    """Seen online just now (only called while they show it)."""
+    cur.execute('UPDATE users SET last_seen = NOW() WHERE username = %s', (username,))
+
+
+def shows_online(cur, username: str) -> bool:
+    cur.execute('SELECT show_online FROM users WHERE username = %s', (username,))
+    row = cur.fetchone()
+    return row['show_online'] if row else True
+
+
+def may_message(cur, sender: str, recipient: str, dm_room: str) -> bool:
+    """May `sender` send in their DM with `recipient`? Always once the chat has begun
+    (anything in it, including a match's "you're connected"); before that, it's up to
+    the recipient: anyone, people sharing a room with them (not the lobby), or nobody."""
+    cur.execute('SELECT 1 FROM messages WHERE room = %s LIMIT 1', (dm_room,))
+    if cur.fetchone():
+        return True
+    rule = get(cur, recipient)['dm_from']
+    if rule == 'everyone':
+        return True
+    if rule == 'nobody':
+        return False
+    inside = '(%s = ANY(members) OR %s = ANY(admins) OR owner = %s)'
+    cur.execute(
+        f'SELECT 1 FROM rooms WHERE name <> %s AND {inside} AND {inside} LIMIT 1',
+        (LOBBY, sender, sender, sender, recipient, recipient, recipient),
+    )
+    return cur.fetchone() is not None
+
+
+# ── nicknames and cards ───────────────────────────────────────
 
 
 def nicknames(cur, owner: str) -> dict[str, str]:
@@ -86,7 +175,7 @@ def card(cur, viewer: str, target: str, room: str | None, in_voice: bool, guest:
     if not me:
         cur.execute(
             'SELECT MAX(created_at) AS at FROM messages WHERE room = %s AND username = %s',
-            (dm_room_id(viewer, target), target),
+            (_dm_room(viewer, target), target),
         )
         written = cur.fetchone()['at']
         if written:

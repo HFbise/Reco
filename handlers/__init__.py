@@ -15,7 +15,6 @@ from . import (
     room_card,
     room_moderation,
     rooms,
-    settings,
     voice,
 )
 
@@ -35,6 +34,5 @@ __all__ = [
     'room_card',
     'room_moderation',
     'rooms',
-    'settings',
     'voice',
 ]

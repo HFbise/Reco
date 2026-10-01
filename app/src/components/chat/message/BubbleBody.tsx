@@ -4,7 +4,7 @@ import { ImageViewer } from '../ImageViewer';
 import { fitImage, imageUrl } from '../../../lib/images';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
 import { splitMentions } from '../../../lib/mentions';
-import { useDisplayName } from '../../../store/nicknameStore';
+import { useDisplayName } from '../../../store/peopleStore';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 import { TEXT_SIZES, usePrefsStore } from '../../../store/prefsStore';

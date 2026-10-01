@@ -12,6 +12,8 @@ export const TEXT_SIZES: Record<TextSize, { fontSize: number; lineHeight: number
 };
 
 interface Prefs {
+  /** A sound for new messages */
+  soundEnabled: boolean;
   /** Enter sends (Shift+Enter adds a line), or adds a line (Ctrl/⌘+Enter sends). Keyboards only. */
   enterSends: boolean;
   textSize: TextSize;
@@ -23,11 +25,12 @@ interface PrefsState extends Prefs {
   set: (patch: Partial<Prefs>) => void;
 }
 
-/** How chatting looks and feels on this device (settings that every device shares are on the
- *  server, see useAccountSettings). */
+/** How chatting looks, sounds and feels on this device (settings that every device shares are on
+ *  the server, see useAccountSettings). */
 export const usePrefsStore = create<PrefsState>()(
   persist(
     (set) => ({
+      soundEnabled: true,
       enterSends: true,
       textSize: 'default',
       hour12: false,
@@ -36,3 +39,15 @@ export const usePrefsStore = create<PrefsState>()(
     { name: 'chat-prefs', storage: createJSONStorage(() => AsyncStorage) },
   ),
 );
+
+/** The sound switch used to have its own saved key: carry an "off" over, once. */
+export async function adoptLegacySoundSetting() {
+  try {
+    const old = await AsyncStorage.getItem('notifSound');
+    if (old === null) return;
+    if (old === 'false') usePrefsStore.getState().set({ soundEnabled: false });
+    await AsyncStorage.removeItem('notifSound');
+  } catch {
+    // nothing to carry over
+  }
+}

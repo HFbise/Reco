@@ -7,7 +7,7 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import type { DmFrom, useAccountSettings } from '../../hooks/useAccountSettings';
 import { getSocket } from '../../lib/socket';
-import { useBlockStore } from '../../store/blockStore';
+import { usePeopleStore } from '../../store/peopleStore';
 import { Fonts, Spacing } from '../../theme';
 
 type Account = ReturnType<typeof useAccountSettings>;
@@ -41,7 +41,7 @@ export function PrivacySettings({ account }: { account: Account }) {
 function BlockedList() {
   const c = useColors();
   const t = useT();
-  const removeBlocked = useBlockStore((s) => s.removeBlocked);
+  const removeBlocked = usePeopleStore((s) => s.removeBlocked);
   const [people, setPeople] = useState<Blocked[] | null>(null);
 
   useEffect(() => {

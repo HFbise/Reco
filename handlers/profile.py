@@ -1,4 +1,4 @@
-"""People's cards (profiles.py) and the nicknames you give people."""
+"""About people (profiles.py): your own settings, people's cards, and the nicknames you give them."""
 
 import logging
 
@@ -6,14 +6,61 @@ from flask_socketio import emit
 
 import profiles
 import voice_state
-from auth_session import authenticated, in_room, is_guest, readable
+from auth_session import MEMBERS_ROOM, authenticated, in_room, is_guest, readable
 from db import get_db
 from extensions import socketio
 from replies import fail
-from state import online_users
+from state import invisible, online_users
 from utils import str_field
 
 log = logging.getLogger(__name__)
+
+
+def _to_all_devices(username: str, event: str, payload: dict):
+    for sid in list(online_users.get(username, [])):
+        socketio.emit(event, payload, to=sid)
+
+
+def _show_online(username: str, show: bool):
+    """Appear (or vanish) for everyone at once, if connected right now."""
+    if username not in online_users or show == (username not in invisible):
+        return
+    # The moment they appear or vanish is the last time they were seen
+    with get_db() as conn:
+        profiles.touch_last_seen(conn.cursor(), username)
+        conn.commit()
+    if show:
+        invisible.discard(username)
+    else:
+        invisible.add(username)
+    socketio.emit('online_status_changed', {'username': username, 'online': show}, to=MEMBERS_ROOM)
+
+
+@socketio.on('get_settings')
+@authenticated
+def handle_get_settings(username, data):
+    with get_db() as conn:
+        emit('settings', profiles.get(conn.cursor(), username))
+
+
+@socketio.on('update_settings')
+@authenticated
+def handle_update_settings(username, data):
+    changes = profiles.clean(data)
+    if not changes:
+        return
+    try:
+        with get_db() as conn:
+            cur = conn.cursor()
+            settings = profiles.update(cur, username, changes)
+            conn.commit()
+    except Exception as e:
+        log.exception('update_settings error: %s', e)
+        fail('settings_result', 'server_error')
+        return
+    if 'show_online' in changes:
+        _show_online(username, settings['show_online'])
+    _to_all_devices(username, 'settings', settings)
 
 
 @socketio.on('get_profile_card')
@@ -56,5 +103,4 @@ def handle_set_nickname(username, data):
         log.exception('set_nickname error: %s', e)
         fail('nickname_result', 'server_error')
         return
-    for sid in list(online_users.get(username, [])):
-        socketio.emit('nicknames', {'nicknames': names}, to=sid)
+    _to_all_devices(username, 'nicknames', {'nicknames': names})

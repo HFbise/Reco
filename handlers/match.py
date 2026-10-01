@@ -18,7 +18,7 @@ from flask import request
 from flask_socketio import emit
 
 import moderation
-import user_settings
+import profiles
 import webpush
 from auth_session import authenticated
 from db import get_db
@@ -110,7 +110,7 @@ def _start(a: Ticket, b: Ticket):
         match_id = cur.fetchone()['id']
         conn.commit()
         # Waiting in a background tab gets a push, if they want one
-        notify = set(user_settings.wants_push(cur, [a.username, b.username], 'matches'))
+        notify = set(profiles.wants_push(cur, [a.username, b.username], 'matches'))
     with _live_lock:
         _live[a.username] = Side(match_id, a.mode, a.sid, b.username, b.sid, frozenset(shared), True)
         _live[b.username] = Side(match_id, b.mode, b.sid, a.username, a.sid, frozenset(shared), False)

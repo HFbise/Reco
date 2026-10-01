@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { showAlert } from '../../lib/alert';
 import { buildReactionQuickList, loadRecentEmojis, recordRecentEmoji } from '../../lib/recentEmojis';
 import { useAuthStore } from '../../store/authStore';
-import { useBlockStore } from '../../store/blockStore';
+import { usePeopleStore } from '../../store/peopleStore';
 import { useColors } from '../../hooks/useColors';
 import { useIsDesktop } from '../../hooks/useIsDesktop';
 import { useT } from '../../hooks/useT';
@@ -155,7 +155,7 @@ export function ChatPanel(p: Props) {
     else router.push({ pathname: '/(main)/room/[name]', params: { name: room } });
   }
 
-  const blocked = new Set(useBlockStore((s) => s.blocked));
+  const blocked = new Set(usePeopleStore((s) => s.blocked));
   const shown = chat.messages.filter((m) => m.system || !blocked.has(m.username));
   const sheetMsg = sheetFor?.msg;
   const canModerate = chat.room.myLevel >= 1;

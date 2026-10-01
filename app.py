@@ -29,7 +29,6 @@ import oauth
 import profiles
 import reads
 import room_log
-import user_settings
 import voice_state
 import webpush
 from admin import admin_bp
@@ -258,7 +257,6 @@ def _migrate():
             webpush.migrate(cur)
             chat_prefs.migrate(cur)
             room_log.migrate(cur)
-            user_settings.migrate(cur)
             profiles.migrate(cur)
             # The room card: shown to everyone, edited by the owner and admins
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS description TEXT')

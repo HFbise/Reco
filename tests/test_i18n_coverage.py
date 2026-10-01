@@ -15,8 +15,8 @@ def read(*parts):
         return f.read()
 
 
-I18N = read('app', 'src', 'lib', 'i18n.ts')
-ZH, EN = I18N.split('const en: Record<keyof typeof zh, string> = {')
+ZH = read('app', 'src', 'lib', 'i18n', 'zh.ts')
+EN = read('app', 'src', 'lib', 'i18n', 'en.ts')
 
 
 def keys(block):

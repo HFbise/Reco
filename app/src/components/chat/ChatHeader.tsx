@@ -4,7 +4,7 @@ import { IconChevronLeft, IconInfo, IconMic, IconUsers } from '../Icon';
 import { IconButton } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
 import { useColors } from '../../hooks/useColors';
-import { useDisplayName } from '../../store/nicknameStore';
+import { useDisplayName } from '../../store/peopleStore';
 import { useT } from '../../hooks/useT';
 import type { VoiceMember } from '../../hooks/useVoice';
 import type { DmMeta } from './types';
