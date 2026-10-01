@@ -1,0 +1,36 @@
+name: Load test
+
+# Run by hand (Actions → Load test → Run workflow): starts the production server setup on the
+# runner and adds users in stages until it stops keeping up. See tests/load_gunicorn.py.
+on:
+  workflow_dispatch:
+    inputs:
+      stages:
+        description: Users online at each stage
+        default: '25,50,75,100,125,150,200,300,400'
+      threads:
+        description: gunicorn thread counts to try (production uses 100)
+        default: '100,400'
+
+jobs:
+  load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt "python-socketio[asyncio_client]" aiohttp
+      - run: python tests/load_gunicorn.py
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+          LOAD_STAGES: ${{ inputs.stages }}
+          LOAD_THREADS: ${{ inputs.threads }}
