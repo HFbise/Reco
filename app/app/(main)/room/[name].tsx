@@ -3,7 +3,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useColors } from '../../../src/hooks/useColors';
 import { useMobileVoice } from '../../../src/context/VoiceContext';
-import { ChatPanel, type DmMeta } from '../../../src/components/ChatPanel';
+import { ChatPanel, type DmMeta } from '../../../src/components/chat/ChatPanel';
 
 export default function RoomScreen() {
   const { name, password, displayName, otherUsername, avatarColor, avatarExpression } =

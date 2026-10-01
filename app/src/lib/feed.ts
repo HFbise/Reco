@@ -1,4 +1,4 @@
-import type { Message } from '../components/MessageBubble';
+import type { Message } from '../components/chat/message/types';
 import { formatMsgTime, sameDay } from './time';
 
 export type FeedItem =

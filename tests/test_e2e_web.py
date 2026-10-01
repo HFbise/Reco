@@ -961,3 +961,29 @@ def test_create_a_room_with_a_password_and_join_it_by_code(server, browser, shot
     guest.get_by_placeholder('Password', exact=True).fill('shutter')
     guest.get_by_placeholder('Password', exact=True).press('Enter')
     guest.get_by_placeholder('Type a message...').wait_for()
+
+
+def test_the_reaction_bar_opens_next_to_its_message(server, browser, shots):
+    create_user('cara', screenname='Cara')
+    create_user('dov', screenname='Dov')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE rooms SET members = array_append(members, 'cara') WHERE name = '大厅'")
+        for i in range(8):
+            cur.execute(
+                "INSERT INTO messages (room, username, screenname, text) VALUES ('大厅', 'dov', 'Dov', %s)",
+                (f'line {i}',),
+            )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'cara')
+    open_room(page, 'Lobby')
+    page.get_by_text('line 1', exact=True).hover()
+    button = page.get_by_label('Emoji', exact=True).first
+    at = button.bounding_box()
+    button.click()
+    bar = page.get_by_label('👍', exact=True).first.bounding_box()
+    # Just above (or below) the button: the message list is drawn upside down (scaleY(-1)) and
+    # react-native-web's measure() ignores that, which used to put the bar at the mirrored height
+    assert -75 < bar['y'] - at['y'] < 45, (bar, at)  # the bar's buttons sit ~55 px above, or just below

@@ -3,7 +3,7 @@ import { getSocket } from '../lib/socket';
 import { cacheMsg, getCached, getLastTs, patchCached, patchCachedQuotes, resetRoom } from '../lib/messageCache';
 
 import { useAuthStore } from '../store/authStore';
-import type { Message } from '../components/MessageBubble';
+import type { Message } from '../components/chat/message/types';
 import type { VoiceMember } from './useVoice';
 
 /** How much of a message a reply quotes (matches the server's history.QUOTE_LEN) */

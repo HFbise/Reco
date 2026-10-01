@@ -56,13 +56,19 @@ export function CreateRoomDialog({ visible, onClose, onCreated }: {
 }
 
 export function FindRoomDialog({ visible, onClose, onFound }: {
-  visible: boolean; onClose: () => void; onFound: (room: FoundRoom) => void;
+  visible: boolean; onClose: () => void;
+  /** The room, and its password if it needed one */
+  onFound: (room: FoundRoom, password?: string) => void;
 }) {
   const t = useT();
   const [code, setCode] = useState('');
+  // A protected room asks for its password as a second step of the same dialog: opening a
+  // second dialog while this one fades out let its focus trap take the keyboard back
+  const [protectedRoom, setProtectedRoom] = useState<FoundRoom | null>(null);
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  useFreshFields(visible, () => { setCode(''); setError(''); });
+  useFreshFields(visible, () => { setCode(''); setProtectedRoom(null); setPassword(''); setError(''); });
 
   async function find() {
     if (busy || !code.trim()) return;
@@ -71,11 +77,26 @@ export function FindRoomDialog({ visible, onClose, onFound }: {
     const reply = await request<any>('find_room', { code: code.trim() }, 'find_room_result');
     setBusy(false);
     if (!reply.success) { setError(t.server(reply, 'err-find-failed')); return; }
+    const room = { name: reply.room, hasPassword: !!reply.has_password, needsPassword: !!reply.needs_password };
+    if (room.needsPassword) { setProtectedRoom(room); return; }
     onClose();
-    onFound({ name: reply.room, hasPassword: !!reply.has_password, needsPassword: !!reply.needs_password });
+    onFound(room);
   }
 
-  return (
+  function enter() {
+    if (!protectedRoom) return;
+    if (!password.trim()) { setError(t('err-fill-required')); return; }
+    onClose();
+    onFound(protectedRoom, password.trim());
+  }
+
+  return protectedRoom ? (
+    <ModalFrame visible={visible} title={t('enter-room-pw')} onClose={onClose} error={error}
+      confirmLabel={t('ok')} onConfirm={enter}>
+      <TextField placeholder={t('ph-password')} value={password} onChangeText={setPassword} secureTextEntry
+        autoComplete="current-password" textContentType="password" autoFocus onSubmitEditing={enter} />
+    </ModalFrame>
+  ) : (
     <ModalFrame visible={visible} title={t('find-room')} onClose={onClose} error={error}
       confirmLabel={t('find-room')} onConfirm={find} busy={busy}>
       <TextField placeholder={t('ph-find-code')} value={code} onChangeText={setCode} keyboardType="number-pad"

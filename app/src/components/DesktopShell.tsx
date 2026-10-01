@@ -8,7 +8,7 @@ import { useVoice } from '../hooks/useVoice';
 import { NavRail, type Section } from './NavRail';
 import { ChatList, type ChatListHandle } from './chatList/ChatList';
 import { Welcome } from './Welcome';
-import { ChatPanel } from './ChatPanel';
+import { ChatPanel } from './chat/ChatPanel';
 import { MembersPanel } from './MembersPanel';
 import { StreamPanel } from './StreamPanel';
 import { ConnectionBanner } from './ConnectionBanner';

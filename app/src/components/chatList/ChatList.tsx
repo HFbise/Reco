@@ -169,7 +169,7 @@ export const ChatList = forwardRef<ChatListHandle, Props>(function ChatList(p, r
       <Menu anchor={rowMenu?.at ?? null} items={rowMenu ? rowMenuItems(rowMenu.entry) : []} onClose={() => setRowMenu(null)} />
       <CreateRoomDialog visible={dialog === 'create'} onClose={() => setDialog(null)}
         onCreated={(room, password) => enterRoom(room, password || undefined)} />
-      <FindRoomDialog visible={dialog === 'find'} onClose={() => setDialog(null)} onFound={(room) => enterRoom(room)} />
+      <FindRoomDialog visible={dialog === 'find'} onClose={() => setDialog(null)} onFound={(room, password) => enterRoom(room, password)} />
       <RoomPasswordDialog room={askPassword} onClose={() => setAskPassword(null)}
         onSubmit={(room, password) => enterRoom(room, password)} />
     </View>

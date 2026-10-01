@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Message } from '../components/MessageBubble';
+import type { Message } from '../components/chat/message/types';
 
 // Per-user key: a shared device must never show one account's messages to another
 const keyFor = (username: string) => `msgCache_v2:${username}`;

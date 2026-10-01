@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFeed, GROUP_GAP_MS } from '../feed';
 import { formatMsgTime } from '../time';
-import type { Message } from '../../components/MessageBubble';
+import type { Message } from '../../components/chat/message/types';
 
 const monthDay = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
 const NOW = new Date(2026, 8, 27, 18, 0);

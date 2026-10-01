@@ -6,7 +6,7 @@ import { useColors } from '../../src/hooks/useColors';
 import { useAuthStore } from '../../src/store/authStore';
 import { useMobileVoice } from '../../src/context/VoiceContext';
 import { ChatList, type ChatListHandle } from '../../src/components/chatList/ChatList';
-import { ChatPanel, type DmMeta } from '../../src/components/ChatPanel';
+import { ChatPanel, type DmMeta } from '../../src/components/chat/ChatPanel';
 import { BottomTabBar } from '../../src/components/BottomTabBar';
 import { AvatarView } from '../../src/components/AvatarView';
 import { IconMic, IconPlus } from '../../src/components/Icon';

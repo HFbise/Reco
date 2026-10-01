@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
-import { MessageBubble, type Message } from '../MessageBubble';
+import { MessageRow } from './message/MessageRow';
+import type { Message } from './message/types';
 import { TypingIndicator } from './TypingIndicator';
 import { buildFeed, type FeedItem } from '../../lib/feed';
 import { useColors } from '../../hooks/useColors';
@@ -91,14 +92,14 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
     }
     const desktopActions = p.isDesktop && !p.readOnly;
     return (
-      <MessageBubble
+      <MessageRow
         msg={msg}
         cont={msg._cont}
-        currentUsername={p.currentUsername}
-        isDesktop={p.isDesktop}
+        me={p.currentUsername}
+        wide={p.isDesktop}
         onReactionPress={p.readOnly ? undefined : (emoji) => p.onReact(msg.id, emoji)}
         onLongPress={p.isDesktop || p.readOnly ? undefined : () => p.onLongPress(msg)}
-        onReactionBtnPress={desktopActions ? (x, y, h) => p.onReactionButton(msg, x, y, h) : undefined}
+        onReact={desktopActions ? (at) => p.onReactionButton(msg, at.pageX, at.pageY, at.height) : undefined}
         onEdit={desktopActions && msg.isOwn ? () => p.onEdit(msg) : undefined}
         onRecall={desktopActions && (msg.isOwn || p.canModerate) ? () => p.onRecall(msg) : undefined}
         // Touch screens: double tap for a quick 👍. Only adds: a double tap never takes a reaction back

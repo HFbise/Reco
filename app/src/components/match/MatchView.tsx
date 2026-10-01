@@ -3,7 +3,8 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, FlatList, Platform, KeyboardAvoidingView, ScrollView, Animated, Easing,
 } from 'react-native';
 import { AvatarView } from '../AvatarView';
-import { MessageBubble, type Message } from '../MessageBubble';
+import { MessageRow } from '../chat/message/MessageRow';
+import type { Message } from '../chat/message/types';
 import { TypingIndicator } from '../chat/TypingIndicator';
 import { Button, IconButton } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
@@ -350,7 +351,7 @@ function MatchMessages({ messages, stranger, typing }: {
       data={[...bubbles].reverse()}
       inverted
       keyExtractor={(m) => String(m.id)}
-      renderItem={({ item }) => <MessageBubble msg={item} />}
+      renderItem={({ item }) => <MessageRow msg={item} />}
       ListHeaderComponent={typingRow}
       contentContainerStyle={s.list}
     />

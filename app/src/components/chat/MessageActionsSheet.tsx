@@ -1,6 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
-import type { Message } from '../MessageBubble';
+import type { Message } from './message/types';
 import { useColors } from '../../hooks/useColors';
 import { IconPencil, IconPlus, IconReply, IconTrash } from '../Icon';
 import { useT } from '../../hooks/useT';

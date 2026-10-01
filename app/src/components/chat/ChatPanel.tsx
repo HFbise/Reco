@@ -1,0 +1,289 @@
+import { useEffect, useRef, useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
+import { showAlert } from '../../lib/alert';
+import { buildReactionQuickList, loadRecentEmojis, recordRecentEmoji } from '../../lib/recentEmojis';
+import { useAuthStore } from '../../store/authStore';
+import { useBlockStore } from '../../store/blockStore';
+import { useColors } from '../../hooks/useColors';
+import { useIsDesktop } from '../../hooks/useIsDesktop';
+import { useT } from '../../hooks/useT';
+import { useVoice } from '../../hooks/useVoice';
+import { useRoomChat, type ChatToast } from '../../hooks/useRoomChat';
+import { EmojiPicker } from '../emoji/EmojiPicker';
+import { MembersPanel } from '../MembersPanel';
+import { ChatCard } from './ChatCard';
+import { ChatHeader } from './ChatHeader';
+import { Composer } from './Composer';
+import { MessageActionsSheet } from './MessageActionsSheet';
+import { MessageList, type MessageListHandle } from './MessageList';
+import { RightDrawer } from './RightDrawer';
+import { useJumpToMessage } from './useJumpToMessage';
+import { usePhotoSending } from './usePhotoSending';
+import { useReactionPopovers, type PanelBox } from './useReactionPopovers';
+import { useToast } from './useToast';
+import type { Message } from './message/types';
+import type { DmMeta, ExternalVoice } from './types';
+
+export type { DmMeta, ExternalVoice } from './types';
+
+const TOAST_TEXT = {
+  'muted': 'you-are-muted',
+  'dm-blocked': 'dm-blocked',
+  'rate-limited': 'rate-limited',
+  'send-failed': 'send-failed',
+} as const satisfies Record<ChatToast, string>;
+
+interface Props {
+  /** Room name, or a DM id ("dm:alice:bob") */
+  name: string;
+  password?: string;
+  dmMeta?: DmMeta | null;
+  /** Back to the list (otherwise router.back) */
+  onClose?: () => void;
+  showBackBtn?: boolean;
+  /** The voice connection the screen keeps across chats (else this panel has its own) */
+  externalVoice?: ExternalVoice | null;
+  /** The room whose voice channel you're in, if it's another one */
+  activeVoiceRoom?: string;
+  onLeaveAndSwitch?: (room: string) => void;
+  onNavigateToRoom?: (room: string) => void;
+  /** Bumped by a parent to open the members drawer from outside */
+  membersKey?: number;
+}
+
+/** An open room or DM: header, messages, the message box, and everything that opens over them. */
+export function ChatPanel(p: Props) {
+  const { name } = p;
+  const me = useAuthStore((s) => s.currentUser);
+  const isGuest = !!me?.guest;
+  const c = useColors();
+  const t = useT();
+  const isDesktop = useIsDesktop();
+  const toast = useToast();
+
+  // What's being written: a new message (maybe answering one), or an edit
+  const [input, setInput] = useState('');
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
+  const lastSent = useRef('');
+
+  // What's open over the chat
+  const [showCard, setShowCard] = useState(false);
+  const [showMembers, setShowMembers] = useState(false);
+  const [showInputEmoji, setShowInputEmoji] = useState(false);
+  const [sheetFor, setSheetFor] = useState<{ msg: Message; at: number } | null>(null);
+  useEffect(() => { if (p.membersKey) setShowMembers(true); }, [p.membersKey]);
+
+  const back = () => (p.onClose ? p.onClose() : router.back());
+
+  // Voice: the screen's connection if it has one, else this panel's own
+  const ownVoice = useVoice(p.externalVoice ? '' : name);
+  const voice = p.externalVoice ?? ownVoice;
+  const inVoiceHere = voice.inVoice && (!p.activeVoiceRoom || p.activeVoiceRoom === name);
+  const inVoiceElsewhere = voice.inVoice && !!p.activeVoiceRoom && p.activeVoiceRoom !== name;
+
+  const chat = useRoomChat({
+    name,
+    password: p.password,
+    onRemoved: (reason) => {
+      if (inVoiceHere) voice.leaveVoice();
+      if (reason === 'kicked') showAlert(t('kicked-title'), t('kicked-msg'));
+      else if (!chat.room.isOwner) showAlert(t('room-closed-title'), t('room-closed-msg'));
+      back();
+    },
+    onJoinFailed: (reply) => {
+      // Wrong password, room gone, kicked, server error: there's nothing to show here
+      showAlert(reply.wrong_password ? t('wrong-password') : t('join-failed'), t.server(reply, 'join-failed'));
+      back();
+    },
+    onToast: (kind) => {
+      toast.show(t(TOAST_TEXT[kind]));
+      // Not delivered: give the text back rather than lose it
+      if (kind === 'send-failed' || kind === 'rate-limited') setInput((cur) => cur || lastSent.current);
+    },
+  });
+
+  const messageList = useRef<MessageListHandle>(null);
+  const jumpTo = useJumpToMessage(chat, messageList, () => toast.show(t('message-too-old')));
+
+  const photos = usePhotoSending({
+    enabled: !isGuest,
+    send: (imageId) => { chat.send('', replyingTo?.id, imageId); setReplyingTo(null); },
+    onError: (error) => toast.show(t(error === 'rate_limited' ? 'image_rate_limited' : error)),
+  });
+
+  // Reactions: recent emoji first, remembered across chats
+  const [recent, setRecent] = useState<string[]>([]);
+  useEffect(() => { loadRecentEmojis().then(setRecent); }, []);
+  function react(messageId: number, emoji: string) {
+    chat.react(messageId, emoji);
+    recordRecentEmoji(emoji).then(setRecent);
+  }
+  const quick = buildReactionQuickList(recent);
+  const panelRef = useRef<View>(null);
+  const [panel, setPanel] = useState<PanelBox>({ x: 0, y: 0, w: 0 });
+  const reactions = useReactionPopovers({ panel, sheet: !isDesktop, quick, recent, react });
+
+  function send() {
+    lastSent.current = input;
+    chat.send(input, replyingTo?.id);
+    setInput('');
+    if (input.trim()) setReplyingTo(null);
+  }
+
+  function reply(msg: Message) {
+    setEditing(null);
+    setReplyingTo(msg);
+  }
+
+  function joinVoiceHere() {
+    if (inVoiceElsewhere && p.onLeaveAndSwitch) {
+      showAlert(t('switch-voice-title'), t('switch-voice-msg', { from: t.room(p.activeVoiceRoom!), to: t.room(name) }), [
+        { text: t('cancel'), style: 'cancel' },
+        { text: t('switch'), onPress: () => p.onLeaveAndSwitch!(name) },
+      ]);
+    } else {
+      voice.joinVoice();
+    }
+  }
+
+  function openRoom(room: string) {
+    if (p.onNavigateToRoom) p.onNavigateToRoom(room);
+    else router.push({ pathname: '/(main)/room/[name]', params: { name: room } });
+  }
+
+  const blocked = new Set(useBlockStore((s) => s.blocked));
+  const shown = chat.messages.filter((m) => m.system || !blocked.has(m.username));
+  const sheetMsg = sheetFor?.msg;
+  const canModerate = chat.room.myLevel >= 1;
+
+  return (
+    <View
+      ref={panelRef}
+      style={[s.container, { backgroundColor: c.bg }]}
+      onLayout={() => panelRef.current?.measure((_x, _y, w, _h, pageX, pageY) => setPanel({ x: pageX, y: pageY, w }))}
+    >
+      <ChatHeader
+        name={name}
+        dmMeta={p.dmMeta}
+        memberCount={chat.room.memberCount}
+        code={chat.room.code}
+        showBackBtn={!!p.showBackBtn}
+        onBack={back}
+        onOpenInfo={() => setShowCard(true)}
+        onOpenMembers={() => setShowMembers(true)}
+        voicePillMembers={voice.inVoice ? voice.voiceMembers : chat.voiceMembers}
+        onVoicePillPress={inVoiceElsewhere ? () => p.onNavigateToRoom?.(p.activeVoiceRoom!) : () => setShowMembers(true)}
+        showMembersButton={!isDesktop}
+      />
+
+      <KeyboardAvoidingView style={s.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        <MessageList
+          ref={messageList}
+          messages={shown}
+          currentUsername={me?.username}
+          isDesktop={isDesktop}
+          readOnly={isGuest}
+          canModerate={canModerate}
+          hasOlder={chat.hasOlder}
+          loadingOlder={chat.loadingOlder}
+          onLoadOlder={chat.loadOlder}
+          onReact={react}
+          onLongPress={(msg) => { if (!msg.recalled) setSheetFor({ msg, at: Date.now() }); }}
+          onReactionButton={(msg, pageX, pageY, height) => {
+            reactions.openBar(msg.id, { pageX, pageY, height });
+            setShowInputEmoji(false);
+          }}
+          onEdit={(msg) => setEditing({ id: msg.id, text: msg.text })}
+          onRecall={(msg) => chat.recall(msg.id)}
+          onOpenRoom={openRoom}
+          onReply={reply}
+          typing={chat.typing}
+        />
+        <Composer
+          input={input}
+          onChangeInput={(text) => { setInput(text); if (text.trim()) chat.notifyTyping(); }}
+          onSend={send}
+          emojiOpen={showInputEmoji}
+          onToggleEmoji={() => { setShowInputEmoji((v) => !v); reactions.closeBar(); }}
+          editText={editing?.text ?? null}
+          onChangeEdit={(text) => setEditing((e) => (e ? { ...e, text } : e))}
+          onSaveEdit={() => { if (editing) chat.edit(editing.id, editing.text); setEditing(null); }}
+          onCancelEdit={() => setEditing(null)}
+          isMuted={chat.isTextMuted}
+          isGuest={isGuest}
+          replyingTo={replyingTo ? { name: replyingTo.isOwn ? t('you') : replyingTo.screenname, text: replyingTo.text } : null}
+          onCancelReply={() => setReplyingTo(null)}
+          onAttach={photos.attach}
+          uploading={photos.uploading}
+        />
+      </KeyboardAvoidingView>
+
+      {/* Emoji for the message box (remembered like reactions) */}
+      <EmojiPicker
+        visible={showInputEmoji}
+        sheet={!isDesktop}
+        position={{ bottom: 76, left: 12 }}
+        recent={recent}
+        onClose={() => setShowInputEmoji(false)}
+        onSelect={(emoji) => {
+          setInput((prev) => prev + emoji);
+          recordRecentEmoji(emoji).then(setRecent);
+          setShowInputEmoji(false);
+        }}
+      />
+
+      {reactions.element}
+
+      {/* Phones: long-press a message */}
+      <MessageActionsSheet
+        message={isDesktop ? null : sheetMsg ?? null}
+        openedAt={sheetFor?.at ?? 0}
+        quickEmojis={quick}
+        canEdit={!!sheetMsg?.isOwn}
+        canRecall={!!sheetMsg && (sheetMsg.isOwn || canModerate)}
+        onClose={() => setSheetFor(null)}
+        onReact={(emoji) => { if (sheetMsg) react(sheetMsg.id, emoji); setSheetFor(null); }}
+        onMoreEmojis={() => { if (sheetMsg) reactions.openPicker(sheetMsg.id); setSheetFor(null); }}
+        onEdit={() => { if (sheetMsg) setEditing({ id: sheetMsg.id, text: sheetMsg.text }); setSheetFor(null); }}
+        onRecall={() => { if (sheetMsg) chat.recall(sheetMsg.id); setSheetFor(null); }}
+        onReply={() => { if (sheetMsg) reply(sheetMsg); setSheetFor(null); }}
+      />
+
+      <ChatCard
+        visible={showCard}
+        name={name}
+        dmMeta={p.dmMeta}
+        room={chat.room}
+        isGuest={isGuest}
+        onJumpTo={jumpTo}
+        onClose={() => setShowCard(false)}
+        onLeave={() => { setShowCard(false); chat.leave(); back(); }}
+        onCloseRoom={() => { setShowCard(false); chat.close(); }}
+        onCopied={() => toast.show(t('copied'))}
+      />
+
+      {showMembers && (
+        <RightDrawer onClose={() => setShowMembers(false)} c={c}>
+          <MembersPanel
+            room={name}
+            voice={isGuest ? undefined : voice}
+            roomVoiceMembers={chat.voiceMembers}
+            currentUsername={me?.username}
+            isVoiceHere={inVoiceHere}
+            onJoinVoice={joinVoiceHere}
+            style={{ width: '100%', borderLeftWidth: 0 }}
+          />
+        </RightDrawer>
+      )}
+
+      {toast.element}
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { flex: 1 },
+  body: { flex: 1 },
+});
