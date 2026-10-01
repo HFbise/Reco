@@ -1,0 +1,33 @@
+{# A button that posts a small form; `confirm` asks first. `next` brings the browser back here. #}
+{% macro post_button(action, label, fields={}, danger=False, confirm=None, next=None) -%}
+  <form class="inline" method="post" action="{{ action }}"
+        {%- if confirm %} data-confirm="{{ confirm }}" onsubmit="return confirm(this.dataset.confirm)"{% endif %}>
+    {%- for name, value in fields.items() %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor -%}
+    {%- if next %}<input type="hidden" name="next" value="{{ next }}">{% endif -%}
+    <button class="btn {{ 'btn-danger' if danger else 'btn-ghost' }}">{{ label }}</button>
+  </form>
+{%- endmacro %}
+
+{# "Page 2/5" with first / previous / next / last links. `url(n)` builds page n's address. #}
+{% macro pages(page, total, per_page, url) -%}
+  {% set count = ((total + per_page - 1) // per_page) or 1 %}
+  {% if count > 1 %}
+    <div class="pages">
+      <span class="muted">第 {{ page }}/{{ count }} 页，共 {{ total }} 条</span>
+      {% if page > 1 %}
+        <a href="{{ url(1) }}" class="btn btn-ghost">«</a>
+        <a href="{{ url(page - 1) }}" class="btn btn-ghost">‹ 上一页</a>
+      {% endif %}
+      {% if page < count %}
+        <a href="{{ url(page + 1) }}" class="btn btn-ghost">下一页 ›</a>
+        <a href="{{ url(count) }}" class="btn btn-ghost">»</a>
+      {% endif %}
+    </div>
+  {% endif %}
+{%- endmacro %}
+
+{% macro empty_row(columns, text) -%}
+  <tr><td colspan="{{ columns }}" class="empty">{{ text }}</td></tr>
+{%- endmacro %}
+
+{% macro when(dt, fmt='%Y-%m-%d %H:%M') -%}{{ dt.strftime(fmt) if dt else '' }}{%- endmacro %}

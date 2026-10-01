@@ -1,0 +1,20 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import post_button, empty_row, when %}
+{% block body %}
+  <h2>用户反馈 <span class="count">共 {{ rows|length }} 条</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>用户</th><th>内容</th><th>时间</th><th></th></tr>
+      {% for r in rows %}
+        <tr>
+          <td class="mono">{{ r.username }}</td>
+          <td><div class="pre">{{ r.text }}</div></td>
+          <td class="mono">{{ when(r.created_at) }}</td>
+          <td>{{ post_button(url_for('admin.delete_feedback', fid=r.id), '删除', danger=True, confirm='删除这条反馈？') }}</td>
+        </tr>
+      {% else %}
+        {{ empty_row(4, '暂无反馈') }}
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}

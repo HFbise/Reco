@@ -169,3 +169,79 @@ def test_back_redirect_stays_inside_the_admin_panel():
     create_user('alice')
     resp = admin_client().post('/admin/rooms/大厅/unkick', data={'username': 'alice', 'next': 'https://evil.example/'})
     assert resp.headers['Location'].startswith('/admin/')
+
+
+# ── pages and fixes from the template rewrite ─────────────────
+
+
+def test_every_page_renders_and_escapes_what_users_typed():
+    from conftest import connect_as as _connect
+
+    evil = '<script>alert(1)</script>'
+    create_user('alice', screenname=evil)
+    create_room('club', owner='alice', members=['alice'])
+    alice = _connect('alice')
+    join(alice, 'club')
+    alice.emit('message', {'room': 'club', 'text': evil})
+    alice.emit('submit_feedback', {'text': evil})
+    alice.emit('report_user', {'reported': 'alice2', 'reason': evil})
+    web = admin_client()
+    for path in (
+        '/admin/dashboard',
+        '/admin/feedback',
+        '/admin/reports',
+        '/admin/users',
+        f'/admin/users?q={evil}',
+        '/admin/rooms',
+        '/admin/rooms/club/detail',
+        '/admin/rooms/club/detail?page=abc',  # not a number: page 1, not a crash
+        '/admin/users?page=-3',
+        '/admin/matches/999',
+    ):
+        resp = web.get(path)
+        assert resp.status_code == 200, path
+        assert evil not in resp.get_data(as_text=True), path
+
+
+def test_resetting_a_password_signs_the_person_out_everywhere():
+    create_user('alice')
+    phone = connect_as('alice')
+    resp = admin_client().post('/admin/users/alice/reset-password', data={'new_password': 'brandnew1'})
+    assert 'ok=' in resp.headers['Location']
+    assert events(phone, 'session_expired')
+    phone.emit('get_rooms', {})
+    assert events(phone, 'auth_required')
+
+
+def test_a_password_set_by_the_admin_works_for_a_github_made_account():
+    from conftest import login
+
+    create_user('octo')
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET has_password = FALSE WHERE username = 'octo'")
+        conn.commit()
+    admin_client().post('/admin/users/octo/reset-password', data={'new_password': 'brandnew1'})
+    login('octo', 'brandnew1')
+
+
+def test_resetting_an_unknown_user_says_so():
+    resp = admin_client().post('/admin/users/nobody/reset-password', data={'new_password': 'brandnew1'})
+    assert 'error=' in resp.headers['Location']
+
+
+def test_deleting_a_user_signs_them_out():
+    create_user('alice')
+    phone = connect_as('alice')
+    admin_client().post('/admin/users/alice/delete')
+    assert events(phone, 'session_expired')
+    assert query("SELECT * FROM users WHERE username = 'alice'") == []
+
+
+def test_the_room_page_shows_its_moderation_log():
+    create_user('troll')
+    create_room('club', owner='someone', members=['troll'])
+    web = admin_client()
+    web.post('/admin/rooms/club/kick', data={'username': 'troll'})
+    html = web.get('/admin/rooms/club/detail').get_data(as_text=True)
+    assert '网站管理员' in html and '踢出' in html

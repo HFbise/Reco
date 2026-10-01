@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reco Admin</title>
+  <style>{% include 'admin/admin.css' %}</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-left">
+      <h1>Reco Admin</h1>
+      <nav>
+        {% for endpoint, label in [('dashboard', '概览'), ('feedback', '反馈'), ('reports', '举报'), ('users', '用户'), ('rooms', '房间')] %}
+          <a href="{{ url_for('admin.' + endpoint) }}" class="{{ 'active' if section == endpoint }}">{{ label }}</a>
+        {% endfor %}
+      </nav>
+    </div>
+    <a href="{{ url_for('admin.logout') }}" class="logout">退出</a>
+  </div>
+  <div class="content">
+    {% if request.args.get('error') %}<div class="notice notice-err">{{ request.args.get('error') }}</div>{% endif %}
+    {% if request.args.get('ok') %}<div class="notice notice-ok">{{ request.args.get('ok') }}</div>{% endif %}
+    {% block body %}{% endblock %}
+  </div>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

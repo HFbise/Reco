@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Reco Admin</title>
+  <style>{% include 'admin/admin.css' %}</style>
+</head>
+<body class="login">
+  <div class="box">
+    <h1>Reco Admin</h1>
+    {% if error %}<p class="err">{{ error }}</p>{% endif %}
+    <form method="post">
+      <input type="password" name="password" placeholder="管理员密码" autofocus>
+      <button type="submit">登录</button>
+    </form>
+  </div>
+</body>
+</html>

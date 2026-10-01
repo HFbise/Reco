@@ -1,0 +1,79 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import post_button, pages, empty_row %}
+{% block body %}
+  <h2>用户管理 <span class="count">共 {{ total }} 个用户</span></h2>
+  <form class="search-row" method="get">
+    <input type="search" name="q" value="{{ q }}" placeholder="搜索用户名或显示名…">
+    <button class="btn btn-primary" type="submit">搜索</button>
+    {% if q %}<a href="{{ url_for('admin.users') }}" class="btn btn-ghost">清除</a>{% endif %}
+  </form>
+  <div class="card">
+    <table>
+      <tr><th>用户名</th><th>显示名</th><th>简介</th><th></th></tr>
+      {% for r in rows %}
+        <tr>
+          <td class="mono">{{ r.username }}</td>
+          <td>{{ r.screenname or '' }}</td>
+          <td class="muted">{{ r.bio or '' }}</td>
+          <td class="nowrap">
+            {# The dialogs post to /admin/users/<name>/...; the name travels as inert data #}
+            <button class="btn btn-ghost" data-dialog="reset-dialog" data-action="{{ url_for('admin.reset_user_password', username=r.username) }}">重置密码</button>
+            <button class="btn btn-ghost" data-dialog="rename-dialog" data-action="{{ url_for('admin.rename_user', username=r.username) }}">改用户名</button>
+            {{ post_button(url_for('admin.delete_user', username=r.username), '删除', danger=True, confirm='永久删除用户 ' ~ r.username ~ '？') }}
+          </td>
+        </tr>
+      {% else %}
+        {{ empty_row(4, '未找到用户') }}
+      {% endfor %}
+    </table>
+  </div>
+  {{ pages(page, total, per_page, page_url) }}
+
+  <div class="modal-overlay" id="reset-dialog">
+    <div class="modal">
+      <h3>重置密码</h3>
+      <p>该用户在所有设备上都会被登出。</p>
+      <form method="post">
+        <input type="text" name="new_password" placeholder="新密码（至少6位）" autocomplete="off">
+        <div class="modal-btns">
+          <button type="button" class="btn btn-ghost" data-close>取消</button>
+          <button type="submit" class="btn btn-primary">确认重置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-overlay" id="rename-dialog">
+    <div class="modal">
+      <h3>修改用户名</h3>
+      <p>3-20 位小写字母、数字或下划线。该用户会被登出，需要用新用户名重新登录；旧用户名将永久停用。</p>
+      <form method="post">
+        <input type="text" name="new_username" placeholder="新用户名" autocomplete="off">
+        <div class="modal-btns">
+          <button type="button" class="btn btn-ghost" data-close>取消</button>
+          <button type="submit" class="btn btn-primary">确认修改</button>
+        </div>
+      </form>
+    </div>
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // A button with data-dialog opens that dialog, pointing its form at the button's data-action
+  document.querySelectorAll('[data-dialog]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var dialog = document.getElementById(button.dataset.dialog);
+      var form = dialog.querySelector('form');
+      form.action = button.dataset.action;
+      form.reset();
+      dialog.classList.add('open');
+      setTimeout(function () { form.querySelector('input').focus(); }, 50);
+    });
+  });
+  document.querySelectorAll('.modal-overlay').forEach(function (dialog) {
+    dialog.addEventListener('click', function (e) {
+      if (e.target === dialog || e.target.hasAttribute('data-close')) dialog.classList.remove('open');
+    });
+  });
+</script>
+{% endblock %}

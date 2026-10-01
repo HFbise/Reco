@@ -1,0 +1,112 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import post_button, pages, empty_row, when %}
+
+{# Mute or voice-ban `u` for a chosen time, or lift it if it's on #}
+{% macro restriction(u, kind, active, label) -%}
+  {% if active %}
+    {{ post_button(url_for('admin.lift_restriction', room_name=room.name), '解除' ~ label, {'username': u, 'kind': kind}, next=here) }}
+  {% else %}
+    <form class="inline" method="post" action="{{ url_for('admin.restrict_member', room_name=room.name) }}">
+      <input type="hidden" name="username" value="{{ u }}">
+      <input type="hidden" name="kind" value="{{ kind }}">
+      <input type="hidden" name="next" value="{{ here }}">
+      <select name="duration">{% for secs, text in mute_options %}<option value="{{ secs }}">{{ text }}</option>{% endfor %}</select>
+      <button class="btn btn-ghost">{{ label }}</button>
+    </form>
+  {% endif %}
+{%- endmacro %}
+
+{% block body %}
+  <p class="back"><a href="{{ url_for('admin.rooms') }}">← 返回房间列表</a></p>
+  <h2>{{ room.name }}</h2>
+  <div class="split">
+    <div class="stack">
+      <div class="card">
+        <div class="card-header">成员 ({{ members|length }})</div>
+        <table>
+          <tr><th>用户名</th><th>显示名</th><th>状态</th><th></th></tr>
+          {% for m in members %}
+            <tr>
+              <td>{{ '🟢' if m.online else '⚪' }} <span class="mono">{{ m.username }}</span></td>
+              <td>{{ m.screenname }}</td>
+              <td>
+                {% if m.role %}<span class="tag tag-blue">{{ m.role }}</span>{% endif %}
+                {% if m.muted %}<span class="tag">禁言中</span>{% endif %}
+                {% if m.voice_banned %}<span class="tag">语音禁言中</span>{% endif %}
+              </td>
+              <td class="nowrap">
+                {{ restriction(m.username, 'text', m.muted, '禁言') }}<br>
+                {{ restriction(m.username, 'voice', m.voice_banned, '语音禁言') }}
+                {{ post_button(url_for('admin.kick_member', room_name=room.name), '踢出', {'username': m.username}, danger=True,
+                               confirm='把 ' ~ m.username ~ ' 踢出房间？踢出后无法再加入，直到解封。', next=here) }}
+              </td>
+            </tr>
+          {% else %}
+            {{ empty_row(4, '暂无成员') }}
+          {% endfor %}
+        </table>
+      </div>
+
+      {% if kicked %}
+        <div class="card">
+          <div class="card-header">已踢出 ({{ kicked|length }})</div>
+          <table>
+            <tr><th>用户名</th><th>显示名</th><th></th></tr>
+            {% for k in kicked %}
+              <tr>
+                <td class="mono">{{ k.username }}</td><td>{{ k.screenname }}</td>
+                <td>{{ post_button(url_for('admin.unkick_member', room_name=room.name), '解封', {'username': k.username}, next=here) }}</td>
+              </tr>
+            {% endfor %}
+          </table>
+        </div>
+      {% endif %}
+
+      <div class="card">
+        <div class="card-header">审核日志</div>
+        <table>
+          {% for e in log %}
+            <tr>
+              <td class="mono">{{ e.time[5:16]|replace('T', ' ') }}</td>
+              <td>{{ '网站管理员' if e.actor == 'admin' else e.actor_name }}</td>
+              <td>{{ log_labels.get(e.action, e.action) }}</td>
+              <td>{{ e.target_name or '' }}
+                {% if e.detail.text %}<div class="log-detail">“{{ e.detail.text }}”</div>{% endif %}
+                {% if e.detail.mode %}<div class="log-detail">{{ e.detail.mode }}</div>{% endif %}
+              </td>
+            </tr>
+          {% else %}
+            {{ empty_row(4, '还没有记录') }}
+          {% endfor %}
+        </table>
+      </div>
+    </div>
+
+    <div>
+      <div class="card">
+        <div class="card-header">消息记录（共 {{ message_total }} 条）</div>
+        <table>
+          <tr><th>时间</th><th>发送者</th><th>内容</th><th></th></tr>
+          {% for m in messages %}
+            <tr class="{{ 'system' if m.system }}">
+              <td class="mono nowrap">{{ when(m.created_at, '%m-%d %H:%M') }}</td>
+              <td class="mono">{{ m.screenname or m.username }}</td>
+              <td>
+                {% if m.recalled %}<span class="muted">（已撤回）</span>
+                {% else %}{{ m.text or '' }}{% if m.edited %} <span class="edited">(已编辑)</span>{% endif %}{% endif %}
+              </td>
+              <td class="nowrap">
+                {% if not m.recalled and not m.system %}
+                  {{ post_button(url_for('admin.recall_message', msg_id=m.id), '撤回', danger=True, confirm='撤回这条消息？', next=here) }}
+                {% endif %}
+              </td>
+            </tr>
+          {% else %}
+            {{ empty_row(4, '暂无消息') }}
+          {% endfor %}
+        </table>
+      </div>
+      {{ pages(page, message_total, per_page, page_url) }}
+    </div>
+  </div>
+{% endblock %}

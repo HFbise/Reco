@@ -1,0 +1,30 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import empty_row %}
+{% block body %}
+  <h2>聊天室 <span class="count">共 {{ rows|length }} 个</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>名称</th><th>房间号</th><th>房主</th><th>成员数</th><th></th></tr>
+      {% for r in rows %}
+        <tr>
+          <td><b>{{ r.name }}</b> {% if r.password %}🔒{% endif %}{% if r.invite_only %} <span class="tag tag-blue">仅限邀请</span>{% endif %}</td>
+          <td class="mono">{{ r.code or '' }}</td>
+          <td class="mono">{{ r.owner or '' }}</td>
+          <td>{{ r.member_count or 0 }}</td>
+          <td class="nowrap">
+            <a href="{{ url_for('admin.room_detail', room_name=r.name) }}" class="btn btn-ghost">详情</a>
+            {% if r.name != lobby %}
+              {# The name is free text: it rides along as escaped data, never inside the script #}
+              <form class="inline" method="post" action="{{ url_for('admin.close_room', room_name=r.name) }}"
+                    data-name="{{ r.name }}" onsubmit="return confirm('关闭房间 ' + this.dataset.name + '？将删除所有消息。')">
+                <button class="btn btn-danger">关闭</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% else %}
+        {{ empty_row(5, '暂无房间') }}
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}
