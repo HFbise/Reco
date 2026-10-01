@@ -10,7 +10,8 @@ An invite is used up by the join it lets through.
 import random
 import string
 
-from state import get_level, online_users
+from auth_session import dm_participants
+from state import LOBBY, get_level, online_users
 from utils import hash_password, verify_password
 
 CODE_DIGITS = 6
@@ -102,3 +103,15 @@ def members_view(cur, row: dict) -> list[dict]:
     ]
     members.sort(key=lambda m: (not m['is_online'], m['screenname']))
     return members
+
+
+def can_see(cur, username: str, room: str) -> bool:
+    """A DM's two people; a room's members (everyone, for the lobby), unless kicked."""
+    participants = dm_participants(room)
+    if participants is not None:
+        return username in participants
+    cur.execute('SELECT members, kicked FROM rooms WHERE name = %s', (room,))
+    row = cur.fetchone()
+    if not row or username in (row['kicked'] or []):
+        return False
+    return room == LOBBY or username in (row['members'] or [])

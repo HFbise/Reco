@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import time
+from urllib.parse import quote
 
 import pytest
 
@@ -989,3 +990,101 @@ def test_the_reaction_bar_opens_next_to_its_message(server, browser, shots):
     # Just above (or below) the button: the message list is drawn upside down (scaleY(-1)) and
     # react-native-web's measure() ignores that, which used to put the bar at the mirrored height
     assert -75 < bar['y'] - at['y'] < 45, (bar, at)  # the bar's buttons sit ~55 px above, or just below
+
+
+# ── voice: what the voice code must keep doing (written before its rewrite) ──
+
+
+def _voice_pages(browser, tmp_path, shots, users, room='Lobby'):
+    """Pages for `users` in `room`, each in voice with a fake microphone playing a tone."""
+    wav = tmp_path / 'voice.wav'
+    _speech_level_wav(wav)
+    b = browser.browser_type.launch(
+        args=[
+            '--use-fake-device-for-media-stream',
+            '--use-fake-ui-for-media-stream',
+            f'--use-file-for-fake-audio-capture={wav}',
+        ]
+    )
+    pages = []
+    for user in users:
+        ctx = b.new_context(locale='en-US', viewport={'width': 1280, 'height': 800}, permissions=['microphone'])
+        page = ctx.new_page()
+        shots.append(page)
+        log_in(page, user)
+        open_room(page, room)
+        page.get_by_text('Join Voice', exact=False).first.click()
+        page.get_by_label('Leave Voice').wait_for()
+        pages.append(page)
+    pages[-1].wait_for_timeout(2500)  # connections settle
+    return b, pages
+
+
+def _level_until(page, check, seconds=15):
+    """Measure the page's output until `check(level)` holds (or time runs out); the last level."""
+    deadline = time.time() + seconds
+    while True:
+        level = page.evaluate(_OUTPUT_LEVEL)
+        if check(level) or time.time() > deadline:
+            return level
+
+
+def test_voice_mute_deafen_leave_and_rejoin(server, browser, tmp_path, shots):
+    create_user('ivy', screenname='Ivy')
+    create_user('jon', screenname='Jon')
+    b, (ivy, jon) = _voice_pages(browser, tmp_path, shots, ['ivy', 'jon'])
+    heard = _level_until(jon, lambda v: v > 0.001)
+    assert heard > 0.001  # Jon hears Ivy
+
+    ivy.get_by_role('button', name='Mute mic').click()
+    assert _level_until(jon, lambda v: v < heard * 0.1) < heard * 0.1
+    ivy.get_by_role('button', name='Unmute mic').click()
+    assert _level_until(jon, lambda v: v > heard * 0.6) > heard * 0.6
+
+    jon.get_by_role('button', name='Deafen').click()
+    assert _level_until(jon, lambda v: v < heard * 0.1) < heard * 0.1
+    jon.get_by_role('button', name='Undeafen').click()
+    assert _level_until(jon, lambda v: v > heard * 0.6) > heard * 0.6
+
+    # Ivy leaves: gone from Jon's voice card; she comes back and is heard again
+    ivy.get_by_label('Leave Voice').click()
+    jon.get_by_label('Voice Chat').get_by_label('Ivy', exact=True).wait_for(state='detached')
+    ivy.get_by_text('Join Voice', exact=False).first.click()
+    jon.get_by_label('Voice Chat').get_by_label('Ivy', exact=True).wait_for()
+    assert _level_until(jon, lambda v: v > heard * 0.6) > heard * 0.6
+    b.close()
+
+
+def test_voice_comes_back_after_the_connection_drops(server, browser, tmp_path, shots):
+    create_user('kai', screenname='Kai')
+    create_user('lia', screenname='Lia')
+    b, (kai, lia) = _voice_pages(browser, tmp_path, shots, ['kai', 'lia'])
+    heard = _level_until(lia, lambda v: v > 0.001)
+    assert heard > 0.001
+    # Kai's network drops and returns: the socket reconnects, rejoins voice, and is heard again
+    kai.context.set_offline(True)
+    kai.wait_for_timeout(3000)
+    kai.context.set_offline(False)
+    assert _level_until(lia, lambda v: v > heard * 0.6, seconds=30) > heard * 0.6
+    b.close()
+
+
+def test_an_admin_takes_someone_off_voice(server, browser, tmp_path, shots):
+    create_user('mae', screenname='Mae')
+    create_user('ned', screenname='Ned')
+    b, (mae, ned) = _voice_pages(browser, tmp_path, shots, ['mae', 'ned'])
+    # The site admin panel (the e2e server shares the tests' ADMIN_PASSWORD). Its requests go
+    # through Playwright: a blocking urllib call would keep Ned's dialog listener from reaching
+    # the browser in time, and the alert would be dismissed unseen.
+    admin = b.new_context().request
+    admin.post(URL + '/admin/login', form={'password': os.environ['ADMIN_PASSWORD']})
+    with ned.expect_event('dialog') as told:
+        admin.post(
+            URL + '/admin/rooms/' + quote('大厅') + '/restrict',
+            form={'username': 'ned', 'kind': 'voice', 'duration': '0'},
+        )
+    assert 'Removed from Voice' in told.value.message
+    told.value.dismiss()
+    ned.get_by_text('Join Voice', exact=False).first.wait_for()
+    mae.get_by_label('Voice Chat').get_by_label('Ned', exact=True).wait_for(state='detached')
+    b.close()

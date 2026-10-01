@@ -7,11 +7,12 @@ from flask_socketio import emit
 
 import chat_prefs
 import reads
-from auth_session import authenticated, dm_participants, in_room, readable
+from auth_session import authenticated, in_room, readable
 from db import get_db
 from extensions import socketio
 from replies import fail
-from state import LOBBY, online_users
+from room_access import can_see
+from state import online_users
 from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
@@ -19,18 +20,6 @@ log = logging.getLogger(__name__)
 MAX_QUERY_LEN = 100
 SEARCH_PAGE = 30
 PHOTO_PAGE = 60
-
-
-def can_see(cur, username: str, room: str) -> bool:
-    """A DM's two people; a room's members (everyone, for the lobby), unless kicked."""
-    participants = dm_participants(room)
-    if participants is not None:
-        return username in participants
-    cur.execute('SELECT members, kicked FROM rooms WHERE name = %s', (room,))
-    row = cur.fetchone()
-    if not row or username in (row['kicked'] or []):
-        return False
-    return room == LOBBY or username in (row['members'] or [])
 
 
 def _to_all_devices(username: str, event: str, payload: dict):

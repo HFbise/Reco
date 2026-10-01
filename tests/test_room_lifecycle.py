@@ -186,3 +186,24 @@ def test_report_block_and_unblock():
     ann.emit('unblock_user', {'blocked': 'troll'})
     assert events(ann, 'unblock_result')[0] == {'success': True, 'unblocked': 'troll'}
     assert query('SELECT * FROM blocks') == []
+
+
+# ── voice after a reconnect ───────────────────────────────────
+
+
+def test_a_member_can_rejoin_voice_before_rejoining_the_room():
+    """After a reconnect the client asks to rejoin voice and the room at once, in either order
+    (and on a phone voice can outlive the chat screen). A member gets in either way."""
+    import state
+
+    create_user('ann')
+    create_user('eve')
+    create_room('chess', 'ann', members=['ann'])
+    ann, eve = connect_as('ann'), connect_as('eve')
+    ann.emit('voice_join', {'room': 'chess'})  # this socket never sent 'join'
+    assert [m['username'] for m in events(ann, 'voice_current_members')[0]['members']] == ['ann']
+    eve.emit('voice_join', {'room': 'chess'})  # not a member
+    assert not events(eve, 'voice_current_members')
+    assert [m['username'] for m in state.rooms_voice['chess']['voice_members']] == ['ann']
+    eve.emit('voice_join', {'room': 'dm:ann:eve'})  # DMs have no voice
+    assert 'dm:ann:eve' not in state.rooms_voice

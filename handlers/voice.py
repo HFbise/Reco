@@ -1,13 +1,14 @@
 import logging
 
 from flask import request
-from flask_socketio import emit
+from flask_socketio import emit, join_room
 
 import moderation
 import voice_state
-from auth_session import authenticated, in_room
+from auth_session import authenticated, dm_participants, in_room
 from db import get_db
 from extensions import socketio
+from room_access import can_see
 
 log = logging.getLogger(__name__)
 
@@ -50,11 +51,27 @@ def _to_room(event: str, username: str, data: dict, include_self: bool = True):
     emit(event, data, to=room, include_self=include_self)
 
 
+def _enter(username: str, room) -> bool:
+    """This socket is in `room`, or may be put there now. After a reconnect the client asks
+    to rejoin voice and to rejoin the room at once, and the two can arrive in either order;
+    on a phone, voice can also outlive the chat screen that would rejoin the room. So a
+    member's socket is let in here rather than turned away."""
+    if in_room(room):
+        return True
+    if not isinstance(room, str) or dm_participants(room) is not None:
+        return False  # DMs have no voice
+    with get_db() as conn:
+        if not can_see(conn.cursor(), username, room):
+            return False
+    join_room(room)
+    return True
+
+
 @socketio.on('voice_join')
 @authenticated
 def handle_voice_join(username, data):
     room = data.get('room')
-    if not in_room(room):
+    if not _enter(username, room):
         return
     if moderation.is_restricted(room, username, moderation.VOICE):
         emit('voice_banned', {'target': username, 'room': room})
