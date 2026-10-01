@@ -17,10 +17,10 @@ share the machine with the server, so the numbers describe this machine, not Ren
 import asyncio
 import os
 import random
-import socket
 import subprocess
 import sys
 import time
+import urllib.request
 
 PORT = 5098
 URL = f'http://127.0.0.1:{PORT}'
@@ -38,14 +38,18 @@ import psycopg2  # noqa: E402
 import socketio  # noqa: E402
 
 
-def wait_for_port(timeout=60):
+def wait_until_ready(timeout=120):
+    """Until /health answers: gunicorn's master opens the port before its worker has created the
+    tables (wsgi.py migrates at startup)."""
     deadline = time.time() + timeout
     while time.time() < deadline:
         try:
-            socket.create_connection(('127.0.0.1', PORT), timeout=1).close()
-            return
+            with urllib.request.urlopen(URL + '/health', timeout=2) as r:
+                if r.status == 200:
+                    return
         except OSError:
-            time.sleep(0.3)
+            pass
+        time.sleep(0.5)
     raise SystemExit('gunicorn did not start')
 
 
@@ -53,7 +57,7 @@ def start_server(threads: int):
     env = dict(os.environ, PORT=str(PORT))
     # gunicorn.conf.py sets the rest (one worker, the 120 s timeout), as on Render
     proc = subprocess.Popen([sys.executable, '-m', 'gunicorn', '--threads', str(threads), 'wsgi:app'], env=env)
-    wait_for_port()
+    wait_until_ready()
     return proc
 
 
@@ -66,7 +70,7 @@ def seed(count: int) -> dict[str, str]:
     names = [f'load{i:04d}' for i in range(count)]
     conn = psycopg2.connect(os.environ['DATABASE_URL'])
     cur = conn.cursor()
-    cur.execute("DELETE FROM users WHERE username LIKE 'load%%'")
+    cur.execute('DELETE FROM users WHERE username = ANY(%s)', (names,))
     for name in names:
         cur.execute(
             'INSERT INTO users (username, screenname, password, bio, security_question, security_answer)'
