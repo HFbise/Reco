@@ -3,8 +3,8 @@ import { mentionsMe } from '../../lib/mentions';
 import { getSocket } from '../../lib/socket';
 import { playNotifSound } from '../../lib/sounds';
 import { useAuthStore } from '../../store/authStore';
-import { useBlockStore } from '../../store/blockStore';
-import { useSoundStore } from '../../store/soundStore';
+import { usePeopleStore } from '../../store/peopleStore';
+import { usePrefsStore } from '../../store/prefsStore';
 import {
   patched, withDmNotification, withDms, withLastPatched, withMessage, withOnline, withRoom, withRooms, without,
   type ChatEntry, type ServerDm, type ServerRoom,
@@ -20,8 +20,8 @@ const READ = { unread: 0, mentioned: false };
  */
 export function useChatList(open: string | null | undefined) {
   const username = useAuthStore((s) => s.currentUser?.username);
-  const setBlocked = useBlockStore((s) => s.setBlocked);
-  const soundOn = useSoundStore((s) => s.soundEnabled);
+  const setBlocked = usePeopleStore((s) => s.setBlocked);
+  const soundOn = usePrefsStore((s) => s.soundEnabled);
   const [entries, setEntries] = useState<ChatEntry[]>([]);
   const [loading, setLoading] = useState(true);
 

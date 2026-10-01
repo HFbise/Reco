@@ -16,7 +16,7 @@ import { getSocket } from '../../lib/socket';
 import { ago } from '../../lib/time';
 import { MAX_VOLUME } from '../../lib/webrtc';
 import { useAuthStore } from '../../store/authStore';
-import { useBlockStore } from '../../store/blockStore';
+import { usePeopleStore } from '../../store/peopleStore';
 import type { CardPerson } from '../../store/cardStore';
 import { useVolumeStore } from '../../store/volumeStore';
 import { Fonts, Radius, Spacing } from '../../theme';
@@ -67,7 +67,7 @@ export function ProfileCard({ person, room, inVoiceHere, onOpenDm, onOpenRoom, o
   const c = useColors();
   const t = useT();
   const me = useAuthStore((s) => s.currentUser);
-  const { blocked, addBlocked, removeBlocked } = useBlockStore();
+  const { blocked, addBlocked, removeBlocked } = usePeopleStore();
   const { volumes, setVolume } = useVolumeStore();
   const [data, setData] = useState<CardData | null>(null);
   const [picker, setPicker] = useState<'mute' | 'voice' | null>(null);

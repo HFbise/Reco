@@ -6,7 +6,7 @@ import { IconCrown, IconShield } from './Icon';
 import { VoiceCard } from './voice/VoiceCard';
 import type { Member } from './members/types';
 import { useCardStore } from '../store/cardStore';
-import { useDisplayName } from '../store/nicknameStore';
+import { useDisplayName } from '../store/peopleStore';
 import { useColors } from '../hooks/useColors';
 import { useRoomMembers } from '../hooks/useRoomMembers';
 import { useT } from '../hooks/useT';

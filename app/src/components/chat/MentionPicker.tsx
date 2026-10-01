@@ -2,7 +2,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AvatarView } from '../AvatarView';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
-import { useDisplayName } from '../../store/nicknameStore';
+import { useDisplayName } from '../../store/peopleStore';
 import type { Mentionable } from '../../lib/mentions';
 import { Fonts, Radius } from '../../theme';
 

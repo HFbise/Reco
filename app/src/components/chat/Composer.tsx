@@ -7,7 +7,7 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
 import { activeMention, applyMention, matchMembers, type Mentionable } from '../../lib/mentions';
-import { useNicknameStore } from '../../store/nicknameStore';
+import { usePeopleStore } from '../../store/peopleStore';
 import { usePrefsStore } from '../../store/prefsStore';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -58,7 +58,7 @@ export function Composer(p: Props) {
   const [dismissedAt, setDismissedAt] = useState(-1);
   const mention = p.mentionable ? activeMention(p.input, cursor) : null;
   // Found by the name you know them by too
-  const nicknames = useNicknameStore((st) => st.names);
+  const nicknames = usePeopleStore((st) => st.nicknames);
   const suggestions = mention && mention.start !== dismissedAt
     ? matchMembers(p.mentionable!.map((m) => ({ ...m, screenname: nicknames[m.username] || m.screenname })), mention.query, p.me)
     : [];

@@ -20,7 +20,7 @@ from flask import request
 from flask_socketio import emit, join_room, rooms
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
-import user_settings
+import profiles
 from db import get_db
 from extensions import app, socketio
 from state import hidden_sids, invisible, online_users
@@ -110,9 +110,9 @@ def _arrive(username: str) -> bool:
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            shown = user_settings.shows_online(cur, username)
+            shown = profiles.shows_online(cur, username)
             if shown:
-                user_settings.touch_last_seen(cur, username)
+                profiles.touch_last_seen(cur, username)
                 conn.commit()
             return shown
     except Exception as e:
@@ -123,7 +123,7 @@ def _arrive(username: str) -> bool:
 def _leave(username: str):
     try:
         with get_db() as conn:
-            user_settings.touch_last_seen(conn.cursor(), username)
+            profiles.touch_last_seen(conn.cursor(), username)
             conn.commit()
     except Exception as e:
         log.exception('last_seen update failed: %s', e)

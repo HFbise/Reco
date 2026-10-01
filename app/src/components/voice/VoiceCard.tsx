@@ -7,7 +7,7 @@ import { DisplayText } from '../ui/DisplayText';
 import {
   IconHeadphones, IconMic, IconMicOff, IconMusic, IconPhoneOff, IconScreenShare, IconSpeaker,
 } from '../Icon';
-import { useDisplayName } from '../../store/nicknameStore';
+import { useDisplayName } from '../../store/peopleStore';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { MAX_VOLUME } from '../../lib/webrtc';

@@ -6,7 +6,7 @@ import { getSocket } from '../../lib/socket';
 import { showAlert } from '../../lib/alert';
 import { LOBBY_ID } from '../../lib/i18n';
 import { imageUrl } from '../../lib/images';
-import { useBlockStore } from '../../store/blockStore';
+import { usePeopleStore } from '../../store/peopleStore';
 import { AvatarView } from '../AvatarView';
 import { Sheet } from '../ui/Sheet';
 import { Button, IconButton } from '../ui/Button';
@@ -264,7 +264,7 @@ const SEARCH_DELAY_MS = 300;
 function SearchView({ room, onBack, onPick }: { room: string; onBack: () => void; onPick: (id: number) => void }) {
   const c = useColors();
   const t = useT();
-  const blocked = new Set(useBlockStore((st) => st.blocked));
+  const blocked = new Set(usePeopleStore((st) => st.blocked));
   const [query, setQuery] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [hasMore, setHasMore] = useState(false);

@@ -6,7 +6,7 @@ import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 import { Fonts, Spacing } from '../../../theme';
 import { mentionsMe } from '../../../lib/mentions';
-import { useDisplayName } from '../../../store/nicknameStore';
+import { useDisplayName } from '../../../store/peopleStore';
 import { BubbleBody, photoOnly } from './BubbleBody';
 import { HoverActions, type HoverHandlers } from './HoverActions';
 import { Reactions } from './Reactions';

@@ -13,10 +13,10 @@ import history
 import images
 import mentions
 import moderation
+import profiles
 import reads
 import room_access
 import room_log
-import user_settings
 import webpush
 from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
@@ -106,7 +106,7 @@ def _send(username: str, data: dict, client_id: str | None) -> dict:
             cur = conn.cursor()
             if moderation.blocked_either_way(cur, username, recipient):
                 return _fail('dm_blocked', room, 'dm_blocked')
-            if not user_settings.may_message(cur, username, recipient, room):
+            if not profiles.may_message(cur, username, recipient, room):
                 return _fail('dm_not_allowed', room, 'dm_not_allowed')
 
     # Built server-side: clients can't spoof the sender, display name or `system` flag.
@@ -187,7 +187,7 @@ def _send(username: str, data: dict, client_id: str | None) -> dict:
         with get_db() as conn:
             cur = conn.cursor()
             # Muted this chat, or turned DM notifications off altogether
-            muted = bool(chat_prefs.muted_by(cur, room, [recipient])) or not user_settings.wants_push(
+            muted = bool(chat_prefs.muted_by(cur, room, [recipient])) or not profiles.wants_push(
                 cur, [recipient], 'dms'
             )
         if recipient in online_users:
@@ -240,7 +240,7 @@ def _notify_room(sender: str, msg: dict, mentioned: dict, preview: str):
         cur = conn.cursor()
         cur.execute('SELECT blocker FROM blocks WHERE blocked = %s', (sender,))
         blocking = {r['blocker'] for r in cur.fetchall()}
-        tagged = user_settings.wants_push(cur, [u for u in mentioned if u != sender and u not in blocking], 'mentions')
+        tagged = profiles.wants_push(cur, [u for u in mentioned if u != sender and u not in blocking], 'mentions')
         cur.execute('SELECT m FROM rooms, unnest(members) AS m WHERE name = %s AND m <> %s', (room, sender))
         offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users and r['m'] not in blocking]
         offline = [u for u in offline if u not in tagged]  # they get the mention instead
