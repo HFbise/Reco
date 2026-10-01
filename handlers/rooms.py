@@ -278,7 +278,8 @@ def handle_close_room(requester, data):
 @socketio.on('get_rooms')
 @readable
 def handle_get_rooms(username, data):
-    """Your rooms (the lobby first), with unread counts and your pins and mutes. Guests: the demo room."""
+    """Your rooms (the lobby first), with unread counts, unread @mentions of you, and your pins and
+    mutes. Guests: the demo room."""
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -286,9 +287,10 @@ def handle_get_rooms(username, data):
                 cur.execute('SELECT * FROM rooms WHERE name = %s', (DEMO_ROOM,))
             else:
                 cur.execute('SELECT * FROM rooms WHERE name = %s OR %s = ANY(members)', (LOBBY, username))
-            found = cur.fetchall()
+            found = [r for r in cur.fetchall() if username not in (r['kicked'] or [])]
             names = [r['name'] for r in found]
             unread = {} if is_guest(username) else reads.unread_counts(cur, username, names)
+            mentioned = set() if is_guest(username) else reads.mentioned_in(cur, username, names)
             prefs = {} if is_guest(username) else chat_prefs.for_user(cur, username, names)
         rooms = [
             {
@@ -297,11 +299,16 @@ def handle_get_rooms(username, data):
                 'needs_password': room_access.needs_password(username, r),
                 'code': r.get('code') or '',
                 'unread': unread.get(r['name'], 0),
+                'mentioned': r['name'] in mentioned,
                 **prefs.get(r['name'], chat_prefs.DEFAULT),
             }
             for r in found
         ]
         rooms.sort(key=lambda r: r['name'] != LOBBY)  # stable: otherwise the database's order
+        if not is_guest(username):
+            # Live messages for every room in the list (unread counts, @mentions), opened or not
+            for r in rooms:
+                join_room(r['name'])
         emit('rooms_list', {'rooms': rooms})
     except Exception as e:
         log.exception('get_rooms error: %s', e)

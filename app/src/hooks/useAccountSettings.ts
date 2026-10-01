@@ -10,6 +10,8 @@ export interface AccountSettings {
   /** Others see you online */
   show_online: boolean;
   push_dms: boolean;
+  /** Being @mentioned in a room, even a muted one */
+  push_mentions: boolean;
   push_matches: boolean;
 }
 

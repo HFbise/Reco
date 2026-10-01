@@ -6,6 +6,8 @@
  * gets a message moves to the top of its section. Pinned chats stay above the rest.
  */
 
+import { mentionsMe } from '../../lib/mentions';
+
 /** The newest message of a DM, for the line under its name */
 export interface DmPreview {
   id: number;
@@ -25,6 +27,8 @@ export interface ChatEntry {
   /** Room name, or the other person's display name */
   name: string;
   unread: number;
+  /** A room with an unread message @mentioning you */
+  mentioned?: boolean;
   /** This person's own settings for the chat (chat_prefs on the server) */
   pinned: boolean;
   muted: boolean;
@@ -46,6 +50,7 @@ export interface ServerRoom {
   has_password: boolean;
   needs_password?: boolean;
   unread?: number;
+  mentioned?: boolean;
   pinned?: boolean;
   muted?: boolean;
 }
@@ -83,6 +88,7 @@ export function withRooms(prev: ChatEntry[], rooms: ServerRoom[], open: OpenChat
     hasPassword: r.has_password,
     needsPassword: r.needs_password,
     unread: unreadFrom(r.name, r.unread, known.get(r.name)?.unread ?? 0, open),
+    mentioned: r.name !== open && (r.mentioned ?? known.get(r.name)?.mentioned ?? false),
     pinned: !!r.pinned,
     muted: !!r.muted,
   }));
@@ -122,7 +128,8 @@ export function withRoom(prev: ChatEntry[], room: { name: string; hasPassword: b
 }
 
 /** A live message: its chat moves to the top of its section and, unless it's open or the
- *  message is your own (sent from another device), counts as unread. DMs get a new preview. */
+ *  message is your own (sent from another device), counts as unread (and may mention you).
+ *  DMs get a new preview. */
 export function withMessage(
   prev: ChatEntry[],
   msg: { room: string; id: number; username: string; text?: string; meta?: any },
@@ -138,6 +145,7 @@ export function withMessage(
   const updated: ChatEntry = {
     ...entry,
     unread: msg.room === open ? 0 : entry.unread + (counts ? 1 : 0),
+    mentioned: msg.room !== open && (!!entry.mentioned || (counts && mentionsMe(msg.meta, me))),
     last: entry.kind === 'dm'
       ? {
         id: msg.id, username: msg.username, text: String(msg.text ?? '').slice(0, 120),

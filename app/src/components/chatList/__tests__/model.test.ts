@@ -100,3 +100,19 @@ test('a preview tells mine from theirs and a photo from text', () => {
   assert.deepEqual(preview({ ...base, username: 'ann', text: '', image: true }, 'me'), { kind: 'message', text: '', photo: true, mine: false });
   assert.deepEqual(preview(undefined, 'me'), { kind: 'none' });
 });
+
+test('a room says you were mentioned until it is opened', () => {
+  let list = withRooms([], [lobby, club], null);
+  const mention = { mentions: { me: 'Me' } };
+  list = withMessage(list, { room: 'club', id: 1, username: 'ann', meta: { mentions: { bo: 'Bo' } } }, null, 'me');
+  assert.equal(list[0].mentioned, false);
+  list = withMessage(list, { room: 'club', id: 2, username: 'ann', meta: mention }, null, 'me');
+  assert.equal(list[0].mentioned, true);
+  list = withMessage(list, { room: 'club', id: 3, username: 'ann' }, null, 'me');
+  assert.equal(list[0].mentioned, true); // still waiting on you
+  assert.equal(withMessage(list, { room: 'club', id: 4, username: 'ann' }, 'club', 'me')[0].mentioned, false);
+  assert.equal(withMessage(withRooms([], [club], null), { room: 'club', id: 5, username: 'me', meta: mention }, null, 'me')[0].mentioned, false);
+  // From the server's list (other devices), but never for the open room
+  assert.equal(withRooms([], [{ ...club, mentioned: true }], null)[0].mentioned, true);
+  assert.equal(withRooms([], [{ ...club, mentioned: true }], 'club')[0].mentioned, false);
+});

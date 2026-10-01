@@ -62,3 +62,18 @@ def unread_counts(cur, username: str, rooms: list[str]) -> dict[str, int]:
         (username, list(rooms), username),
     )
     return {r['room']: r['n'] for r in cur.fetchall()}
+
+
+def mentioned_in(cur, username: str, rooms: list[str]) -> set[str]:
+    """Rooms with an unread message @mentioning `username` (see mentions.py). Unlike the unread
+    count, a room never opened (no mark) counts too: being named is news wherever it happens."""
+    if not rooms:
+        return set()
+    cur.execute(
+        'SELECT DISTINCT m.room FROM messages m'
+        ' LEFT JOIN read_marks r ON r.username = %s AND r.room = m.room'
+        ' WHERE m.room = ANY(%s) AND m.id > COALESCE(r.last_read_id, 0) AND m.username <> %s'
+        " AND NOT COALESCE(m.recalled, FALSE) AND m.meta->'mentions' ? %s",
+        (username, list(rooms), username, username),
+    )
+    return {r['room'] for r in cur.fetchall()}

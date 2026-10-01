@@ -48,6 +48,8 @@ export function NotificationSettings({ account }: { account: Account }) {
       <Group title={t('settings-notify-me')} note={t('settings-notify-note')}>
         <ToggleRow label={t('settings-push-dms')} hint={t('settings-push-dms-hint')} value={settings?.push_dms ?? true}
           disabled={!settings} onChange={(v) => change({ push_dms: v })} />
+        <ToggleRow label={t('settings-push-mentions')} hint={t('settings-push-mentions-hint')} value={settings?.push_mentions ?? true}
+          disabled={!settings} onChange={(v) => change({ push_mentions: v })} />
         <ToggleRow label={t('settings-push-matches')} hint={t('settings-push-matches-hint')} value={settings?.push_matches ?? true}
           disabled={!settings} onChange={(v) => change({ push_matches: v })} />
       </Group>

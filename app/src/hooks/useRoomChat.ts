@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getSocket } from '../lib/socket';
 import { cacheMsg, getCached, getLastTs, patchCached, patchCachedQuotes, resetRoom } from '../lib/messageCache';
+import { withMentions } from '../lib/mentions';
 
 import { useAuthStore } from '../store/authStore';
 import type { Message } from '../components/chat/message/types';
@@ -166,10 +167,12 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
       message_edited: (data) => {
         if (!mine(data)) return;
         const quoteText = String(data.text).slice(0, QUOTE_LEN);
-        patchCached(name, data.id, { text: data.text, edited: true });
+        // Who it mentions follows the new text
+        const edited = (m: Message) => ({ text: data.text, edited: true, meta: withMentions(m.meta, data.mentions) });
+        patchCached(name, data.id, edited);
         patchCachedQuotes(name, data.id, { text: quoteText });
         setMessages((prev) => prev.map((m) => (
-          m.id === data.id ? { ...m, text: data.text, edited: true } : patchQuote(m, data.id, { text: quoteText })
+          m.id === data.id ? { ...m, ...edited(m) } : patchQuote(m, data.id, { text: quoteText })
         )));
       },
       reaction_updated: (data) => {

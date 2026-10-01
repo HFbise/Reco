@@ -7,8 +7,8 @@ from state import LOBBY
 # Who may start a DM with you. An existing conversation always carries on.
 DM_FROM = ('everyone', 'rooms', 'nobody')
 
-DEFAULTS = {'dm_from': 'everyone', 'show_online': True, 'push_dms': True, 'push_matches': True}
-_FLAGS = ('show_online', 'push_dms', 'push_matches')
+DEFAULTS = {'dm_from': 'everyone', 'show_online': True, 'push_dms': True, 'push_mentions': True, 'push_matches': True}
+_FLAGS = ('show_online', 'push_dms', 'push_mentions', 'push_matches')
 
 
 def migrate(cur):
@@ -42,11 +42,11 @@ def update(cur, username: str, changes: dict) -> dict:
 
 
 def wants_push(cur, usernames, kind: str) -> list[str]:
-    """Which of `usernames` get push notifications of `kind` ('dms' or 'matches')."""
+    """Which of `usernames` get push notifications of `kind` ('dms', 'mentions' or 'matches')."""
     usernames = list(usernames)
     if not usernames:
         return []
-    column = {'dms': 'push_dms', 'matches': 'push_matches'}[kind]
+    column = {'dms': 'push_dms', 'mentions': 'push_mentions', 'matches': 'push_matches'}[kind]
     cur.execute(f'SELECT username FROM users WHERE username = ANY(%s) AND {column}', (usernames,))
     return [r['username'] for r in cur.fetchall()]
 

@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
-import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../store/authStore';
 import { AvatarView } from './AvatarView';
 import { DisplayText } from './ui/DisplayText';
@@ -8,12 +7,11 @@ import { IconCrown, IconShield } from './Icon';
 import { VoiceCard } from './voice/VoiceCard';
 import { MemberCard, levelOf, type Member } from './members/MemberCard';
 import { useColors } from '../hooks/useColors';
+import { useRoomMembers } from '../hooks/useRoomMembers';
 import { useT } from '../hooks/useT';
 import type { ExternalVoice } from './chat/types';
 import type { VoiceMember } from '../hooks/useVoice';
 import { Fonts, Spacing } from '../theme';
-
-const membersCache = new Map<string, Member[]>();
 
 interface Props {
   room: string;
@@ -30,32 +28,9 @@ interface Props {
 export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, onOpenDm, isVoiceHere, onJoinVoice, style }: Props) {
   const c = useColors();
   const t = useT();
-  const [members, setMembers] = useState<Member[]>(() => membersCache.get(room) ?? []);
+  const members = useRoomMembers(room);
   const [selected, setSelected] = useState<Member | null>(null);
   const isGuest = !!useAuthStore((st) => st.currentUser?.guest);
-
-  useEffect(() => {
-    if (!room) return;
-    const socket = getSocket();
-    setMembers(membersCache.get(room) ?? []);
-    socket.emit('get_members', { room });
-
-    const onMembersList = (data: { room: string; members: Member[] }) => {
-      if (data.room !== room) return;
-      membersCache.set(room, data.members);
-      setMembers(data.members);
-    };
-    const onOnlineStatus = (data: { username: string; online: boolean }) => {
-      setMembers((prev) => prev.map((m) => m.username === data.username ? { ...m, is_online: data.online } : m));
-    };
-
-    socket.on('members_list', onMembersList);
-    socket.on('online_status_changed', onOnlineStatus);
-    return () => {
-      socket.off('members_list', onMembersList);
-      socket.off('online_status_changed', onOnlineStatus);
-    };
-  }, [room]);
 
   const online = members.filter((m) => m.is_online);
   const offline = members.filter((m) => !m.is_online);

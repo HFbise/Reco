@@ -9,6 +9,7 @@ from flask_socketio import emit
 import chat_prefs
 import history
 import images
+import mentions
 import moderation
 import reads
 import room_log
@@ -96,7 +97,13 @@ def handle_message(username, data):
                 conn.rollback()
                 emit('message_failed', {'room': room})
                 return
-            msg['meta'] = {'image': image} if image else None
+            meta = {}
+            if image:
+                meta['image'] = image
+            mentioned = mentions.find(cur, room, text)
+            if mentioned:
+                meta['mentions'] = mentioned
+            msg['meta'] = meta or None
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, reply_to, meta)'
                 ' VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, created_at',
@@ -107,7 +114,7 @@ def handle_message(username, data):
                     text,
                     datetime.now().strftime('%H:%M'),
                     reply_to,
-                    json.dumps(msg['meta']) if image else None,
+                    json.dumps(meta) if meta else None,
                 ),
             )
             saved = cur.fetchone()
@@ -146,7 +153,7 @@ def handle_message(username, data):
                         # so this is the only copy of the first message the list gets
                         'message_id': msg['id'],
                         'text': text[:120],
-                        'image': bool(msg['meta']),
+                        'image': bool(image),
                     },
                     to=sid,
                 )
@@ -166,21 +173,42 @@ def handle_message(username, data):
             webpush.notify([recipient], msg['screenname'], preview, url, tag=room)
         return
 
-    # Room message: push to offline members, except anyone who has blocked the sender
     try:
-        with get_db() as conn:
-            cur = conn.cursor()
-            cur.execute(
-                'SELECT m FROM rooms, unnest(members) AS m WHERE name = %s AND m <> %s'
-                ' AND m NOT IN (SELECT blocker FROM blocks WHERE blocked = %s)',
-                (room, username, username),
-            )
-            offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users]
-            muted = chat_prefs.muted_by(cur, room, offline)
-            offline = [u for u in offline if u not in muted]
-        send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
+        _notify_room(username, msg, mentioned, preview)
     except Exception as e:
         log.exception('push notify error: %s', e)
+
+
+def _notify_room(sender: str, msg: dict, mentioned: dict, preview: str):
+    """Phones of offline members get a push (unless they muted the room). People @mentioned are
+    told even in a muted room, on the web too, unless they turned mention notifications off.
+    Nobody hears about someone they've blocked."""
+    room = msg['room']
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT blocker FROM blocks WHERE blocked = %s', (sender,))
+        blocking = {r['blocker'] for r in cur.fetchall()}
+        tagged = user_settings.wants_push(cur, [u for u in mentioned if u != sender and u not in blocking], 'mentions')
+        cur.execute('SELECT m FROM rooms, unnest(members) AS m WHERE name = %s AND m <> %s', (room, sender))
+        offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users and r['m'] not in blocking]
+        offline = [u for u in offline if u not in tagged]  # they get the mention instead
+        muted = chat_prefs.muted_by(cur, room, offline)
+        offline = [u for u in offline if u not in muted]
+    send_push(tokens_for(offline), f'{msg["screenname"]} in {room}', preview, {'room': room})
+    if not tagged:
+        return
+    send_push(
+        tokens_for([u for u in tagged if u not in online_users]),
+        f'{msg["screenname"]} mentioned you in {room}',
+        preview,
+        {'room': room},
+    )
+    away = [u for u in tagged if not is_watching(u)]
+    if not away:
+        return
+    url = f'/room/{urllib.parse.quote(room, safe="")}'
+    params = {'name': msg['screenname'], 'room': room}
+    webpush.notify(away, msg['screenname'], preview, url, tag=f'{room}:mention', title_code='mention', params=params)
 
 
 @socketio.on('mark_read')
@@ -286,9 +314,16 @@ def handle_edit_message(username, data):
             if not msg or msg['recalled'] or msg['username'] != username:
                 return
             room = msg['room']
-            cur.execute('UPDATE messages SET text = %s, edited = true WHERE id = %s', (new_text, msg_id))
+            # Mentions follow the new text (nobody is notified again)
+            mentioned = mentions.find(cur, room, new_text)
+            cur.execute(
+                "UPDATE messages SET text = %s, edited = true, meta = CASE WHEN %s::jsonb = '{}'::jsonb"
+                " THEN NULLIF(COALESCE(meta, '{}'::jsonb) - 'mentions', '{}'::jsonb)"
+                " ELSE COALESCE(meta, '{}'::jsonb) || jsonb_build_object('mentions', %s::jsonb) END WHERE id = %s",
+                (new_text, json.dumps(mentioned), json.dumps(mentioned), msg_id),
+            )
             conn.commit()
-        emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room}, to=room)
+        emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room, 'mentions': mentioned}, to=room)
     except Exception as e:
         log.exception('edit_message error: %s', e)
 

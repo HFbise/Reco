@@ -69,7 +69,10 @@ export function ChatRow(p: Props) {
           {entry.pinned && <View accessibilityLabel={t('pinned')}><IconPin size={12} color={c.textMuted} /></View>}
           {entry.muted && <View accessibilityLabel={t('muted-chat')}><IconBellOff size={12} color={c.textMuted} /></View>}
         </View>
-        {!!previewText && (
+        {entry.mentioned && (
+          <Text style={[s.preview, s.previewUnread, { color: c.accent }]} numberOfLines={1}>{t('mentioned-you')}</Text>
+        )}
+        {!!previewText && !entry.mentioned && (
           <Text style={[s.preview, { color: entry.unread > 0 ? c.text : c.textSub }, entry.unread > 0 && s.previewUnread]}
             numberOfLines={1}>
             {previewText}

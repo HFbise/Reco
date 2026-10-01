@@ -1185,3 +1185,40 @@ def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
     assert query("SELECT 1 FROM users WHERE username = 'val' AND dm_from = 'rooms'")
     phone.get_by_label('Back', exact=True).click()
     phone.get_by_text('Edit Profile').wait_for()
+
+
+def test_mention_someone_and_they_see_it(server, browser, shots):
+    create_user('abe', screenname='Abe')
+    create_user('bea', screenname='Bea Lee')
+    create_user('ben', screenname='Ben')
+    create_room('crew', 'abe', members=['abe', 'bea', 'ben'])
+    abe, bea = new_page(browser), new_page(browser)
+    shots.extend([abe, bea])
+    log_in(bea, 'bea')
+    bea.get_by_text('crew', exact=True).wait_for()
+    log_in(abe, 'abe')
+    open_room(abe, 'crew')
+    box = abe.get_by_placeholder('Type a message...')
+    box.click()
+    box.press_sequentially('lunch @b')
+    picker = abe.get_by_role('menu', name='Mention someone')
+    picker.get_by_role('menuitem').first.wait_for()
+    assert picker.get_by_role('menuitem').count() == 2  # Bea and Ben, not Abe himself
+    box.press('ArrowDown')
+    box.press('ArrowUp')
+    box.press('Enter')  # picks Bea (first by name), doesn't send
+    assert box.input_value() == 'lunch @bea '
+    picker.wait_for(state='detached')
+    box.press_sequentially('at 1?')
+    box.press('Enter')
+    abe.get_by_text('@Bea Lee', exact=True).wait_for()  # shown by display name
+    assert box.input_value() == ''
+
+    # Bea, on the list: the room says she was mentioned, and the message stands out
+    bea.get_by_text('[Mentioned you]').wait_for()
+    open_room(bea, 'crew')
+    chip = bea.get_by_text('@Bea Lee', exact=True)
+    chip.wait_for()
+    assert chip.evaluate('e => getComputedStyle(e).backgroundColor') == 'rgb(255, 176, 32)'  # sunny: it's her
+    bea.get_by_label('Chats', exact=True).click()
+    assert bea.get_by_text('[Mentioned you]').count() == 0

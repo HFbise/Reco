@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { mentionsMe } from '../../lib/mentions';
 import { getSocket } from '../../lib/socket';
 import { playNotifSound } from '../../lib/sounds';
 import { useAuthStore } from '../../store/authStore';
@@ -8,6 +9,9 @@ import {
   patched, withDmNotification, withDms, withLastPatched, withMessage, withOnline, withRoom, withRooms, without,
   type ChatEntry, type ServerDm, type ServerRoom,
 } from './model';
+
+// Nothing unread, nobody waiting on you
+const READ = { unread: 0, mentioned: false };
 
 /**
  * The chat list's data, kept in step with the server: the lists it sends, live messages,
@@ -60,8 +64,9 @@ export function useChatList(open: string | null | undefined) {
       message: (data: any) => {
         if (!data.room || data.system || opening.current.has(data.room)) return;
         const { open: openNow, soundOn: sound, entries: now } = latest.current;
-        const muted = now.find((e) => e.key === data.room)?.muted;
-        if (data.room !== openNow && data.username !== username && !muted && sound) playNotifSound();
+        // A muted chat stays quiet, unless the message @mentions you
+        const quiet = now.find((e) => e.key === data.room)?.muted && !mentionsMe(data.meta, username);
+        if (data.room !== openNow && data.username !== username && !quiet && sound) playNotifSound();
         update((prev) => withMessage(prev, data, openNow, username));
       },
       new_dm_notification: (data: any) => {
@@ -76,7 +81,7 @@ export function useChatList(open: string | null | undefined) {
       // Pins, mutes and read marks are per person: every device of yours hears about them
       chat_pref: (data: { room: string; pinned: boolean; muted: boolean }) =>
         update((prev) => patched(prev, data.room, { pinned: data.pinned, muted: data.muted })),
-      chat_read: (data: { room: string }) => update((prev) => patched(prev, data.room, { unread: 0 })),
+      chat_read: (data: { room: string }) => update((prev) => patched(prev, data.room, READ)),
       leave_room_result: (data: { success: boolean; room: string }) => {
         if (data.success) update((prev) => without(prev, data.room));
       },
@@ -93,7 +98,7 @@ export function useChatList(open: string | null | undefined) {
   /** About to open `key`: its history isn't news, and whatever was unread is read now. */
   const opened = useCallback((key: string) => {
     opening.current.add(key);
-    setEntries((prev) => patched(prev, key, { unread: 0 }));
+    setEntries((prev) => patched(prev, key, READ));
   }, []);
 
   const setPref = useCallback((key: string, pref: { pinned?: boolean; muted?: boolean }) => {
@@ -102,7 +107,7 @@ export function useChatList(open: string | null | undefined) {
   }, []);
 
   const markRead = useCallback((key: string) => {
-    setEntries((prev) => patched(prev, key, { unread: 0 }));
+    setEntries((prev) => patched(prev, key, READ));
     getSocket().emit('mark_chat_read', { room: key });
   }, []);
 

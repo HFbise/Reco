@@ -554,6 +554,10 @@ const zh = {
   'theme-system-hint': '设备切换深浅色时，Reco 也会跟着变',
   'settings-volume': '音量',
   'settings-devices': '设备',
+  'mention-someone': '提到某人',
+  'mentioned-you': '[有人@我]',
+  'settings-push-mentions': '@我',
+  'settings-push-mentions-hint': '有人在房间里@你，即使那个房间开了免打扰',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -1110,6 +1114,10 @@ const en: Record<keyof typeof zh, string> = {
   'theme-system-hint': 'Reco switches when your device does',
   'settings-volume': 'Volume',
   'settings-devices': 'Devices',
+  'mention-someone': 'Mention someone',
+  'mentioned-you': '[Mentioned you]',
+  'settings-push-mentions': '@mentions',
+  'settings-push-mentions-hint': 'Someone @mentions you in a room, even one you muted',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };

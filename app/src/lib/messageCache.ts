@@ -80,12 +80,12 @@ export function cacheMsg(room: string, msg: Message) {
   scheduleSave();
 }
 
-export function patchCached(room: string, id: number, patch: Partial<Message>) {
+export function patchCached(room: string, id: number, patch: Partial<Message> | ((m: Message) => Partial<Message>)) {
   const msgs = cache.get(room);
   if (!msgs) return;
   const i = msgs.findIndex(m => m.id === id);
   if (i !== -1) {
-    Object.assign(msgs[i], patch);
+    Object.assign(msgs[i], typeof patch === 'function' ? patch(msgs[i]) : patch);
     scheduleSave();
   }
 }

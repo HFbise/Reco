@@ -12,7 +12,12 @@ export interface Message {
   /** Sent by the signed-in person */
   isOwn: boolean;
   system?: boolean;
-  meta?: { invite?: { room: string; code: string }; image?: { id: string; w: number; h: number } } | null;
+  meta?: {
+    invite?: { room: string; code: string };
+    image?: { id: string; w: number; h: number };
+    /** Who it @mentions: username → display name (see lib/mentions) */
+    mentions?: Record<string, string>;
+  } | null;
   avatar_expression?: string;
   avatar_color?: string;
   /** The message this one replies to, as quoted by the server */

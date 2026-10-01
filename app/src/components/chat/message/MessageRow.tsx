@@ -4,6 +4,7 @@ import { AvatarView } from '../../AvatarView';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
 import { useColors } from '../../../hooks/useColors';
 import { Fonts, Spacing } from '../../../theme';
+import { mentionsMe } from '../../../lib/mentions';
 import { BubbleBody, photoOnly } from './BubbleBody';
 import { HoverActions, type HoverHandlers } from './HoverActions';
 import { Reactions } from './Reactions';
@@ -61,7 +62,7 @@ export function MessageRow(p: Props) {
     <View style={[
       s.bubble,
       own ? s.tailOwn : s.tailOther,
-      { backgroundColor: own ? c.bubbleOwn : c.bubbleOther },
+      { backgroundColor: own ? c.bubbleOwn : mentionsMe(msg.meta, p.me) ? c.sunnyBg : c.bubbleOther },
       !own && !c.isDark && s.lifted,
       p.highlighted && { borderWidth: 2, borderColor: c.sunny },
       photoOnly(msg) && s.photoFrame,

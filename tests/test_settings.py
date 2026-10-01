@@ -35,12 +35,19 @@ def pushes(monkeypatch):
 def test_settings_start_at_the_defaults_and_reach_every_device():
     create_user('alice')
     phone, laptop = connect_as('alice'), connect_as('alice')
-    assert settings_of(phone) == {'dm_from': 'everyone', 'show_online': True, 'push_dms': True, 'push_matches': True}
+    assert settings_of(phone) == {
+        'dm_from': 'everyone',
+        'show_online': True,
+        'push_dms': True,
+        'push_mentions': True,
+        'push_matches': True,
+    }
     phone.emit('update_settings', {'dm_from': 'rooms', 'push_dms': False})
     assert events(laptop, 'settings')[-1] == {
         'dm_from': 'rooms',
         'show_online': True,
         'push_dms': False,
+        'push_mentions': True,
         'push_matches': True,
     }
     assert settings_of(connect_as('alice'))['dm_from'] == 'rooms'  # kept for the next session

@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { GuestBanner } from '../GuestBanner';
+import { MentionPicker } from './MentionPicker';
 import { IconBan, IconClose, IconEmoji, IconImage, IconPencil, IconReply, IconSend } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
+import { activeMention, applyMention, matchMembers, type Mentionable } from '../../lib/mentions';
 import { usePrefsStore } from '../../store/prefsStore';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -27,6 +29,9 @@ interface Props {
   /** Pick and send a photo (web); shown as a button next to the emoji one */
   onAttach?: () => void;
   uploading?: boolean;
+  /** People who can be @mentioned (rooms; none in DMs), and you */
+  mentionable?: Mentionable[];
+  me?: string;
 }
 
 // The message box starts one line tall and grows with what's typed, up to a limit
@@ -45,6 +50,48 @@ export function Composer(p: Props) {
   const inputRef = useRef<TextInput>(null);
   // Picking "Reply" puts the cursor in the box, ready to type
   useEffect(() => { if (p.replyingTo) inputRef.current?.focus(); }, [p.replyingTo]);
+
+  // @mentions: suggestions while an @name is typed at the cursor (Escape hides them for that @)
+  const [cursor, setCursor] = useState(0);
+  const [highlighted, setHighlighted] = useState(0);
+  const [dismissedAt, setDismissedAt] = useState(-1);
+  const mention = p.mentionable ? activeMention(p.input, cursor) : null;
+  const suggestions = mention && mention.start !== dismissedAt ? matchMembers(p.mentionable!, mention.query, p.me) : [];
+  const picking = suggestions.length > 0;
+  useEffect(() => { setHighlighted(0); }, [mention?.start, mention?.query]);
+
+  function pick(person: Mentionable) {
+    if (!mention) return;
+    const next = applyMention(p.input, mention, cursor, person.username);
+    p.onChangeInput(next.text);
+    setCursor(next.cursor);
+    // After the new text is in the box: put the cursor just past the name
+    requestAnimationFrame(() => {
+      const box = inputRef.current as any;
+      box?.focus?.();
+      if (box?.setSelectionRange) box.setSelectionRange(next.cursor, next.cursor);
+      else box?.setSelection?.(next.cursor, next.cursor);
+    });
+  }
+
+  /** Keys while suggestions show: arrows move, Enter or Tab picks, Escape hides. True if used. */
+  function pickerKey(e: { key?: string; isComposing?: boolean; keyCode?: number }) {
+    if (!picking || e.isComposing || e.keyCode === 229) return false;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      setHighlighted((i) => (i + step + suggestions.length) % suggestions.length);
+      return true;
+    }
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      pick(suggestions[Math.min(highlighted, suggestions.length - 1)]);
+      return true;
+    }
+    if (e.key === 'Escape') {
+      setDismissedAt(mention!.start);
+      return true;
+    }
+    return false;
+  }
 
   if (p.editText !== null) {
     return (
@@ -87,6 +134,10 @@ export function Composer(p: Props) {
   return (
     <View style={[s.inputArea, { backgroundColor: c.bg }]}>
       <View style={[s.card, { backgroundColor: c.surface, borderColor: c.border }, !c.isDark && s.cardLifted]}>
+        {picking && (
+          <MentionPicker people={suggestions} highlighted={Math.min(highlighted, suggestions.length - 1)}
+            onPick={pick} onHover={setHighlighted} />
+        )}
         {p.replyingTo && (
           <View style={[s.replyBar, { backgroundColor: c.surface2 }]}>
             <IconReply size={16} color={c.accent} />
@@ -121,10 +172,15 @@ export function Composer(p: Props) {
           placeholderTextColor={c.textMuted}
           value={p.input}
           onChangeText={p.onChangeInput}
-          onSubmitEditing={p.onSend}
+          onSelectionChange={(e) => setCursor(e.nativeEvent.selection.end)}
+          onSubmitEditing={() => (picking ? pick(suggestions[Math.min(highlighted, suggestions.length - 1)]) : p.onSend())}
           returnKeyType="send"
           multiline
           onKeyPress={(e: any) => {
+            if (Platform.OS === 'web' && pickerKey(e.nativeEvent)) {
+              e.preventDefault?.();
+              return;
+            }
             // Web: Enter sends and Shift+Enter adds a line (or, by setting, Ctrl/⌘+Enter sends).
             // Not while an input method is composing: there Enter picks the candidate (e.g. pinyin)
             if (Platform.OS === 'web' && isSendKey(e.nativeEvent, enterSends)) {

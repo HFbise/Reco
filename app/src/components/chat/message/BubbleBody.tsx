@@ -3,6 +3,7 @@ import { Image, Platform, StyleSheet, Text, TouchableOpacity } from 'react-nativ
 import { ImageViewer } from '../ImageViewer';
 import { fitImage, imageUrl } from '../../../lib/images';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
+import { splitMentions } from '../../../lib/mentions';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 import { TEXT_SIZES, usePrefsStore } from '../../../store/prefsStore';
@@ -57,7 +58,16 @@ export function BubbleBody({ msg, me, onQuotePress }: {
         </TouchableOpacity>
       )}
       {!!msg.text && (
-        <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>{msg.text}</Text>
+        <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>
+          {splitMentions(msg.text, msg.meta?.mentions).map((part, i) => ('text' in part ? part.text : (
+            // @Screenname; you, in the sunny color
+            <Text key={i} style={[s.mention, part.username === me
+              ? { backgroundColor: c.sunny, color: c.sunnyText }
+              : own ? { backgroundColor: 'rgba(255,255,255,0.2)', color: c.onAccent } : { backgroundColor: c.accentBg, color: c.accentText }]}>
+              @{part.screenname}
+            </Text>
+          )))}
+        </Text>
       )}
       {msg.edited && <Text style={[s.edited, { color: faint }]}>{t('msg-edited')}</Text>}
       {viewing && image && <ImageViewer image={image} onClose={() => setViewing(false)} />}
@@ -74,6 +84,7 @@ const s = StyleSheet.create({
   caption: { marginTop: 8 },
   photo: { borderRadius: 16 },
   edited: { fontSize: 11, marginTop: 2 },
+  mention: { fontWeight: String(Fonts.heavy) as any, borderRadius: 6, paddingHorizontal: 2 },
   recalled: { fontSize: 14, fontStyle: 'italic' },
   italic: { fontStyle: 'italic' },
   quote: { borderLeftWidth: 3, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 9, marginBottom: 6, gap: 1 },

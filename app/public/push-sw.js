@@ -6,6 +6,18 @@
 const TEXT = {
   match_found: { en: 'Found someone to chat with', zh: '找到聊天对象了' },
 };
+const TITLE = {
+  mention: { en: '{name} mentioned you in {room}', zh: '{name} 在 {room} 提到了你' },
+};
+const LOBBY = { en: 'Lobby', zh: '大厅' }; // the lobby's id is '大厅'
+
+function fill(template, params, lang) {
+  return template.replace(/\{(\w+)\}/g, (m, key) => {
+    const value = params[key];
+    if (value === undefined) return m;
+    return key === 'room' && value === '大厅' ? LOBBY[lang] : String(value);
+  });
+}
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
@@ -18,9 +30,11 @@ self.addEventListener('push', (event) => {
     // not a payload of ours
   }
   const lang = (self.navigator.language || 'en').toLowerCase().startsWith('zh') ? 'zh' : 'en';
-  const body = (data.code && TEXT[data.code] && TEXT[data.code][lang]) || data.body || '';
+  const params = data.params || {};
+  const body = (data.code && TEXT[data.code] && fill(TEXT[data.code][lang], params, lang)) || data.body || '';
+  const title = (data.title_code && TITLE[data.title_code] && fill(TITLE[data.title_code][lang], params, lang)) || data.title || 'Reco';
   event.waitUntil(
-    self.registration.showNotification(data.title || 'Reco', {
+    self.registration.showNotification(title, {
       body,
       // One notification per chat: a newer message replaces the older one
       tag: data.tag || undefined,

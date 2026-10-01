@@ -155,9 +155,10 @@ def _deliver(rows, payload: str):
             conn.commit()
 
 
-def notify(usernames, title: str, body: str, url: str, tag: str, code: str = ''):
-    """Show a notification on every browser these users turned notifications on in. `code` names
-    a fixed text the service worker translates (the server doesn't know the reader's language)."""
+def notify(usernames, title: str, body: str, url: str, tag: str, code: str = '', title_code: str = '', params=None):
+    """Show a notification on every browser these users turned notifications on in. `code` and
+    `title_code` name fixed texts (filled in with `params`) that the service worker translates in
+    place of the body and title: the server doesn't know the reader's language."""
     usernames = list(usernames)
     if not usernames or not public_key():
         return
@@ -167,7 +168,17 @@ def notify(usernames, title: str, body: str, url: str, tag: str, code: str = '')
         rows = cur.fetchall()
     if not rows:
         return
-    payload = json.dumps({'title': title, 'body': body, 'url': url, 'tag': tag, 'code': code})
+    payload = json.dumps(
+        {
+            'title': title,
+            'body': body,
+            'url': url,
+            'tag': tag,
+            'code': code,
+            'title_code': title_code,
+            'params': params or {},
+        }
+    )
     if BACKGROUND:
         threading.Thread(target=_deliver, args=(rows, payload), daemon=True).start()
     else:

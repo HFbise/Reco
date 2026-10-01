@@ -9,6 +9,7 @@ import { useColors } from '../../hooks/useColors';
 import { useIsDesktop } from '../../hooks/useIsDesktop';
 import { useT } from '../../hooks/useT';
 import { useVoice } from '../../hooks/useVoice';
+import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { useRoomChat, type ChatToast } from '../../hooks/useRoomChat';
 import { EmojiPicker } from '../emoji/EmojiPicker';
 import { MembersPanel } from '../MembersPanel';
@@ -80,6 +81,8 @@ export function ChatPanel(p: Props) {
 
   // Voice: the screen's connection if it has one, else this panel's own
   const ownVoice = useVoice(p.externalVoice ? '' : name);
+  // Who can be @mentioned: the room's members (DMs have no mentions)
+  const members = useRoomMembers(name.startsWith('dm:') || isGuest ? '' : name);
   const voice = p.externalVoice ?? ownVoice;
   const inVoiceHere = voice.inVoice && (!p.activeVoiceRoom || p.activeVoiceRoom === name);
   const inVoiceElsewhere = voice.inVoice && !!p.activeVoiceRoom && p.activeVoiceRoom !== name;
@@ -218,6 +221,8 @@ export function ChatPanel(p: Props) {
           onCancelReply={() => setReplyingTo(null)}
           onAttach={photos.attach}
           uploading={photos.uploading}
+          mentionable={name.startsWith('dm:') ? undefined : members}
+          me={me?.username}
         />
       </KeyboardAvoidingView>
 
