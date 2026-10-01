@@ -29,6 +29,8 @@ interface Props {
   onRecall: (msg: Message) => void;
   onOpenRoom: (room: string) => void;
   onReply: (msg: Message) => void;
+  /** Send again a message of yours that wasn't delivered */
+  onRetry: (msg: Message) => void;
   /** Display names of the others typing right now */
   typing: string[];
 }
@@ -90,20 +92,23 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         </View>
       );
     }
-    const desktopActions = p.isDesktop && !p.readOnly;
+    // Nothing to do with a message the server doesn't have yet, except send it again
+    const inert = p.readOnly || !!msg.pending;
+    const desktopActions = p.isDesktop && !inert;
     return (
       <MessageRow
         msg={msg}
         cont={msg._cont}
         me={p.currentUsername}
         wide={p.isDesktop}
-        onReactionPress={p.readOnly ? undefined : (emoji) => p.onReact(msg.id, emoji)}
-        onLongPress={p.isDesktop || p.readOnly ? undefined : () => p.onLongPress(msg)}
+        onRetry={msg.pending === 'failed' ? () => p.onRetry(msg) : undefined}
+        onReactionPress={inert ? undefined : (emoji) => p.onReact(msg.id, emoji)}
+        onLongPress={p.isDesktop || inert ? undefined : () => p.onLongPress(msg)}
         onReact={desktopActions ? (at) => p.onReactionButton(msg, at.pageX, at.pageY, at.height) : undefined}
         onEdit={desktopActions && msg.isOwn ? () => p.onEdit(msg) : undefined}
         onRecall={desktopActions && (msg.isOwn || p.canModerate) ? () => p.onRecall(msg) : undefined}
         // Touch screens: double tap for a quick 👍. Only adds: a double tap never takes a reaction back
-        onDoubleTap={isTouchScreen && !p.readOnly && !msg.recalled ? () => {
+        onDoubleTap={isTouchScreen && !inert && !msg.recalled ? () => {
           if (!msg.reactions?.[QUICK_REACTION]?.includes(p.currentUsername ?? '')) p.onReact(msg.id, QUICK_REACTION);
         } : undefined}
         onReply={desktopActions ? () => p.onReply(msg) : undefined}
@@ -131,7 +136,8 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         </TouchableOpacity>
       ) : null}
       initialNumToRender={data.length || 20}
-      keyExtractor={(item) => (item._type === 'sep' ? item._id : String((item as Message).id))}
+      // Your own message keeps its key from "sending" to sent: no flicker when it's confirmed
+      keyExtractor={(item) => (item._type === 'sep' ? item._id : (item as Message).client_id ?? String((item as Message).id))}
       renderItem={renderItem}
       // Inverted: the "header" sits under the newest message
       ListHeaderComponent={p.typing.length ? <TypingIndicator label={

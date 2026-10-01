@@ -1222,3 +1222,67 @@ def test_mention_someone_and_they_see_it(server, browser, shots):
     assert chip.evaluate('e => getComputedStyle(e).backgroundColor') == 'rgb(255, 176, 32)'  # sunny: it's her
     bea.get_by_label('Chats', exact=True).click()
     assert bea.get_by_text('[Mentioned you]').count() == 0
+
+
+def test_messages_show_right_after_a_reload_both_ways(server, browser, shots):
+    """The cached history once shared its list with the screen: after a reload, new messages
+    (yours and theirs) were stored but not shown until the next reload."""
+    create_user('amy', screenname='Amy')
+    create_user('bud', screenname='Bud')
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:amy:bud', 'bud', 'Bud', 'old one')"
+        )
+        conn.commit()
+    amy, bud = new_page(browser), new_page(browser)
+    shots.extend([amy, bud])
+    log_in(amy, 'amy')
+    open_room(amy, 'Bud')
+    box = amy.get_by_placeholder('Type a message...')
+    box.fill('first')
+    box.press('Enter')
+    amy.get_by_text('first', exact=True).wait_for()
+    amy.wait_for_timeout(800)  # the cache is saved
+    amy.reload()
+    open_room(amy, 'Bud')
+    box.fill('after reload')
+    box.press('Enter')
+    amy.get_by_text('after reload', exact=True).wait_for()
+    amy.get_by_label('Sending').wait_for(state='detached')  # confirmed
+    log_in(bud, 'bud')
+    open_room(bud, 'Amy')
+    bud_box = bud.get_by_placeholder('Type a message...')
+    bud_box.fill('got it')
+    bud_box.press('Enter')
+    shown = amy.get_by_text('got it', exact=True)
+    deadline = time.time() + 10
+    while shown.count() < 2 and time.time() < deadline:  # the list's preview, and the chat
+        amy.wait_for_timeout(100)
+    assert shown.count() == 2
+
+
+def test_a_message_that_was_not_sent_can_be_sent_again(server, browser, shots):
+    create_user('cal', screenname='Cal')
+    create_room('desk', 'cal', members=['cal'])
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'cal')
+    open_room(page, 'desk')
+    with get_db() as conn:  # muted behind the page's back: it doesn't know yet
+        conn.cursor().execute("INSERT INTO room_restrictions (room, username, kind) VALUES ('desk', 'cal', 'text')")
+        conn.commit()
+    box = page.get_by_placeholder('Type a message...')
+    box.fill('can anyone hear me')
+    box.press('Enter')
+    page.get_by_text('can anyone hear me', exact=True).wait_for()  # shown at once
+    retry = page.get_by_role('button', name='Not sent. Tap to send again')
+    retry.wait_for()
+    assert query('SELECT 1 FROM messages') == []
+    with get_db() as conn:
+        conn.cursor().execute('DELETE FROM room_restrictions')
+        conn.commit()
+    retry.click()
+    retry.wait_for(state='detached')
+    page.get_by_label('Sending').wait_for(state='detached')
+    assert [r['text'] for r in query('SELECT text FROM messages')] == ['can anyone hear me']
+    assert page.get_by_text('can anyone hear me', exact=True).count() == 1

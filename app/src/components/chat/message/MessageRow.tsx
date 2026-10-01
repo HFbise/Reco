@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AvatarView } from '../../AvatarView';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
 import { useColors } from '../../../hooks/useColors';
+import { useT } from '../../../hooks/useT';
 import { Fonts, Spacing } from '../../../theme';
 import { mentionsMe } from '../../../lib/mentions';
 import { BubbleBody, photoOnly } from './BubbleBody';
@@ -33,6 +34,8 @@ interface Props extends HoverHandlers {
   onQuotePress?: (id: number) => void;
   /** Briefly outlined after a jump to it */
   highlighted?: boolean;
+  /** Not delivered: tapping the warning sends it again */
+  onRetry?: () => void;
 }
 
 /**
@@ -80,6 +83,7 @@ export function MessageRow(p: Props) {
         ? <View style={s.avatarSpace} />
         : <AvatarView expression={msg.avatar_expression} color={avatarColor} username={msg.username} screenname={msg.screenname} size={AVATAR} />)}
 
+      {msg.pending && <SendStatus failed={msg.pending === 'failed'} onRetry={p.onRetry} />}
       <View style={[s.column, own ? s.columnOwn : s.columnOther]}>
         {!own && !p.cont && (
           <Text style={[s.name, { color: nameColor(avatarColor, c.isDark, c.bg) }]}>{msg.screenname}</Text>
@@ -103,7 +107,26 @@ export function MessageRow(p: Props) {
   );
 }
 
+/** Beside a message of yours the server doesn't have yet: a spinner while it's on its way, or
+ *  a red "!" when it didn't arrive, which sends it again. */
+function SendStatus({ failed, onRetry }: { failed: boolean; onRetry?: () => void }) {
+  const c = useColors();
+  const t = useT();
+  if (!failed) {
+    return <ActivityIndicator size="small" color={c.textMuted} style={s.status} accessibilityLabel={t('sending')} />;
+  }
+  return (
+    <TouchableOpacity onPress={onRetry} activeOpacity={0.7} hitSlop={8} style={[s.status, s.failed, { backgroundColor: c.danger }]}
+      accessibilityRole="button" accessibilityLabel={t('not-sent-retry')}>
+      <Text style={s.failedMark}>!</Text>
+    </TouchableOpacity>
+  );
+}
+
 const s = StyleSheet.create({
+  status: { alignSelf: 'center', width: 22, height: 22 },
+  failed: { borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+  failedMark: { color: '#FFFFFF', fontSize: 14, lineHeight: 16, fontWeight: String(Fonts.heavy) as any },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
   rowOwn: { justifyContent: 'flex-end' },
   avatarSpace: { width: AVATAR },

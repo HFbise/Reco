@@ -10,7 +10,10 @@ An invite is used up by the join it lets through.
 import random
 import string
 
-from auth_session import dm_participants
+from flask_socketio import join_room
+
+from auth_session import dm_participants, in_room
+from db import get_db
 from state import LOBBY, appears_online, get_level
 from utils import hash_password, verify_password
 
@@ -115,3 +118,18 @@ def can_see(cur, username: str, room: str) -> bool:
     if not row or username in (row['kicked'] or []):
         return False
     return room == LOBBY or username in (row['members'] or [])
+
+
+def enter(username: str, room) -> bool:
+    """This socket is in `room`, or may be put there now: someone who can see it. After a
+    reconnect the client rejoins its chats and resends what it was sending at once, and those
+    can arrive in either order (the server handles events on several threads)."""
+    if in_room(room):
+        return True
+    if not isinstance(room, str):
+        return False
+    with get_db() as conn:
+        if not can_see(conn.cursor(), username, room):
+            return False
+    join_room(room)
+    return True

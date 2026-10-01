@@ -558,6 +558,8 @@ const zh = {
   'mentioned-you': '[有人@我]',
   'settings-push-mentions': '@我',
   'settings-push-mentions-hint': '有人在房间里@你，即使那个房间开了免打扰',
+  'sending': '发送中',
+  'not-sent-retry': '没有发出去，点一下重新发送',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -1118,6 +1120,8 @@ const en: Record<keyof typeof zh, string> = {
   'mentioned-you': '[Mentioned you]',
   'settings-push-mentions': '@mentions',
   'settings-push-mentions-hint': 'Someone @mentions you in a room, even one you muted',
+  'sending': 'Sending',
+  'not-sent-retry': 'Not sent. Tap to send again',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };

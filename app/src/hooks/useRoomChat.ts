@@ -9,6 +9,10 @@ import type { VoiceMember } from './useVoice';
 
 /** How much of a message a reply quotes (matches the server's history.QUOTE_LEN) */
 const QUOTE_LEN = 140;
+/** A message the server hasn't confirmed by then shows as not sent */
+const SEND_TIMEOUT_MS = 15000;
+// Temporary ids for messages being sent (negative: never a real one)
+let lastLocalId = 0;
 
 /** `m` with its quote of message `id` updated, if it quotes that message */
 function patchQuote(m: Message, id: number, patch: Partial<NonNullable<Message['reply']>>): Message {
@@ -137,14 +141,19 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
           const { [msg.username]: _done, ...rest } = t;
           return rest;
         });
-        // Append rather than reload the cache: older pages loaded by scrolling up live only in state
-        setMessages((prev) => (msg.id != null && prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]));
+        // Append rather than reload the cache: older pages loaded by scrolling up live only in state.
+        // Your own message replaces the copy shown while it was being sent.
+        setMessages((prev) => {
+          const sending = msg.client_id ? prev.findIndex((m) => m.client_id === msg.client_id) : -1;
+          if (sending !== -1) return prev.map((m, i) => (i === sending ? msg : m));
+          return msg.id != null && prev.some((m) => m.id === msg.id) ? prev : [...prev, msg];
+        });
       },
       history_reset: (data) => {
         // More than a page arrived while away: the server is sending the latest page instead
         if (!mine(data)) return;
         resetRoom(name);
-        setMessages([]);
+        setMessages((prev) => prev.filter((m) => m.pending)); // what you're sending stays
       },
       older_messages: (data) => {
         if (!mine(data)) return;
@@ -292,18 +301,60 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     getSocket().emit('load_older', { room: name, before_id: before });
   }, [messages, hasOlder, loadingOlder, name]);
 
-  /**
-   * Send `text`, optionally as a reply to message `replyTo` and/or with an uploaded photo
-   * (both checked by the server: same room, the sender's own unused upload).
-   */
-  const send = useCallback((text: string, replyTo?: number | null, imageId?: string) => {
-    const body = text.trim();
-    if (!body && !imageId) return;
-    getSocket().emit('message', {
-      room: name, text: body, ...(replyTo ? { reply_to: replyTo } : {}), ...(imageId ? { image: imageId } : {}),
-    });
-    lastTypingSent.current = 0; // the next message starts a fresh "typing" 
+  /** Hand a pending message to the server. Its reply says whether it went; if it did, the
+   *  message itself also comes back (with our client_id) and takes the copy's place. */
+  const deliver = useCallback((msg: Message) => {
+    const settle = (patch: Partial<Message>) => setMessages((prev) => prev.map((m) => (
+      m.client_id === msg.client_id && m.pending ? { ...m, ...patch } : m
+    )));
+    getSocket().timeout(SEND_TIMEOUT_MS).emit(
+      'message', { room: name, client_id: msg.client_id, ...msg.outgoing },
+      (err: Error | null, reply?: { ok: boolean; id?: number }) => {
+        if (!err && reply?.ok && typeof reply.id === 'number') settle({ id: reply.id, pending: undefined });
+        else settle({ pending: 'failed' });
+      },
+    );
   }, [name]);
+
+  /**
+   * Send `text`, optionally as a reply to `replyTo` and/or with an uploaded photo (both checked
+   * by the server: same room, the sender's own unused upload). It shows at once, as sending.
+   */
+  const send = useCallback((text: string, replyTo?: Message | null, image?: { id: string; w: number; h: number }) => {
+    const body = text.trim();
+    if (!body && !image) return;
+    const me = useAuthStore.getState().currentUser;
+    const msg: Message = {
+      id: -(++lastLocalId),
+      client_id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`,
+      username: username ?? '',
+      screenname: me?.screenname ?? username ?? '',
+      avatar_expression: me?.avatar_expression,
+      avatar_color: me?.avatar_color,
+      text: body,
+      time: new Date().toISOString(),
+      isOwn: true,
+      meta: image ? { image } : null,
+      reply: replyTo
+        ? {
+          id: replyTo.id, username: replyTo.username, screenname: replyTo.screenname,
+          text: replyTo.text.slice(0, QUOTE_LEN), recalled: !!replyTo.recalled,
+        }
+        : null,
+      pending: 'sending',
+      outgoing: { text: body, ...(replyTo ? { reply_to: replyTo.id } : {}), ...(image ? { image: image.id } : {}) },
+    };
+    setMessages((prev) => [...prev, msg]);
+    deliver(msg);
+    lastTypingSent.current = 0; // the next message starts a fresh "typing"
+  }, [username, deliver]);
+
+  /** Try a message that wasn't delivered again (the server stores it once, whatever happens) */
+  const resend = useCallback((msg: Message) => {
+    if (msg.pending !== 'failed') return;
+    setMessages((prev) => prev.map((m) => (m.client_id === msg.client_id ? { ...m, pending: 'sending' } : m)));
+    deliver(msg);
+  }, [deliver]);
 
   const recall = useCallback((id: number) => getSocket().emit('recall_message', { id }), []);
   const edit = useCallback((id: number, text: string) => {
@@ -318,6 +369,6 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     messages, hasOlder, loadingOlder, loadOlder,
     room, isTextMuted, voiceMembers,
     typing: Object.values(typists).map((v) => v.screenname),
-    send, notifyTyping, recall, edit, react, leave, close,
+    send, resend, notifyTyping, recall, edit, react, leave, close,
   };
 }

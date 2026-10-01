@@ -55,8 +55,10 @@ export function resetMessageCache() {
   owner = null;
 }
 
+/** A copy: the cache changes its own arrays and objects in place (cacheMsg, patchCached), and
+ *  React state must never share them, or an update looks like no change and isn't shown. */
 export function getCached(room: string): Message[] {
-  return cache.get(room) ?? [];
+  return (cache.get(room) ?? []).map((m) => ({ ...m }));
 }
 
 export function getLastTs(room: string): string | null {

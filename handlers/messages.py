@@ -1,7 +1,9 @@
 import json
 import logging
+import threading
 import time
 import urllib.parse
+from collections import OrderedDict
 from datetime import datetime
 
 from flask_socketio import emit
@@ -12,6 +14,7 @@ import images
 import mentions
 import moderation
 import reads
+import room_access
 import room_log
 import user_settings
 import webpush
@@ -30,21 +33,71 @@ MAX_MESSAGE_LEN = 4000
 MAX_REACTION_KINDS = 20  # distinct emoji per message
 
 
+# Messages already sent, by (username, client_id): their id, or None while being sent.
+# A resend after a lost reply is then answered from here instead of stored twice.
+_sent: OrderedDict = OrderedDict()
+_sent_lock = threading.Lock()
+MAX_REMEMBERED = 5000
+
+
 @socketio.on('message')
 @authenticated
 def handle_message(username, data):
+    """Send a message. The reply (the Socket.IO acknowledgement) says whether it went:
+    {'ok': True, 'id': ...} or {'ok': False, 'code': ...}. The client's `client_id` comes back
+    on the message, so the sender can swap its "sending" copy for the real one."""
+    client_id = data.get('client_id')
+    if not (isinstance(client_id, str) and 0 < len(client_id) <= 64):
+        return _send(username, data, None)
+    key = (username, client_id)
+    with _sent_lock:
+        if key in _sent:
+            done = _sent[key]
+            if done is None:
+                return {'ok': False, 'code': 'in_progress'}
+            _resend_to_sender(data.get('room'), done, client_id)
+            return {'ok': True, 'id': done}
+        _sent[key] = None
+        while len(_sent) > MAX_REMEMBERED:
+            _sent.popitem(last=False)
+    reply = _send(username, data, client_id)
+    with _sent_lock:
+        if reply['ok']:
+            _sent[key] = reply['id']
+        else:
+            _sent.pop(key, None)
+    return reply
+
+
+def _resend_to_sender(room, msg_id: int, client_id: str):
+    """The sender asked again for a message already stored (the first reply was lost): just
+    this socket gets it again, in case the first copy never arrived either."""
+    if not in_room(room):
+        return
+    with get_db() as conn:
+        msg = history.one(conn.cursor(), room, msg_id)
+    if msg:
+        emit('message', {**msg, 'client_id': client_id})
+
+
+def _fail(event: str, room: str, code: str) -> dict:
+    emit(event, {'room': room})
+    return {'ok': False, 'code': code}
+
+
+def _send(username: str, data: dict, client_id: str | None) -> dict:
     room = str_field(data, 'room')
     text = str_field(data, 'text').strip()[:MAX_MESSAGE_LEN]
     image_id = data.get('image')  # an upload of the sender's (see images.py); the text is optional then
-    # Only sockets that passed the join checks (member / DM participant) are in the room.
-    if not (text or image_id) or not in_room(room) or room == DEMO_ROOM:
-        return
+    if not (text or image_id) or room == DEMO_ROOM:
+        return {'ok': False, 'code': 'empty'}
+    # Members and DM participants only (a socket that hasn't rejoined since a reconnect is let in)
+    if not room_access.enter(username, room):
+        return {'ok': False, 'code': 'no_permission'}
     if not check_msg_rate(username):
-        emit('message_rate_limited', {'room': room})
-        return
+        return _fail('message_rate_limited', room, 'rate_limited')
     if moderation.is_muted(room, username):
-        emit('text_muted_notify', {'room': room})
-        return
+        return _fail('text_muted_notify', room, 'muted')
     participants = dm_participants(room)
     recipient = None
     if participants:
@@ -52,11 +105,9 @@ def handle_message(username, data):
         with get_db() as conn:
             cur = conn.cursor()
             if moderation.blocked_either_way(cur, username, recipient):
-                emit('dm_blocked', {'room': room})
-                return
+                return _fail('dm_blocked', room, 'dm_blocked')
             if not user_settings.may_message(cur, username, recipient, room):
-                emit('dm_not_allowed', {'room': room})
-                return
+                return _fail('dm_not_allowed', room, 'dm_not_allowed')
 
     # Built server-side: clients can't spoof the sender, display name or `system` flag.
     msg = {'username': username, 'screenname': username, 'room': room, 'text': text}
@@ -95,8 +146,7 @@ def handle_message(username, data):
             image = images.attach(cur, image_id, username, room) if image_id else None
             if not image and not text:
                 conn.rollback()
-                emit('message_failed', {'room': room})
-                return
+                return _fail('message_failed', room, 'send_failed')
             meta = {}
             if image:
                 meta['image'] = image
@@ -126,9 +176,10 @@ def handle_message(username, data):
     except Exception as e:
         # Never show a message that wasn't stored: it would vanish on reload
         log.exception('message save error: %s', e)
-        emit('message_failed', {'room': room})
-        return
+        return _fail('message_failed', room, 'send_failed')
 
+    if client_id:
+        msg['client_id'] = client_id
     emit('message', msg, to=room)
 
     preview = text[:100] or '📷'
@@ -171,12 +222,13 @@ def handle_message(username, data):
             )
             url = f'/room/{urllib.parse.quote(room, safe="")}?{query}'
             webpush.notify([recipient], msg['screenname'], preview, url, tag=room)
-        return
+        return {'ok': True, 'id': msg['id']}
 
     try:
         _notify_room(username, msg, mentioned, preview)
     except Exception as e:
         log.exception('push notify error: %s', e)
+    return {'ok': True, 'id': msg['id']}
 
 
 def _notify_room(sender: str, msg: dict, mentioned: dict, preview: str):

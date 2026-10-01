@@ -68,7 +68,6 @@ export function ChatPanel(p: Props) {
   const [input, setInput] = useState('');
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
-  const lastSent = useRef('');
 
   // What's open over the chat
   const [showCard, setShowCard] = useState(false);
@@ -101,11 +100,8 @@ export function ChatPanel(p: Props) {
       showAlert(reply.wrong_password ? t('wrong-password') : t('join-failed'), t.server(reply, 'join-failed'));
       back();
     },
-    onToast: (kind) => {
-      toast.show(t(TOAST_TEXT[kind]));
-      // Not delivered: give the text back rather than lose it
-      if (kind === 'send-failed' || kind === 'rate-limited') setInput((cur) => cur || lastSent.current);
-    },
+    // A message that wasn't delivered stays in the chat, marked, to send again
+    onToast: (kind) => toast.show(t(TOAST_TEXT[kind])),
   });
 
   const messageList = useRef<MessageListHandle>(null);
@@ -113,7 +109,7 @@ export function ChatPanel(p: Props) {
 
   const photos = usePhotoSending({
     enabled: !isGuest,
-    send: (imageId) => { chat.send('', replyingTo?.id, imageId); setReplyingTo(null); },
+    send: (image) => { chat.send('', replyingTo, { id: image.id, w: image.width, h: image.height }); setReplyingTo(null); },
     onError: (error) => toast.show(t(error === 'rate_limited' ? 'image_rate_limited' : error)),
   });
 
@@ -130,8 +126,7 @@ export function ChatPanel(p: Props) {
   const reactions = useReactionPopovers({ panel, sheet: !isDesktop, quick, recent, react });
 
   function send() {
-    lastSent.current = input;
-    chat.send(input, replyingTo?.id);
+    chat.send(input, replyingTo);
     setInput('');
     if (input.trim()) setReplyingTo(null);
   }
@@ -203,6 +198,7 @@ export function ChatPanel(p: Props) {
           onRecall={(msg) => chat.recall(msg.id)}
           onOpenRoom={openRoom}
           onReply={reply}
+          onRetry={chat.resend}
           typing={chat.typing}
         />
         <Composer

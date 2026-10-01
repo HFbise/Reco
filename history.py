@@ -51,6 +51,13 @@ def serialize(msg: dict) -> dict:
     }
 
 
+def one(cur, room: str, msg_id: int) -> dict | None:
+    """One message of `room` as clients receive it."""
+    cur.execute(_SELECT + ' AND m.id = %s', (room, msg_id))
+    row = cur.fetchone()
+    return serialize(row) if row else None
+
+
 def recent(cur, room: str, since: str | None = None) -> tuple[list[dict], bool]:
     """Messages to show when a client opens `room`, oldest first.
 

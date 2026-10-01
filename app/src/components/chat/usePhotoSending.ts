@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { canSendImages, pickImageFile, uploadImage, type UploadError } from '../../lib/images';
+import { canSendImages, pickImageFile, uploadImage, type UploadError, type UploadedImage } from '../../lib/images';
 
 /**
  * Photos in a chat: pick a file or paste a screenshot (desktop) → shrink and upload → `send`
@@ -7,7 +7,7 @@ import { canSendImages, pickImageFile, uploadImage, type UploadError } from '../
  */
 export function usePhotoSending({ enabled, send, onError }: {
   enabled: boolean;
-  send: (imageId: string) => void;
+  send: (image: UploadedImage) => void;
   onError: (error: UploadError) => void;
 }) {
   const [uploading, setUploading] = useState(false);
@@ -19,7 +19,7 @@ export function usePhotoSending({ enabled, send, onError }: {
     const result = await uploadImage(file);
     setUploading(false);
     if (typeof result === 'string') onError(result);
-    else send(result.id);
+    else send(result);
   }
   // The paste listener is added once; it calls whatever sendFile is current
   const latest = useRef(sendFile);
