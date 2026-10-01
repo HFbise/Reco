@@ -957,6 +957,8 @@ def test_create_a_room_with_a_password_and_join_it_by_code(server, browser, shot
     with guest.expect_event('dialog') as refused:  # "Wrong password": listed, but not let in
         guest.get_by_placeholder('Password', exact=True).press('Enter')
     refused.value.dismiss()
+    # The alert paused the page; let the find dialog finish closing before asking again
+    guest.get_by_placeholder('Password', exact=True).wait_for(state='detached')
     guest.get_by_text('darkroom', exact=True).first.click()
     guest.get_by_placeholder('Password', exact=True).fill('shutter')
     guest.get_by_placeholder('Password', exact=True).press('Enter')
