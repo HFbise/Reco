@@ -32,11 +32,7 @@ def _room(cur, room: str):
 
 
 def _screenname(cur, username: str | None) -> str | None:
-    if not username:
-        return None
-    cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
-    row = cur.fetchone()
-    return row['screenname'] if row else username
+    return moderation.screenname(cur, username) if username else None
 
 
 def details(cur, row: dict) -> dict:

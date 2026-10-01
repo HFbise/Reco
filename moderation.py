@@ -24,7 +24,8 @@ def dm_room_id(a: str, b: str) -> str:
     return 'dm:' + ':'.join(sorted([a, b]))
 
 
-def _screenname(cur, username: str) -> str:
+def screenname(cur, username: str) -> str:
+    """Someone's display name (their username if the account is gone)."""
     cur.execute('SELECT screenname FROM users WHERE username = %s', (username,))
     row = cur.fetchone()
     return row['screenname'] if row else username
@@ -67,7 +68,7 @@ def kick(room: str, target: str) -> bool:
         )
         if not cur.fetchone():
             return False
-        target_screen = _screenname(cur, target)
+        target_screen = screenname(cur, target)
         conn.commit()
     for sid in list(online_users.get(target, [])):
         socketio.emit('kicked_from_room', {'room': room}, to=sid)
