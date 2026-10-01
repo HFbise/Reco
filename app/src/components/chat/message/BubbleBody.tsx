@@ -5,6 +5,7 @@ import { fitImage, imageUrl } from '../../../lib/images';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
+import { TEXT_SIZES, usePrefsStore } from '../../../store/prefsStore';
 import { Fonts } from '../../../theme';
 import type { Message } from './types';
 
@@ -16,6 +17,7 @@ export function BubbleBody({ msg, me, onQuotePress }: {
   const c = useColors();
   const t = useT();
   const [viewing, setViewing] = useState(false);
+  const textSize = TEXT_SIZES[usePrefsStore((p) => p.textSize)];
   const own = msg.isOwn;
   const faint = own ? 'rgba(255,255,255,0.7)' : c.textMuted;
 
@@ -55,7 +57,7 @@ export function BubbleBody({ msg, me, onQuotePress }: {
         </TouchableOpacity>
       )}
       {!!msg.text && (
-        <Text style={[s.text, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>{msg.text}</Text>
+        <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>{msg.text}</Text>
       )}
       {msg.edited && <Text style={[s.edited, { color: faint }]}>{t('msg-edited')}</Text>}
       {viewing && image && <ImageViewer image={image} onClose={() => setViewing(false)} />}

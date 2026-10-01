@@ -2,7 +2,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getSocket } from '../../lib/socket';
 import { request } from '../../lib/account';
-import { formatMsgTime } from '../../lib/time';
 import { Button, IconButton } from '../ui/Button';
 import { DisplayText } from '../ui/DisplayText';
 import { TextField } from '../ui/TextField';
@@ -188,7 +187,7 @@ export function BansView({ room, onBack }: { room: string; onBack: () => void })
                       <Text style={[s.optionLabel, { color: c.text }]} numberOfLines={1}>{p.screenname}</Text>
                       <Text style={[s.optionHint, { color: c.textMuted }]}>
                         {kind === 'kicked' ? `@${p.username}`
-                          : p.until ? t('until', { time: formatMsgTime(p.until, t.monthDay) }) : t('duration-forever')}
+                          : p.until ? t('until', { time: t.when(p.until) }) : t('duration-forever')}
                       </Text>
                     </View>
                     <Button label={t('lift')} variant="quiet" onPress={() => lift(kind, p.username)} style={s.small}
@@ -246,7 +245,7 @@ export function LogView({ room, onBack }: { room: string; onBack: () => void }) 
           <View key={e.id} style={[s.logRow, { borderBottomColor: c.border }]}>
             <Text style={[s.logText, { color: c.text }]}>{describe(e)}</Text>
             {!!e.detail.text && <Text style={[s.logQuote, { color: c.textSub }]} numberOfLines={2}>“{e.detail.text}”</Text>}
-            <Text style={[s.logTime, { color: c.textMuted }]}>{formatMsgTime(e.time, t.monthDay)}</Text>
+            <Text style={[s.logTime, { color: c.textMuted }]}>{t.when(e.time)}</Text>
           </View>
         ))}
       {hasMore && entries && (

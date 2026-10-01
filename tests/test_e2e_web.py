@@ -5,6 +5,7 @@ Playwright (Chromium). Skipped when Playwright isn't installed.
 """
 
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -15,7 +16,7 @@ import pytest
 
 sync_api = pytest.importorskip('playwright.sync_api')
 
-from conftest import ROOT, create_room, create_user, get_db  # noqa: E402
+from conftest import ROOT, create_room, create_user, get_db, query  # noqa: E402
 
 import demo  # noqa: E402
 
@@ -583,12 +584,12 @@ def test_voice_volumes_go_up_to_150_percent(server, browser, tmp_path, shots):
     def settings_slider(page, index):
         page.get_by_label('Me', exact=True).click()  # settings open from your profile
         page.get_by_text('Settings', exact=True).click()
-        page.get_by_text('Audio', exact=True).click()
+        page.get_by_role('tab', name='Voice', exact=True).click()
         # The device pickers load a moment later and resize the dialog: click after that
         page.get_by_role('combobox').first.wait_for()
         to_max(page, page.get_by_role('slider').nth(index))
         page.get_by_text('150%').first.wait_for()
-        page.get_by_text('Close', exact=True).last.click()
+        page.get_by_role('button', name='Close').last.click()
         page.get_by_label('Chats', exact=True).click()  # back to the room (voice stays connected)
 
     def louder_than(level):
@@ -719,6 +720,7 @@ def test_notifications_are_offered_in_the_app_before_the_browser_asks(server, br
     page.get_by_text('Turn on notifications?').wait_for(state='detached')
     assert page.evaluate("sessionStorage.getItem('asked')")
     page.goto(f'{URL}/me')
+    page.get_by_text('Settings', exact=True).click()  # opens on notifications
     page.get_by_text('Blocked in this browser', exact=False).wait_for()
 
 
@@ -1088,3 +1090,98 @@ def test_an_admin_takes_someone_off_voice(server, browser, tmp_path, shots):
     ned.get_by_text('Join Voice', exact=False).first.wait_for()
     mae.get_by_label('Voice Chat').get_by_label('Ned', exact=True).wait_for(state='detached')
     b.close()
+
+
+# ── personal settings ─────────────────────────────────────────
+
+
+def _open_settings(page, section):
+    page.get_by_label('Me', exact=True).click()
+    page.get_by_text('Settings', exact=True).click()
+    page.get_by_role('tab', name=section, exact=True).click()
+
+
+def test_settings_change_the_theme_text_size_and_clock(server, browser, shots):
+    create_user('rae', screenname='Rae')
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('大厅', 'rae', 'Rae', 'evening all')"
+        )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    page.emulate_media(color_scheme='light')
+    log_in(page, 'rae')
+    ground = lambda: page.evaluate('getComputedStyle(document.body).backgroundColor')  # noqa: E731
+    light = ground()
+
+    _open_settings(page, 'Appearance')
+    page.get_by_role('radio', name='Dark', exact=True).click()
+    page.wait_for_function(f'getComputedStyle(document.body).backgroundColor !== {light!r}')
+    page.get_by_role('radio', name='System', exact=True).click()  # follows the device, which is light
+    page.wait_for_function(f'getComputedStyle(document.body).backgroundColor === {light!r}')
+    page.emulate_media(color_scheme='dark')  # ...and keeps following it
+    page.wait_for_function(f'getComputedStyle(document.body).backgroundColor !== {light!r}')
+
+    page.get_by_role('tab', name='Chat', exact=True).click()
+    page.get_by_role('radio', name='Large', exact=True).click()
+    page.get_by_role('radio', name='12-hour', exact=True).click()
+    page.get_by_role('button', name='Close').last.click()
+
+    page.get_by_label('Chats', exact=True).click()
+    open_room(page, 'Lobby')
+    bubble = page.get_by_text('evening all', exact=True).last
+    assert bubble.evaluate('e => getComputedStyle(e).fontSize') == '17px'
+    page.get_by_text(re.compile(r'^\d{1,2}:\d{2} [AP]M$')).first.wait_for()  # the time separator
+    page.reload()  # kept on this device
+    open_room(page, 'Lobby')
+    page.get_by_text('evening all', exact=True).last.wait_for()
+    assert page.get_by_text('evening all', exact=True).last.evaluate('e => getComputedStyle(e).fontSize') == '17px'
+
+
+def test_nobody_can_message_first_and_blocked_people_can_be_unblocked(server, browser, shots):
+    create_user('sal', screenname='Sal')
+    create_user('tom', screenname='Tom')
+    create_user('uma', screenname='Uma')
+    with get_db() as conn:
+        conn.cursor().execute("INSERT INTO blocks (blocker, blocked) VALUES ('sal', 'uma')")
+        conn.commit()
+    sal, tom = new_page(browser), new_page(browser)
+    shots.extend([sal, tom])
+    log_in(sal, 'sal')
+    _open_settings(sal, 'Privacy')
+    sal.get_by_role('radio', name='Nobody', exact=True).click()
+
+    sal.get_by_text('Uma', exact=True).wait_for()  # the blocked list
+    sal.get_by_role('button', name='Unblock Uma').click()
+    sal.get_by_text('blocked anyone', exact=False).wait_for()
+    assert query('SELECT * FROM blocks') == []
+
+    # Saved with the account: Tom can't start a DM with Sal
+    deadline = time.time() + 5
+    while query("SELECT 1 FROM users WHERE username = 'sal' AND dm_from = 'nobody'") == [] and time.time() < deadline:
+        time.sleep(0.1)
+    log_in(tom, 'tom')
+    tom.goto(URL + '/room/dm%3Asal%3Atom?otherUsername=sal&displayName=Sal')
+    box = tom.get_by_placeholder('Type a message...')
+    box.fill('hi sal')
+    box.press('Enter')
+    tom.get_by_text('Not sent', exact=False).wait_for()
+    assert query("SELECT 1 FROM messages WHERE room = 'dm:sal:tom'") == []
+
+
+def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
+    create_user('val', screenname='Val')
+    phone = _phone(browser)
+    shots.append(phone)
+    log_in(phone, 'val')
+    phone.goto(f'{URL}/me')
+    phone.get_by_text('Settings', exact=True).click()
+    phone.get_by_text('Who can message me first').wait_for()
+    phone.get_by_role('radio', name='People in my rooms', exact=True).click()
+    deadline = time.time() + 5
+    while query("SELECT 1 FROM users WHERE username = 'val' AND dm_from = 'rooms'") == [] and time.time() < deadline:
+        time.sleep(0.1)
+    assert query("SELECT 1 FROM users WHERE username = 'val' AND dm_from = 'rooms'")
+    phone.get_by_label('Back', exact=True).click()
+    phone.get_by_text('Edit Profile').wait_for()

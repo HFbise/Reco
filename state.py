@@ -17,6 +17,7 @@ rooms_voice: dict = {}  # { room: { voice_members } }
 rooms_stream: dict = {}  # { room: { username: screenname } }
 online_users: dict = {}  # { username: set of sids }
 hidden_sids: set = set()  # sockets whose page is in the background (web tabs report it)
+invisible: set = set()  # online users who chose not to show it (see user_settings.show_online)
 sid_to_voice: dict = {}  # { sid: (username, room) }
 message_rate: dict = {}  # { username: [timestamps] }
 login_attempts: dict = {}  # { username: {'count': N, 'until': float} }
@@ -125,3 +126,8 @@ def is_watching(username) -> bool:
     """Has Reco on screen somewhere: a socket whose page isn't hidden. If not, the web
     gets a push notification even though a background tab is still connected."""
     return any(sid not in hidden_sids for sid in online_users.get(username, ()))
+
+
+def appears_online(username) -> bool:
+    """Online as others see it: connected, and not hiding it."""
+    return username in online_users and username not in invisible

@@ -11,7 +11,7 @@ import random
 import string
 
 from auth_session import dm_participants
-from state import LOBBY, get_level, online_users
+from state import LOBBY, appears_online, get_level
 from utils import hash_password, verify_password
 
 CODE_DIGITS = 6
@@ -95,7 +95,7 @@ def members_view(cur, row: dict) -> list[dict]:
             'screenname': profiles.get(u, {}).get('screenname', u),
             'is_admin': u in admins,
             'is_owner': u == owner,
-            'is_online': u in online_users,
+            'is_online': appears_online(u),
             'avatar_expression': profiles.get(u, {}).get('avatar_expression') or 'Smile',
             'avatar_color': profiles.get(u, {}).get('avatar_color') or '#5865F2',
         }

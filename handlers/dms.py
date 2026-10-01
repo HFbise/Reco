@@ -8,7 +8,7 @@ import reads
 from auth_session import authenticated, dm_participants, readable
 from db import get_db
 from extensions import socketio
-from state import online_users
+from state import appears_online
 
 log = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ def handle_get_dms(username, data):
                     'other_screenname': r['screenname'],
                     'avatar_expression': r.get('avatar_expression') or 'Smile',
                     'avatar_color': r.get('avatar_color') or '#5865F2',
-                    'online': r['username'] in online_users,
+                    'online': appears_online(r['username']),
                     'last': last_message_preview(r),
                     'unread': unread.get(r['room'], 0),
                     **prefs.get(r['room'], chat_prefs.DEFAULT),

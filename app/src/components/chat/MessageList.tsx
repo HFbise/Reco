@@ -44,7 +44,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   const c = useColors();
   const t = useT();
   // Inverted list: newest at the bottom, so feed it newest-first
-  const data = useMemo(() => [...buildFeed(p.messages, t.monthDay)].reverse(), [p.messages, t.monthDay]);
+  const data = useMemo(() => [...buildFeed(p.messages, t.monthDay, new Date(), t.clock)].reverse(), [p.messages, t]);
   const list = useRef<FlatList<FeedItem>>(null);
   const [highlighted, setHighlighted] = useState<number | null>(null);
   useEffect(() => {

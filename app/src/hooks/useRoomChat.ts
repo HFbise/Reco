@@ -34,7 +34,7 @@ interface Options {
   onToast: (kind: ChatToast) => void;
 }
 
-export type ChatToast = 'muted' | 'dm-blocked' | 'rate-limited' | 'send-failed';
+export type ChatToast = 'muted' | 'dm-blocked' | 'dm-not-allowed' | 'rate-limited' | 'send-failed';
 
 // Typing: send at most this often while typing; forget a typist this long after their last signal
 const TYPING_SEND_MS = 2000;
@@ -204,6 +204,9 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
       },
       dm_blocked: (data) => {
         if (mine(data)) callbacks.current.onToast('dm-blocked');
+      },
+      dm_not_allowed: (data) => {
+        if (mine(data)) callbacks.current.onToast('dm-not-allowed');
       },
       kicked_from_room: (data) => {
         if (mine(data)) callbacks.current.onRemoved('kicked');

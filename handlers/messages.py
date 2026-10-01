@@ -12,6 +12,7 @@ import images
 import moderation
 import reads
 import room_log
+import user_settings
 import webpush
 from auth_session import authenticated, dm_participants, in_room, readable
 from db import get_db
@@ -48,8 +49,12 @@ def handle_message(username, data):
     if participants:
         recipient = participants[1] if participants[0] == username else participants[0]
         with get_db() as conn:
-            if moderation.blocked_either_way(conn.cursor(), username, recipient):
+            cur = conn.cursor()
+            if moderation.blocked_either_way(cur, username, recipient):
                 emit('dm_blocked', {'room': room})
+                return
+            if not user_settings.may_message(cur, username, recipient, room):
+                emit('dm_not_allowed', {'room': room})
                 return
 
     # Built server-side: clients can't spoof the sender, display name or `system` flag.
@@ -122,7 +127,11 @@ def handle_message(username, data):
     preview = text[:100] or '📷'
     if recipient:
         with get_db() as conn:
-            muted = bool(chat_prefs.muted_by(conn.cursor(), room, [recipient]))
+            cur = conn.cursor()
+            # Muted this chat, or turned DM notifications off altogether
+            muted = bool(chat_prefs.muted_by(cur, room, [recipient])) or not user_settings.wants_push(
+                cur, [recipient], 'dms'
+            )
         if recipient in online_users:
             for sid in list(online_users[recipient]):
                 socketio.emit(

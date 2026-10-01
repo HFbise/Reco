@@ -30,6 +30,7 @@ export type { DmMeta, ExternalVoice } from './types';
 const TOAST_TEXT = {
   'muted': 'you-are-muted',
   'dm-blocked': 'dm-blocked',
+  'dm-not-allowed': 'dm-not-allowed',
   'rate-limited': 'rate-limited',
   'send-failed': 'send-failed',
 } as const satisfies Record<ChatToast, string>;

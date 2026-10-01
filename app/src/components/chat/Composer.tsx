@@ -5,6 +5,7 @@ import { IconBan, IconClose, IconEmoji, IconImage, IconPencil, IconReply, IconSe
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
+import { usePrefsStore } from '../../store/prefsStore';
 import { Fonts, Radius, Spacing } from '../../theme';
 
 interface Props {
@@ -36,6 +37,7 @@ const MAX_INPUT = 120;
 export function Composer(p: Props) {
   const c = useColors();
   const t = useT();
+  const enterSends = usePrefsStore((s) => s.enterSends);
   const [inputHeight, setInputHeight] = useState(MIN_INPUT);
   // The box grows with its text, but on the web the measured height never drops below the box's
   // own, so it can't shrink by itself: start over at one line once it's empty (sent or cleared)
@@ -123,9 +125,9 @@ export function Composer(p: Props) {
           returnKeyType="send"
           multiline
           onKeyPress={(e: any) => {
-            // Web: Enter sends, Shift+Enter adds a line. Not while an input method is composing:
-            // there Enter picks the candidate (e.g. pinyin), it doesn't mean "send"
-            if (Platform.OS === 'web' && isSendKey(e.nativeEvent)) {
+            // Web: Enter sends and Shift+Enter adds a line (or, by setting, Ctrl/⌘+Enter sends).
+            // Not while an input method is composing: there Enter picks the candidate (e.g. pinyin)
+            if (Platform.OS === 'web' && isSendKey(e.nativeEvent, enterSends)) {
               e.preventDefault?.();
               p.onSend();
             }

@@ -93,6 +93,7 @@ def clean_state():
     for d in (
         state.online_users,
         state.hidden_sids,
+        state.invisible,
         state.login_attempts,
         state.message_rate,
         state.rooms_voice,

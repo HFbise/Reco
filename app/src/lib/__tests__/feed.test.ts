@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFeed, GROUP_GAP_MS } from '../feed';
-import { formatMsgTime } from '../time';
+import { clock12, formatMsgTime } from '../time';
 import type { Message } from '../../components/chat/message/types';
 
 const monthDay = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
@@ -59,4 +59,12 @@ test('back-to-back messages from one sender are marked as a continuation', () =>
 test('separator labels: time only today, date + time otherwise', () => {
   assert.equal(formatMsgTime(new Date(2026, 8, 27, 9, 5).toISOString(), monthDay, NOW), '09:05');
   assert.equal(formatMsgTime(new Date(2026, 8, 20, 9, 5).toISOString(), monthDay, NOW), '9/20 09:05');
+});
+
+test('the 12-hour clock, in each language', () => {
+  const evening = new Date(2026, 8, 27, 21, 5).toISOString();
+  assert.equal(formatMsgTime(evening, monthDay, NOW, clock12('en')), '9:05 PM');
+  assert.equal(formatMsgTime(evening, monthDay, NOW, clock12('zh')), '下午9:05');
+  assert.equal(formatMsgTime(new Date(2026, 8, 27, 0, 30).toISOString(), monthDay, NOW, clock12('en')), '12:30 AM');
+  assert.equal(formatMsgTime(new Date(2026, 8, 20, 12, 0).toISOString(), monthDay, NOW, clock12('en')), '9/20 12:00 PM');
 });

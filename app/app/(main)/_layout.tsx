@@ -16,6 +16,7 @@ export default function MainLayout() {
         <Stack.Screen name="index" options={{ animation: 'none' }} />
         <Stack.Screen name="match" options={{ animation: 'none' }} />
         <Stack.Screen name="me" options={{ animation: 'none' }} />
+        <Stack.Screen name="settings" options={{ animation: 'slide_from_right', gestureEnabled: true }} />
         <Stack.Screen name="room/[name]" options={{ animation: 'slide_from_right', gestureEnabled: true, fullScreenGestureEnabled: true, animationMatchesGesture: true }} />
       </Stack>
     </VoiceProvider>

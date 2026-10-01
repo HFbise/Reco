@@ -20,9 +20,10 @@ from flask import request
 from flask_socketio import emit, join_room, rooms
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
+import user_settings
 from db import get_db
 from extensions import app, socketio
-from state import hidden_sids, online_users
+from state import hidden_sids, invisible, online_users
 
 log = logging.getLogger(__name__)
 
@@ -96,8 +97,21 @@ def bind(username: str):
     join_room(MEMBERS_ROOM)
     was_online = username in online_users
     online_users.setdefault(username, set()).add(sid)
-    if not was_online:
+    if was_online:
+        return
+    if _hides_online(username):
+        invisible.add(username)
+    else:
         socketio.emit('online_status_changed', {'username': username, 'online': True}, to=MEMBERS_ROOM)
+
+
+def _hides_online(username: str) -> bool:
+    try:
+        with get_db() as conn:
+            return not user_settings.shows_online(conn.cursor(), username)
+    except Exception as e:
+        log.exception('show_online lookup failed: %s', e)
+        return False
 
 
 def unbind(sid: str):
@@ -109,7 +123,10 @@ def unbind(sid: str):
         online_users[username].discard(sid)
         if not online_users[username]:
             del online_users[username]
-            socketio.emit('online_status_changed', {'username': username, 'online': False}, to=MEMBERS_ROOM)
+            if username in invisible:
+                invisible.discard(username)
+            else:
+                socketio.emit('online_status_changed', {'username': username, 'online': False}, to=MEMBERS_ROOM)
     return username
 
 

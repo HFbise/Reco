@@ -6,7 +6,6 @@ import { getSocket } from '../../lib/socket';
 import { showAlert } from '../../lib/alert';
 import { LOBBY_ID } from '../../lib/i18n';
 import { imageUrl } from '../../lib/images';
-import { formatMsgTime } from '../../lib/time';
 import { useBlockStore } from '../../store/blockStore';
 import { AvatarView } from '../AvatarView';
 import { Sheet } from '../ui/Sheet';
@@ -50,7 +49,6 @@ interface Props {
  *  your own settings for it (pin, mute), its history (search, photos), and leaving. Rooms and
  *  DMs alike; the owner's controls only show for the owner. */
 export function ChatCard(p: Props) {
-  const c = useColors();
   const t = useT();
   const isDm = p.name.startsWith('dm:');
   const [view, setView] = useState<CardView>('main');
@@ -161,7 +159,7 @@ function Main(p: Props & {
           <Text style={[s.announcementText, { color: c.text }]}>{announcement.text}</Text>
           {!!announcement.by && (
             <Text style={[s.announcementMeta, { color: c.textSub }]}>
-              {announcement.by}{announcement.time ? ` · ${formatMsgTime(announcement.time, t.monthDay)}` : ''}
+              {announcement.by}{announcement.time ? ` · ${t.when(announcement.time)}` : ''}
             </Text>
           )}
         </View>
@@ -326,7 +324,7 @@ function SearchView({ room, onBack, onPick }: { room: string; onBack: () => void
               onPress={() => onPick(h.id)} accessibilityRole="button">
               <View style={s.hitHead}>
                 <Text style={[s.hitName, { color: c.text }]} numberOfLines={1}>{h.screenname}</Text>
-                <Text style={[s.hitTime, { color: c.textMuted }]}>{formatMsgTime(h.time, t.monthDay)}</Text>
+                <Text style={[s.hitTime, { color: c.textMuted }]}>{t.when(h.time)}</Text>
               </View>
               <Highlighted text={h.text} query={asked.current} />
             </TouchableOpacity>

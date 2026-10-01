@@ -78,9 +78,16 @@ def handle_get_blocked_users(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT blocked FROM blocks WHERE blocker = %s', (username,))
+            cur.execute(
+                'SELECT b.blocked AS username, u.screenname, u.avatar_expression, u.avatar_color'
+                ' FROM blocks b LEFT JOIN users u ON u.username = b.blocked WHERE b.blocker = %s'
+                ' ORDER BY lower(COALESCE(u.screenname, b.blocked))',
+                (username,),
+            )
             rows = cur.fetchall()
-        emit('blocked_users_list', {'users': [r['blocked'] for r in rows]})
+        people = [{**r, 'screenname': r['screenname'] or r['username']} for r in rows]
+        # `users` (names only) is what the chat list needs; settings shows `people`
+        emit('blocked_users_list', {'users': [p['username'] for p in people], 'people': people})
     except Exception as e:
         log.exception('get_blocked_users error: %s', e)
-        emit('blocked_users_list', {'users': []})
+        emit('blocked_users_list', {'users': [], 'people': []})
