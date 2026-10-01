@@ -26,3 +26,19 @@ export function formatMsgTime(time: string, monthDay: (d: Date) => string, now: 
 export function sameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
+
+/** How long ago `iso` was, in the steps a "last online" line uses */
+export type Ago =
+  | { unit: 'now' }
+  | { unit: 'minutes' | 'hours' | 'days'; n: number }
+  | { unit: 'date'; date: Date };
+
+export function ago(iso: string, now: Date = new Date()): Ago {
+  const then = new Date(iso);
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60000);
+  if (minutes < 2) return { unit: 'now' };
+  if (minutes < 60) return { unit: 'minutes', n: minutes };
+  if (minutes < 24 * 60) return { unit: 'hours', n: Math.floor(minutes / 60) };
+  if (minutes < 7 * 24 * 60) return { unit: 'days', n: Math.floor(minutes / (24 * 60)) };
+  return { unit: 'date', date: then };
+}

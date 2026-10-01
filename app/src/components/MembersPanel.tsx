@@ -1,11 +1,12 @@
-import { useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Platform, type StyleProp, type ViewStyle } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { AvatarView } from './AvatarView';
 import { DisplayText } from './ui/DisplayText';
 import { IconCrown, IconShield } from './Icon';
 import { VoiceCard } from './voice/VoiceCard';
-import { MemberCard, levelOf, type Member } from './members/MemberCard';
+import type { Member } from './members/types';
+import { useCardStore } from '../store/cardStore';
+import { useDisplayName } from '../store/nicknameStore';
 import { useColors } from '../hooks/useColors';
 import { useRoomMembers } from '../hooks/useRoomMembers';
 import { useT } from '../hooks/useT';
@@ -18,43 +19,32 @@ interface Props {
   voice?: ExternalVoice | null;
   roomVoiceMembers?: VoiceMember[];
   currentUsername?: string;
-  onOpenDm?: (username: string, screenname: string, avatarExpression?: string, avatarColor?: string) => void;
   isVoiceHere?: boolean;
   onJoinVoice?: () => void;
   style?: StyleProp<ViewStyle>;
 }
 
 /** Right-hand panel of a room: the voice card on top, then everyone in the room. */
-export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, onOpenDm, isVoiceHere, onJoinVoice, style }: Props) {
+export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, isVoiceHere, onJoinVoice, style }: Props) {
   const c = useColors();
   const t = useT();
   const members = useRoomMembers(room);
-  const [selected, setSelected] = useState<Member | null>(null);
   const isGuest = !!useAuthStore((st) => st.currentUser?.guest);
 
   const online = members.filter((m) => m.is_online);
   const offline = members.filter((m) => !m.is_online);
-  const me = members.find((m) => m.username === currentUsername);
   const voiceMembers = voice ? (roomVoiceMembers ?? voice.voiceMembers) : [];
   const inVoiceHere = !!voice && (isVoiceHere ?? voice.inVoice);
-  const selectedInVoice = !!selected && voiceMembers.some((v) => v.username === selected.username);
-
-  function openVoiceMember(v: VoiceMember) {
-    // Someone in voice may not be in the list yet (it loads separately)
-    setSelected(members.find((m) => m.username === v.username) ?? {
-      username: v.username, screenname: v.screenname,
-      is_admin: false, is_owner: false, is_online: true,
-      avatar_color: v.avatar_color, avatar_expression: v.avatar_expression,
-    });
-  }
+  const showCard = useCardStore((st) => st.show);
+  const name = useDisplayName();
+  const open = (m: Member | VoiceMember) => showCard(m, room);
 
   function renderRow(m: Member) {
     const isMe = m.username === currentUsername;
     return (
       <TouchableOpacity
         key={m.username}
-        onPress={() => { if (!isGuest) setSelected(m); }}
-        disabled={isGuest}
+        onPress={() => open(m)}
         activeOpacity={0.7}
         style={s.row}
       >
@@ -63,7 +53,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
             username={m.username} screenname={m.screenname} size={36} />
         </View>
         <Text style={[s.rowName, { color: m.is_online ? c.text : c.textSub }]} numberOfLines={1}>
-          {m.screenname}
+          {name(m.username, m.screenname)}
           {isMe && <Text style={[s.you, { color: c.textSub }]}>{t('you-suffix')}</Text>}
         </Text>
         {m.is_owner && <View accessibilityLabel={t('owner')}><IconCrown size={18} color={c.crown} /></View>}
@@ -82,7 +72,7 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
             inVoice={inVoiceHere}
             currentUsername={currentUsername}
             onJoin={onJoinVoice ?? voice.joinVoice}
-            onPressMember={openVoiceMember}
+            onPressMember={open}
           />
         )}
 
@@ -101,17 +91,6 @@ export function MembersPanel({ room, voice, roomVoiceMembers, currentUsername, o
           {offline.map(renderRow)}
         </View>
       </ScrollView>
-
-      <MemberCard
-        member={selected}
-        room={room}
-        currentUsername={currentUsername}
-        myLevel={me ? levelOf(me) : 0}
-        inVoice={selectedInVoice}
-        showVolume={Platform.OS === 'web' && inVoiceHere && selectedInVoice && selected?.username !== currentUsername}
-        onOpenDm={onOpenDm}
-        onClose={() => setSelected(null)}
-      />
     </View>
   );
 }

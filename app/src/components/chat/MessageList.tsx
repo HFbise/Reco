@@ -8,10 +8,13 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { Spacing } from '../../theme';
 import { isTouchScreen } from '../../lib/pointer';
+import { useCardStore } from '../../store/cardStore';
 
 const QUICK_REACTION = '👍';
 
 interface Props {
+  /** The room or DM shown (a card opened from here knows where) */
+  room: string;
   messages: Message[];
   currentUsername?: string;
   isDesktop: boolean;
@@ -48,6 +51,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   // Inverted list: newest at the bottom, so feed it newest-first
   const data = useMemo(() => [...buildFeed(p.messages, t.monthDay, new Date(), t.clock)].reverse(), [p.messages, t]);
   const list = useRef<FlatList<FeedItem>>(null);
+  const showCard = useCardStore((s) => s.show);
   const [highlighted, setHighlighted] = useState<number | null>(null);
   useEffect(() => {
     if (highlighted == null) return;
@@ -102,6 +106,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         me={p.currentUsername}
         wide={p.isDesktop}
         onRetry={msg.pending === 'failed' ? () => p.onRetry(msg) : undefined}
+        onPersonPress={(person) => showCard(person, p.room)}
         onReactionPress={inert ? undefined : (emoji) => p.onReact(msg.id, emoji)}
         onLongPress={p.isDesktop || inert ? undefined : () => p.onLongPress(msg)}
         onReact={desktopActions ? (at) => p.onReactionButton(msg, at.pageX, at.pageY, at.height) : undefined}

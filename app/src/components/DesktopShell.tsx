@@ -14,6 +14,7 @@ import { StreamPanel } from './StreamPanel';
 import { ConnectionBanner } from './ConnectionBanner';
 import { ProfileView } from './account/ProfileView';
 import { MatchView } from './match/MatchView';
+import { ProfileCardHost } from './members/ProfileCardHost';
 import { SettingsModal } from './settings/SettingsModal';
 import { useSavedAudioDevices } from './settings/VoiceSettings';
 import type { DmMeta } from './chat/types';
@@ -166,15 +167,18 @@ export function DesktopShell() {
         </View>
 
         {showChat && !room.startsWith('dm:') && (
-          <MembersPanel
-            room={room}
-            voice={voice}
-            currentUsername={currentUser?.username}
-            onOpenDm={(username, screenname, avatarExpression, avatarColor) =>
-              openDm(dmIdWith(currentUser?.username ?? '', username), { screenname, username, avatarExpression, avatarColor })}
-          />
+          <MembersPanel room={room} voice={voice} currentUsername={currentUser?.username} />
         )}
       </View>
+
+      <ProfileCardHost
+        voiceRoom={voice.inVoice ? room : null}
+        onOpenDm={(person) => openDm(dmIdWith(currentUser?.username ?? '', person.username), {
+          username: person.username, screenname: person.screenname,
+          avatarExpression: person.avatar_expression, avatarColor: person.avatar_color,
+        })}
+        onOpenRoom={(name) => openRoom(name)}
+      />
 
       <SettingsModal visible={showSettings} onClose={() => setShowSettings(false)} voice={voice} devices={audioDevices} />
     </SafeAreaView>

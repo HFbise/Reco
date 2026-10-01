@@ -1286,3 +1286,97 @@ def test_a_message_that_was_not_sent_can_be_sent_again(server, browser, shots):
     page.get_by_label('Sending').wait_for(state='detached')
     assert [r['text'] for r in query('SELECT text FROM messages')] == ['can anyone hear me']
     assert page.get_by_text('can anyone hear me', exact=True).count() == 1
+
+
+def test_a_persons_card_opens_from_their_message_and_takes_a_nickname(server, browser, shots):
+    create_user('abe', screenname='Abe')
+    create_user('bea', screenname='Bea Lee')
+    create_room('crew', 'abe', members=['abe', 'bea'])
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET bio = 'plays bass' WHERE username = 'bea'")
+        cur.execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('crew', 'bea', 'Bea Lee', 'hello crew')"
+        )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'abe')
+    open_room(page, 'crew')
+    page.get_by_text('hello crew').wait_for()
+    page.get_by_role('button', name='Bea Lee', exact=True).click()  # her avatar
+    card = page.get_by_label("Bea Lee's profile")
+    card.get_by_text('plays bass').wait_for()  # the bio shows now
+    card.get_by_text('Joined Reco').wait_for()
+    card.get_by_text('Rooms in common · 1').wait_for()
+    card.get_by_role('button', name='Nickname').click()
+    card.get_by_label('Nickname').fill('Bassist')
+    card.get_by_role('button', name='Save').click()
+    card = page.get_by_label("Bassist's profile")  # it goes by the nickname now
+    card.get_by_text('Bea Lee · @bea').wait_for()
+    card.get_by_role('button', name='Close').first.click()
+    card.wait_for(state='detached')
+    page.get_by_text('Bassist', exact=True).first.wait_for()  # her name on the message
+    page.reload()
+    open_room(page, 'crew')
+    page.get_by_text('Bassist', exact=True).first.click()  # the name opens the card too
+    page.get_by_label("Bassist's profile").wait_for()
+
+
+def test_moderation_on_a_card_offers_only_what_applies(server, browser, shots):
+    create_user('abe', screenname='Abe')
+    create_user('bea', screenname='Bea')
+    create_room('crew', 'abe', members=['abe', 'bea'])
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('crew', 'bea', 'Bea', 'hi')"
+        )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'abe')
+    open_room(page, 'crew')
+    page.get_by_text('Bea', exact=True).first.click()
+    card = page.get_by_label("Bea's profile")
+    card.get_by_role('button', name='Mute in chat').wait_for()
+    assert card.get_by_role('button', name='Unmute in chat').count() == 0
+    assert card.get_by_role('button', name='Ban from voice').count() == 0  # she isn't in voice
+    card.get_by_role('button', name='Mute in chat').click()
+    card.get_by_text('5 min', exact=False).first.click()
+    card.wait_for(state='detached')
+    deadline = time.time() + 5
+    while not query("SELECT 1 FROM room_restrictions WHERE username = 'bea'") and time.time() < deadline:
+        time.sleep(0.1)
+    page.get_by_text('Bea', exact=True).first.click()
+    card.get_by_text('Muted (until', exact=False).wait_for()
+    card.get_by_role('button', name='Unmute in chat').click()
+    card.wait_for(state='detached')
+
+
+def test_headers_open_cards_and_your_own_card_edits_your_profile(server, browser, shots):
+    create_user('abe', screenname='Abe')
+    create_user('bea', screenname='Bea')
+    create_room('crew', 'abe', members=['abe', 'bea'])
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO messages (room, username, screenname, text) VALUES ('dm:abe:bea', 'bea', 'Bea', 'yo')"
+        )
+        conn.commit()
+    page = new_page(browser)
+    shots.append(page)
+    log_in(page, 'abe')
+    open_room(page, 'crew')
+    page.get_by_role('button', name='crew', exact=False).filter(has_text='room code').click()  # the room's title
+    photos = page.get_by_role('button', name='Photos', exact=True)  # on the room card
+    photos.wait_for()
+    page.mouse.click(5, 5)  # outside it
+    photos.wait_for(state='detached')
+    open_room(page, 'Bea')
+    page.get_by_role('button', name="Bea's profile").click()  # the DM's title
+    page.get_by_label("Bea's profile").last.get_by_text('@bea').wait_for()
+    page.get_by_role('button', name='Close').first.click()
+    # Your own card, from the members list
+    open_room(page, 'crew')
+    page.get_by_text('(you)', exact=False).first.click()
+    page.get_by_role('button', name='Edit Profile').click()
+    page.get_by_role('button', name='Save').wait_for()

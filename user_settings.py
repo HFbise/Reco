@@ -51,6 +51,11 @@ def wants_push(cur, usernames, kind: str) -> list[str]:
     return [r['username'] for r in cur.fetchall()]
 
 
+def touch_last_seen(cur, username: str):
+    """Seen online just now (only called while they show it): see profiles.py."""
+    cur.execute('UPDATE users SET last_seen = NOW() WHERE username = %s', (username,))
+
+
 def shows_online(cur, username: str) -> bool:
     cur.execute('SELECT show_online FROM users WHERE username = %s', (username,))
     row = cur.fetchone()

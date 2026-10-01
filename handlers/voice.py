@@ -99,12 +99,16 @@ def handle_voice_ice(username, data):
 @socketio.on('voice_mute_status')
 @authenticated
 def handle_voice_mute(username, data):
+    if isinstance(data.get('muted'), bool) and in_room(data.get('room')):
+        voice_state.set_flag(data['room'], username, 'isMuted', data['muted'])
     _to_room('voice_mute_status', username, data)
 
 
 @socketio.on('voice_speaking')
 @authenticated
 def handle_voice_speaking(username, data):
+    if isinstance(data.get('speaking'), bool) and in_room(data.get('room')):
+        voice_state.set_flag(data['room'], username, 'isSpeaking', data['speaking'])
     _to_room('voice_speaking', username, data)
 
 

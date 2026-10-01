@@ -3,7 +3,7 @@ import { useLangStore } from '../store/langStore';
 import { usePrefsStore } from '../store/prefsStore';
 import { clock12, clock24, formatMsgTime } from '../lib/time';
 import {
-  t as _t, serverError, systemMessage, securityQuestion, roomLabel, monthDay, tagLabel,
+  t as _t, serverError, systemMessage, securityQuestion, roomLabel, monthDay, monthYear, tagLabel,
   type I18nKey, type Params,
 } from '../lib/i18n';
 
@@ -15,6 +15,7 @@ import {
  *   t.room(name)                  room name for display (the lobby is translated)
  *   t.question(id)                security question
  *   t.monthDay(date)              "Sep 27" / "9月27日"
+ *   t.monthYear(date)             "Sep 2026" / "2026年9月"
  *   t.clock(date)                 "21:05", or "9:05 PM" with the 12-hour setting
  *   t.when(iso)                   t.clock for today, else with the date ("Sep 27 21:05")
  *   t.tag(id)                     match interest tag
@@ -34,6 +35,7 @@ export function useT() {
         room: (name: string) => roomLabel(lang, name),
         question: (idOrText: string) => securityQuestion(lang, idOrText),
         monthDay: md,
+        monthYear: (d: Date) => monthYear(lang, d),
         clock,
         when: (iso: string) => formatMsgTime(iso, md, new Date(), clock),
         tag: (id: string) => tagLabel(lang, id),

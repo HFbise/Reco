@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getSocket } from '../lib/socket';
-import type { Member } from '../components/members/MemberCard';
+import type { Member } from '../components/members/types';
 
 // The last list seen per room: shown at once when a room is opened again, then refreshed
 const cache = new Map<string, Member[]>();

@@ -207,3 +207,17 @@ def test_a_member_can_rejoin_voice_before_rejoining_the_room():
     assert [m['username'] for m in state.rooms_voice['chess']['voice_members']] == ['ann']
     eve.emit('voice_join', {'room': 'dm:ann:eve'})  # DMs have no voice
     assert 'dm:ann:eve' not in state.rooms_voice
+
+
+def test_someone_joining_voice_sees_who_is_already_talking_or_muted():
+    """Speaking and mute are announced when they change: a later arrival gets them in the list."""
+    create_user('ann')
+    create_user('bob')
+    create_room('chess', 'ann', members=['ann', 'bob'])
+    ann, bob = connect_as('ann'), connect_as('bob')
+    ann.emit('voice_join', {'room': 'chess'})
+    ann.emit('voice_speaking', {'room': 'chess', 'speaking': True})
+    ann.emit('voice_mute_status', {'room': 'chess', 'muted': True})
+    bob.emit('voice_join', {'room': 'chess'})
+    [ann_seen] = [m for m in events(bob, 'voice_current_members')[0]['members'] if m['username'] == 'ann']
+    assert ann_seen['isSpeaking'] is True and ann_seen['isMuted'] is True

@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildFeed, GROUP_GAP_MS } from '../feed';
-import { clock12, formatMsgTime } from '../time';
+import { ago, clock12, formatMsgTime } from '../time';
 import type { Message } from '../../components/chat/message/types';
 
 const monthDay = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
@@ -67,4 +67,13 @@ test('the 12-hour clock, in each language', () => {
   assert.equal(formatMsgTime(evening, monthDay, NOW, clock12('zh')), '下午9:05');
   assert.equal(formatMsgTime(new Date(2026, 8, 27, 0, 30).toISOString(), monthDay, NOW, clock12('en')), '12:30 AM');
   assert.equal(formatMsgTime(new Date(2026, 8, 20, 12, 0).toISOString(), monthDay, NOW, clock12('en')), '9/20 12:00 PM');
+});
+
+test('how long ago, for "last online"', () => {
+  const at = (minutes: number) => new Date(NOW.getTime() - minutes * 60000).toISOString();
+  assert.deepEqual(ago(at(1), NOW), { unit: 'now' });
+  assert.deepEqual(ago(at(5), NOW), { unit: 'minutes', n: 5 });
+  assert.deepEqual(ago(at(150), NOW), { unit: 'hours', n: 2 });
+  assert.deepEqual(ago(at(3 * 24 * 60 + 5), NOW), { unit: 'days', n: 3 });
+  assert.equal(ago(at(30 * 24 * 60), NOW).unit, 'date');
 });

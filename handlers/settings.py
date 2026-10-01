@@ -23,6 +23,10 @@ def _show_online(username: str, show: bool):
     """Appear (or vanish) for everyone at once, if connected right now."""
     if username not in online_users or show == (username not in invisible):
         return
+    # The moment they appear or vanish is the last time they were seen
+    with get_db() as conn:
+        user_settings.touch_last_seen(conn.cursor(), username)
+        conn.commit()
     if show:
         invisible.discard(username)
     else:

@@ -80,6 +80,7 @@ TABLES = [
     'web_push_subscriptions',
     'chat_prefs',
     'room_log',
+    'user_nicknames',
 ]
 
 

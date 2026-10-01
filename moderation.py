@@ -244,6 +244,7 @@ def delete_account(cur, username: str):
     cur.execute('DELETE FROM oauth_accounts WHERE username = %s', (username,))
     cur.execute('DELETE FROM web_push_subscriptions WHERE username = %s', (username,))
     cur.execute('DELETE FROM chat_prefs WHERE username = %s', (username,))
+    cur.execute('DELETE FROM user_nicknames WHERE owner = %s OR target = %s', (username, username))
     cur.execute('DELETE FROM users WHERE username = %s', (username,))
     cur.execute('INSERT INTO deleted_usernames (username) VALUES (%s) ON CONFLICT DO NOTHING', (username,))
 
@@ -299,6 +300,8 @@ def rename_user(old: str, new: str):
         cur.execute('UPDATE oauth_accounts SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE web_push_subscriptions SET username = %s WHERE username = %s', (new, old))
         cur.execute('UPDATE chat_prefs SET username = %s WHERE username = %s', (new, old))
+        cur.execute('UPDATE user_nicknames SET owner = %s WHERE owner = %s', (new, old))
+        cur.execute('UPDATE user_nicknames SET target = %s WHERE target = %s', (new, old))
         cur.execute('UPDATE room_log SET actor = %s WHERE actor = %s', (new, old))
         cur.execute('UPDATE room_log SET target = %s WHERE target = %s', (new, old))
         cur.execute('UPDATE rooms SET announcement_by = %s WHERE announcement_by = %s', (new, old))

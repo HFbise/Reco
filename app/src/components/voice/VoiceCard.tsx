@@ -7,6 +7,7 @@ import { DisplayText } from '../ui/DisplayText';
 import {
   IconHeadphones, IconMic, IconMicOff, IconMusic, IconPhoneOff, IconScreenShare, IconSpeaker,
 } from '../Icon';
+import { useDisplayName } from '../../store/nicknameStore';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { MAX_VOLUME } from '../../lib/webrtc';
@@ -35,6 +36,7 @@ const canShareScreen = Platform.OS === 'web' && typeof navigator !== 'undefined'
 /** Voice channel card: who's here, who's talking, and my controls. */
 export function VoiceCard({ voice, members, inVoice, currentUsername, onJoin, onPressMember }: Props) {
   const c = useColors();
+  const displayName = useDisplayName();
   const t = useT();
   const [gridWidth, setGridWidth] = useState(0);
   const tileWidth = gridWidth ? Math.floor((gridWidth - GAP * (COLUMNS - 1)) / COLUMNS) : 0;
@@ -56,7 +58,7 @@ export function VoiceCard({ voice, members, inVoice, currentUsername, onJoin, on
         <View style={s.grid} onLayout={(e) => setGridWidth(e.nativeEvent.layout.width)}>
           {tileWidth > 0 && members.map((m) => {
             const muted = m.isMuted || (m.username === currentUsername && voice.isMuted);
-            const name = m.screenname || m.username;
+            const name = displayName(m.username, m.screenname || m.username);
             return (
               <TouchableOpacity
                 key={m.username}

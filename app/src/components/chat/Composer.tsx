@@ -7,6 +7,7 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
 import { activeMention, applyMention, matchMembers, type Mentionable } from '../../lib/mentions';
+import { useNicknameStore } from '../../store/nicknameStore';
 import { usePrefsStore } from '../../store/prefsStore';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -56,7 +57,11 @@ export function Composer(p: Props) {
   const [highlighted, setHighlighted] = useState(0);
   const [dismissedAt, setDismissedAt] = useState(-1);
   const mention = p.mentionable ? activeMention(p.input, cursor) : null;
-  const suggestions = mention && mention.start !== dismissedAt ? matchMembers(p.mentionable!, mention.query, p.me) : [];
+  // Found by the name you know them by too
+  const nicknames = useNicknameStore((st) => st.names);
+  const suggestions = mention && mention.start !== dismissedAt
+    ? matchMembers(p.mentionable!.map((m) => ({ ...m, screenname: nicknames[m.username] || m.screenname })), mention.query, p.me)
+    : [];
   const picking = suggestions.length > 0;
   useEffect(() => { setHighlighted(0); }, [mention?.start, mention?.query]);
 

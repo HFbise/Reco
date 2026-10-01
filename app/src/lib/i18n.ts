@@ -96,7 +96,6 @@ const zh = {
   // DM
   'direct-messages': '私信',
   'send-dm': '私信',
-  'invite-to-room': '邀请加入',
   'no-dms': '暂无私信',
 
   // Password
@@ -208,8 +207,6 @@ const zh = {
   'kick-member': '踢出成员',
   'set-as-admin': '设为管理员',
   'remove-admin': '取消管理员',
-  'ban-voice': '禁言',
-  'unmute': '解除禁言',
   'confirm-kick': '确定踢出该成员吗？',
   'confirm-kick-title': '踢出成员',
   'ok': '确定',
@@ -407,6 +404,7 @@ const zh = {
   'duration-1d': '1 天',
   'duration-forever': '永久',
   'date-month-day': '{month}月{day}日',
+  'date-month-year': '{year}年{month}月',
 
   // Sign in with GitHub / Google
   'continue-with': '使用 {provider} 登录',
@@ -560,6 +558,24 @@ const zh = {
   'settings-push-mentions-hint': '有人在房间里@你，即使那个房间开了免打扰',
   'sending': '发送中',
   'not-sent-retry': '没有发出去，点一下重新发送',
+  'is-speaking': '{name} 正在说话',
+  'profile-of': '{name} 的资料卡',
+  'seen-just-now': '刚刚在线',
+  'seen-minutes': '{n} 分钟前在线',
+  'seen-hours': '{n} 小时前在线',
+  'seen-days': '{n} 天前在线',
+  'seen-on': '{date} 在线过',
+  'joined-reco': '加入 Reco',
+  'nickname': '备注名',
+  'nickname-add': '添加',
+  'nickname-hint': '只有你看得到这个名字',
+  'rooms-in-common': '共同房间 · {n}',
+  'muted-chip': '禁言中（{until}）',
+  'voice-banned-chip': '语音禁言中（{until}）',
+  'mute-in-chat': '禁言',
+  'lift-chat-mute': '解除禁言',
+  'ban-from-voice': '语音禁言',
+  'lift-voice-ban': '解除语音禁言',
 } as const;
 
 const en: Record<keyof typeof zh, string> = {
@@ -658,7 +674,6 @@ const en: Record<keyof typeof zh, string> = {
   // DM
   'direct-messages': 'Direct Messages',
   'send-dm': 'Message',
-  'invite-to-room': 'Invite',
   'no-dms': 'No direct messages',
 
   // Password
@@ -770,8 +785,6 @@ const en: Record<keyof typeof zh, string> = {
   'kick-member': 'Kick Member',
   'set-as-admin': 'Set as Admin',
   'remove-admin': 'Remove Admin',
-  'ban-voice': 'Mute in chat',
-  'unmute': 'Unmute',
   'confirm-kick': 'Are you sure you want to kick this member?',
   'confirm-kick-title': 'Kick Member',
   'ok': 'OK',
@@ -969,6 +982,7 @@ const en: Record<keyof typeof zh, string> = {
   'duration-1d': '1 day',
   'duration-forever': 'Permanently',
   'date-month-day': '{monthName} {day}',
+  'date-month-year': '{monthName} {year}',
 
   // Sign in with GitHub / Google
   'continue-with': 'Continue with {provider}',
@@ -1122,6 +1136,24 @@ const en: Record<keyof typeof zh, string> = {
   'settings-push-mentions-hint': 'Someone @mentions you in a room, even one you muted',
   'sending': 'Sending',
   'not-sent-retry': 'Not sent. Tap to send again',
+  'is-speaking': '{name} is speaking',
+  'profile-of': "{name}'s profile",
+  'seen-just-now': 'Online just now',
+  'seen-minutes': 'Online {n} min ago',
+  'seen-hours': 'Online {n} h ago',
+  'seen-days': 'Online {n} d ago',
+  'seen-on': 'Last online {date}',
+  'joined-reco': 'Joined Reco',
+  'nickname': 'Nickname',
+  'nickname-add': 'Add',
+  'nickname-hint': 'Only you see this name',
+  'rooms-in-common': 'Rooms in common · {n}',
+  'muted-chip': 'Muted ({until})',
+  'voice-banned-chip': 'Banned from voice ({until})',
+  'mute-in-chat': 'Mute in chat',
+  'lift-chat-mute': 'Unmute in chat',
+  'ban-from-voice': 'Ban from voice',
+  'lift-voice-ban': 'Lift voice ban',
 };
 
 const strings: Record<Lang, Record<keyof typeof zh, string>> = { zh, en };
@@ -1175,6 +1207,10 @@ export const LOBBY_ID = '大厅';
 /** Display name for a room: the lobby's id is Chinese, so show it translated. */
 export function roomLabel(lang: Lang, room: string): string {
   return room === LOBBY_ID ? t(lang, 'lobby') : room;
+}
+
+export function monthYear(lang: Lang, d: Date): string {
+  return t(lang, 'date-month-year', { month: d.getMonth() + 1, monthName: MONTHS_EN[d.getMonth()], year: d.getFullYear() });
 }
 
 export function monthDay(lang: Lang, d: Date): string {

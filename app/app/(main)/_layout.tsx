@@ -1,10 +1,12 @@
 import { Stack } from 'expo-router';
 import { useIsDesktop } from '../../src/hooks/useIsDesktop';
+import { useNicknameSync } from '../../src/hooks/useNicknameSync';
 import { DesktopShell } from '../../src/components/DesktopShell';
 import { VoiceProvider } from '../../src/context/VoiceContext';
 
 export default function MainLayout() {
   const isDesktop = useIsDesktop();
+  useNicknameSync();
 
   if (isDesktop) {
     return <DesktopShell />;

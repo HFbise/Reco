@@ -23,6 +23,14 @@ def sids(username: str, room: str) -> list:
     return [sid for sid, (user, r) in list(sid_to_voice.items()) if user == username and r == room]
 
 
+def set_flag(room: str, username: str, key: str, value: bool):
+    """Remember a member's isSpeaking / isMuted, so whoever joins or opens the room later sees
+    it too (the change itself is only announced once)."""
+    for m in members(room):
+        if m['username'] == username:
+            m[key] = value
+
+
 def join(sid: str, room: str, member: dict):
     """Put this socket in `room`'s voice channel (leaving any other one first)."""
     current = sid_to_voice.get(sid)

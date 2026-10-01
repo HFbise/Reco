@@ -2,6 +2,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AvatarView } from '../AvatarView';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
+import { useDisplayName } from '../../store/nicknameStore';
 import type { Mentionable } from '../../lib/mentions';
 import { Fonts, Radius } from '../../theme';
 
@@ -15,6 +16,7 @@ export function MentionPicker({ people, highlighted, onPick, onHover }: {
 }) {
   const c = useColors();
   const t = useT();
+  const name = useDisplayName();
   return (
     <View style={[s.box, { backgroundColor: c.surface, borderColor: c.border }]} accessibilityRole="menu"
       accessibilityLabel={t('mention-someone')}>
@@ -26,7 +28,7 @@ export function MentionPicker({ people, highlighted, onPick, onHover }: {
             accessibilityRole="menuitem" accessibilityState={{ selected: on }} accessibilityLabel={`${m.screenname} @${m.username}`}
             style={[s.row, on && { backgroundColor: c.accentBg }]}>
             <AvatarView expression={m.avatar_expression} color={m.avatar_color} username={m.username} screenname={m.screenname} size={28} />
-            <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{m.screenname}</Text>
+            <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{name(m.username, m.screenname)}</Text>
             <Text style={[s.handle, { color: c.textMuted }]} numberOfLines={1}>@{m.username}</Text>
           </TouchableOpacity>
         );

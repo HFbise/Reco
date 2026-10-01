@@ -7,6 +7,7 @@ import { isTouchScreen } from '../../lib/pointer';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius } from '../../theme';
+import { useDisplayName } from '../../store/nicknameStore';
 import { preview, type ChatEntry } from './model';
 
 interface Props {
@@ -30,6 +31,7 @@ export function ChatRow(p: Props) {
   const c = useColors();
   const t = useT();
   const [hovered, setHovered] = useState(false);
+  const displayName = useDisplayName();
   const { entry, active } = p;
 
   const line = preview(entry.last, p.me);
@@ -64,7 +66,7 @@ export function ChatRow(p: Props) {
       <View style={s.text}>
         <View style={s.nameLine}>
           <Text style={[s.name, { color: active ? c.accentText : c.text }, active && s.nameActive]} numberOfLines={1}>
-            {entry.kind === 'room' ? t.room(entry.name) : entry.name}
+            {entry.kind === 'room' ? t.room(entry.name) : displayName(entry.otherUsername, entry.name)}
           </Text>
           {entry.pinned && <View accessibilityLabel={t('pinned')}><IconPin size={12} color={c.textMuted} /></View>}
           {entry.muted && <View accessibilityLabel={t('muted-chat')}><IconBellOff size={12} color={c.textMuted} /></View>}

@@ -6,6 +6,7 @@ import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 import { Fonts, Spacing } from '../../../theme';
 import { mentionsMe } from '../../../lib/mentions';
+import { useDisplayName } from '../../../store/nicknameStore';
 import { BubbleBody, photoOnly } from './BubbleBody';
 import { HoverActions, type HoverHandlers } from './HoverActions';
 import { Reactions } from './Reactions';
@@ -36,6 +37,8 @@ interface Props extends HoverHandlers {
   highlighted?: boolean;
   /** Not delivered: tapping the warning sends it again */
   onRetry?: () => void;
+  /** Their avatar or name was tapped (or an @mention): open that person's card */
+  onPersonPress?: (person: { username: string; screenname: string; avatar_expression?: string; avatar_color?: string }) => void;
 }
 
 /**
@@ -58,6 +61,9 @@ export function MessageRow(p: Props) {
   const doubleTap = useDoubleTap(p.onDoubleTap && (() => { p.onDoubleTap!(); pop.pop(QUICK_REACTION); }));
 
   const avatarColor = msg.avatar_color || getAvatarColor(msg.username);
+  const name = useDisplayName();
+  const sender = { username: msg.username, screenname: msg.screenname, avatar_expression: msg.avatar_expression, avatar_color: msg.avatar_color };
+  const openSender = p.onPersonPress && (() => p.onPersonPress!(sender));
   const hoverable = p.wide && Platform.OS === 'web' && !msg.recalled;
   const hasHoverActions = !!(p.onReply || p.onReact || p.onEdit || p.onRecall);
 
@@ -70,7 +76,8 @@ export function MessageRow(p: Props) {
       p.highlighted && { borderWidth: 2, borderColor: c.sunny },
       photoOnly(msg) && s.photoFrame,
     ]}>
-      <BubbleBody msg={msg} me={p.me} onQuotePress={p.onQuotePress} />
+      <BubbleBody msg={msg} me={p.me} onQuotePress={p.onQuotePress}
+        onMentionPress={p.onPersonPress && ((username, screenname) => p.onPersonPress!({ username, screenname }))} />
     </View>
   );
 
@@ -81,12 +88,19 @@ export function MessageRow(p: Props) {
     >
       {!own && (p.cont
         ? <View style={s.avatarSpace} />
-        : <AvatarView expression={msg.avatar_expression} color={avatarColor} username={msg.username} screenname={msg.screenname} size={AVATAR} />)}
+        : (
+          <TouchableOpacity onPress={openSender} disabled={!openSender} activeOpacity={0.7}
+            accessibilityRole="button" accessibilityLabel={name(msg.username, msg.screenname)}>
+            <AvatarView expression={msg.avatar_expression} color={avatarColor} username={msg.username} screenname={msg.screenname} size={AVATAR} />
+          </TouchableOpacity>
+        ))}
 
       {msg.pending && <SendStatus failed={msg.pending === 'failed'} onRetry={p.onRetry} />}
       <View style={[s.column, own ? s.columnOwn : s.columnOther]}>
         {!own && !p.cont && (
-          <Text style={[s.name, { color: nameColor(avatarColor, c.isDark, c.bg) }]}>{msg.screenname}</Text>
+          <Text style={[s.name, { color: nameColor(avatarColor, c.isDark, c.bg) }]} onPress={openSender} suppressHighlighting>
+            {name(msg.username, msg.screenname)}
+          </Text>
         )}
         <View style={s.bubbleLine}>
           {/* Touchable only when there's something to do with the bubble itself (phones):

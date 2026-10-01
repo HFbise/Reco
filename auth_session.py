@@ -99,19 +99,34 @@ def bind(username: str):
     online_users.setdefault(username, set()).add(sid)
     if was_online:
         return
-    if _hides_online(username):
-        invisible.add(username)
-    else:
+    if _arrive(username):
         socketio.emit('online_status_changed', {'username': username, 'online': True}, to=MEMBERS_ROOM)
+    else:
+        invisible.add(username)
 
 
-def _hides_online(username: str) -> bool:
+def _arrive(username: str) -> bool:
+    """Coming online: True if they show it (and then it's when they were last seen)."""
     try:
         with get_db() as conn:
-            return not user_settings.shows_online(conn.cursor(), username)
+            cur = conn.cursor()
+            shown = user_settings.shows_online(cur, username)
+            if shown:
+                user_settings.touch_last_seen(cur, username)
+                conn.commit()
+            return shown
     except Exception as e:
         log.exception('show_online lookup failed: %s', e)
-        return False
+        return True
+
+
+def _leave(username: str):
+    try:
+        with get_db() as conn:
+            user_settings.touch_last_seen(conn.cursor(), username)
+            conn.commit()
+    except Exception as e:
+        log.exception('last_seen update failed: %s', e)
 
 
 def unbind(sid: str):
@@ -126,6 +141,7 @@ def unbind(sid: str):
             if username in invisible:
                 invisible.discard(username)
             else:
+                _leave(username)
                 socketio.emit('online_status_changed', {'username': username, 'online': False}, to=MEMBERS_ROOM)
     return username
 

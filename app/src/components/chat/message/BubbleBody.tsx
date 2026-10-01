@@ -4,6 +4,7 @@ import { ImageViewer } from '../ImageViewer';
 import { fitImage, imageUrl } from '../../../lib/images';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
 import { splitMentions } from '../../../lib/mentions';
+import { useDisplayName } from '../../../store/nicknameStore';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 import { TEXT_SIZES, usePrefsStore } from '../../../store/prefsStore';
@@ -12,13 +13,16 @@ import type { Message } from './types';
 
 /** What's inside a bubble: the quote it answers, a photo, the text, "edited" (or just
  *  "message recalled"). Colors follow the bubble: on your own (accent) ones, light on dark. */
-export function BubbleBody({ msg, me, onQuotePress }: {
+export function BubbleBody({ msg, me, onQuotePress, onMentionPress }: {
   msg: Message; me: string | undefined; onQuotePress?: (id: number) => void;
+  /** An @mention was tapped */
+  onMentionPress?: (username: string, screenname: string) => void;
 }) {
   const c = useColors();
   const t = useT();
   const [viewing, setViewing] = useState(false);
   const textSize = TEXT_SIZES[usePrefsStore((p) => p.textSize)];
+  const name = useDisplayName();
   const own = msg.isOwn;
   const faint = own ? 'rgba(255,255,255,0.7)' : c.textMuted;
 
@@ -61,10 +65,12 @@ export function BubbleBody({ msg, me, onQuotePress }: {
         <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>
           {splitMentions(msg.text, msg.meta?.mentions).map((part, i) => ('text' in part ? part.text : (
             // @Screenname; you, in the sunny color
-            <Text key={i} style={[s.mention, part.username === me
+            <Text key={i} onPress={onMentionPress && (() => onMentionPress(part.username, part.screenname))} suppressHighlighting
+              accessibilityRole={onMentionPress ? 'link' : undefined}
+              style={[s.mention, part.username === me
               ? { backgroundColor: c.sunny, color: c.sunnyText }
               : own ? { backgroundColor: 'rgba(255,255,255,0.2)', color: c.onAccent } : { backgroundColor: c.accentBg, color: c.accentText }]}>
-              @{part.screenname}
+              @{name(part.username, part.screenname)}
             </Text>
           )))}
         </Text>

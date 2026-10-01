@@ -12,6 +12,8 @@ import { useVoice } from '../../hooks/useVoice';
 import { useRoomMembers } from '../../hooks/useRoomMembers';
 import { useRoomChat, type ChatToast } from '../../hooks/useRoomChat';
 import { EmojiPicker } from '../emoji/EmojiPicker';
+import { ProfileCardHost } from '../members/ProfileCardHost';
+import { useCardStore } from '../../store/cardStore';
 import { MembersPanel } from '../MembersPanel';
 import { ChatCard } from './ChatCard';
 import { ChatHeader } from './ChatHeader';
@@ -63,6 +65,7 @@ export function ChatPanel(p: Props) {
   const t = useT();
   const isDesktop = useIsDesktop();
   const toast = useToast();
+  const showPerson = useCardStore((s) => s.show);
 
   // What's being written: a new message (maybe answering one), or an edit
   const [input, setInput] = useState('');
@@ -175,11 +178,18 @@ export function ChatPanel(p: Props) {
         voicePillMembers={voice.inVoice ? voice.voiceMembers : chat.voiceMembers}
         onVoicePillPress={inVoiceElsewhere ? () => p.onNavigateToRoom?.(p.activeVoiceRoom!) : () => setShowMembers(true)}
         showMembersButton={!isDesktop}
+        onTitlePress={() => (p.dmMeta
+          ? showPerson({
+            username: p.dmMeta.username, screenname: p.dmMeta.screenname,
+            avatar_expression: p.dmMeta.avatarExpression, avatar_color: p.dmMeta.avatarColor,
+          }, name)
+          : setShowCard(true))}
       />
 
       <KeyboardAvoidingView style={s.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <MessageList
           ref={messageList}
+          room={name}
           messages={shown}
           currentUsername={me?.username}
           isDesktop={isDesktop}
@@ -278,6 +288,22 @@ export function ChatPanel(p: Props) {
             style={{ width: '100%', borderLeftWidth: 0 }}
           />
         </RightDrawer>
+      )}
+
+      {/* Phones: cards opened in this chat (the desktop shell has its own) */}
+      {!isDesktop && (
+        <ProfileCardHost
+          voiceRoom={inVoiceHere ? name : null}
+          onOpenDm={(person) => router.push({
+            pathname: '/(main)/room/[name]',
+            params: {
+              name: `dm:${[me?.username ?? '', person.username].sort().join(':')}`,
+              otherUsername: person.username, displayName: person.screenname,
+              avatarExpression: person.avatar_expression ?? '', avatarColor: person.avatar_color ?? '',
+            },
+          })}
+          onOpenRoom={openRoom}
+        />
       )}
 
       {toast.element}
