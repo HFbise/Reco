@@ -81,10 +81,11 @@ export function ChatPanel(p: Props) {
 
   const back = () => (p.onClose ? p.onClose() : router.back());
 
-  // Voice: the screen's connection if it has one, else this panel's own
-  const ownVoice = useVoice(p.externalVoice ? '' : name);
+  // Voice: the screen's connection if it has one, else this panel's own (DMs have no voice)
+  const isDm = name.startsWith('dm:');
+  const ownVoice = useVoice(p.externalVoice || isDm ? '' : name);
   // Who can be @mentioned: the room's members (DMs have no mentions)
-  const members = useRoomMembers(name.startsWith('dm:') || isGuest ? '' : name);
+  const members = useRoomMembers(isDm || isGuest ? '' : name);
   const voice = p.externalVoice ?? ownVoice;
   const inVoiceHere = voice.inVoice && (!p.activeVoiceRoom || p.activeVoiceRoom === name);
   const inVoiceElsewhere = voice.inVoice && !!p.activeVoiceRoom && p.activeVoiceRoom !== name;

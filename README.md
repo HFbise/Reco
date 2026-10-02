@@ -9,19 +9,19 @@ read-only demo room without an account; the **Match** tab shows the matching scr
 too (starting a match needs an account, since it pairs you with real people). The
 free instance sleeps when idle, so the first load can take up to a minute.
 
-![Desktop: a group room with a voice channel going](docs/screenshots/desktop-room.png)
+![Desktop: a group room with a voice channel going and an @mention](docs/screenshots/desktop-room.png)
 
 | Random match (desktop) | Random match (phone) | Chats with DM previews (phone) |
 |---|---|---|
 | ![](docs/screenshots/match-chat.png) | ![](docs/screenshots/mobile-match.png) | ![](docs/screenshots/mobile-list.png) |
 
-| Match setup | Member card | Dark mode |
+| Match setup | Profile card | Dark mode |
 |---|---|---|
-| ![](docs/screenshots/match-start.png) | ![](docs/screenshots/member-card.png) | ![](docs/screenshots/desktop-room-dark.png) |
+| ![](docs/screenshots/match-start.png) | ![](docs/screenshots/profile-card.png) | ![](docs/screenshots/desktop-room-dark.png) |
 
-| Sign in | Guest demo | Chinese UI |
+| Settings | Guest demo | Chinese UI |
 |---|---|---|
-| ![](docs/screenshots/login.png) | ![](docs/screenshots/guest-demo.png) | ![](docs/screenshots/desktop-zh.png) |
+| ![](docs/screenshots/settings.png) | ![](docs/screenshots/guest-demo.png) | ![](docs/screenshots/desktop-zh.png) |
 
 ## Features
 
@@ -34,6 +34,30 @@ free instance sleeps when idle, so the first load can take up to a minute.
   emoji reactions, replies that quote the message they answer (tap the quote to jump
   back to it), "… is typing" and online presence. The DM list shows each
   conversation's last message and an online dot, kept live over the socket.
+- **Messages show at once.** A sent message appears immediately with a spinner, and the
+  server's acknowledgement swaps it for the stored one in place (matched by an id the
+  client picks). If it isn't delivered (muted, blocked, a dropped connection, no answer
+  in 15 s) it gets a red "!" and a tap sends it again. The server remembers recent
+  client ids, so a resend after a lost acknowledgement is still stored only once.
+- **@mentions:** typing @ in a room suggests its members by name or by the nickname you
+  gave them (arrow keys, then Enter or Tab). The server works out who an @name really
+  refers to (people in the room only) and stores that with the message, so every
+  client shows it as @DisplayName. A message that mentions you is highlighted, the room
+  says "Mentioned you" in your list until you read it, and you're notified even in a
+  room you muted.
+- **Profile cards:** tap anyone's avatar, name or @mention, a DM's title, or a member in
+  the list. A card shows their bio, when they joined, when they were last online (as
+  you could see it: someone who hides their status still counts as online to the person
+  they just messaged, like Steam), the rooms you share, and a nickname only you see,
+  which then replaces their name everywhere you see it. Owners and admins get the
+  moderation that applies: unmute only if they're muted, a voice ban only while
+  they're in voice.
+- **Personal settings:** notifications (push in this browser; DMs, @mentions and
+  matches each on or off; sounds), privacy (who can message you first: everyone,
+  people in your rooms, or nobody; whether you show as online; your blocked list),
+  chat (Enter sends or adds a line, text size, 12- or 24-hour clock), appearance
+  (system, light or dark) and voice devices. Account settings live on the server and
+  follow you to every device; how the app looks stays per device.
 - **Chat cards:** every room and DM has a card (like a QQ group's settings or a Discord
   server's sheet): pin it to the top of your list, mute its notifications (no push, no
   sound, a quiet grey badge), search its history (tapping a result loads older pages
@@ -54,8 +78,9 @@ free instance sleeps when idle, so the first load can take up to a minute.
 - **Message history:** the most recent page loads on join, and older messages load on
   demand. Clients that reconnect after missing more than a page get a clean reset
   instead of a gap.
-- **Voice channels:** WebRTC audio (mesh) with mute, speaking indicators, device
-  selection and screen sharing. Voice goes through a self-hosted TURN server using
+- **Voice channels:** WebRTC audio (mesh) with mute, speaking indicators (also for
+  people who were already talking when you joined), device selection, screen sharing
+  and reconnecting by itself after a dropped connection. Voice goes through a self-hosted TURN server using
   short-lived HMAC credentials.
 - **Random matching:**
   - Pick text or voice + text, plus up to five interests from a categorized catalog,
@@ -107,7 +132,7 @@ flowchart LR
   end
 
   subgraph Server["Flask + Flask-SocketIO (gunicorn, 1 worker, threads)"]
-    Handlers[handlers/*: auth, rooms, messages, dms, voice, match]
+    Handlers[handlers/*: auth, rooms, messages, dms, voice, match, profile]
     Queue[matching.MatchQueue]
     Admin[/admin panel/]
     Handlers --> Queue
@@ -130,6 +155,10 @@ flowchart LR
   short-lived, single-use ticket in the URL fragment (never sent to servers or in
   `Referer`), which the app trades over the socket for a normal session. The
   provider's access token is used once to read the account id, then dropped.
+- **Sends are acknowledged and idempotent.** The `message` event answers with a Socket.IO
+  acknowledgement (`{ok, id}` or `{ok: false, code}`) and the broadcast carries the
+  sender's client id, so the client can show a message before the server has it and
+  resend it safely.
 - **Replies are codes, not strings.** For example, `fail('join', 'wrong_password')`.
   The client's i18n layer turns them into text, and a test checks that every server
   code has a translation.
@@ -192,23 +221,58 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # ~130 tests, including browser end-to-end tests
+pytest                       # 287 backend tests + 42 browser end-to-end tests
+pytest --ignore=tests/test_e2e_web.py --cov=.    # backend line coverage
 
 cd app
-npm run typecheck && npm run lint && npm test
+npm run typecheck && npm run lint && npm test     # 42 frontend unit tests
 ```
 
 The backend tests start a disposable Postgres (via `pgserver`) and drive the real
-Socket.IO server with test clients. The end-to-end tests serve the production web
-build (`cd app && npx expo export -p web` first) and use Playwright to cover flows
-such as:
+Socket.IO server with test clients; they cover 88% of the backend's lines. The
+end-to-end tests serve the production web build (`cd app && npx expo export -p web`
+first) and use Playwright to cover flows such as:
 
-- two browsers exchanging messages live
+- two browsers exchanging messages live, and messages showing right after a reload
+- a message that wasn't delivered, sent again with a tap
+- @mentioning someone, and their list saying so
+- a profile card opened from a message, taking a nickname
+- voice: mute, deafen, leave and rejoin, coming back after the connection drops, and
+  an admin removing someone
 - the guest demo staying read-only
 - two strangers matching, chatting and both choosing to keep in touch
 
 CI runs all of this, plus a gunicorn and WebSocket smoke test of the production
 server.
+
+## Load test
+
+`tests/load_gunicorn.py` (run by hand: Actions → Load test) starts the production setup,
+gunicorn with `gunicorn.conf.py`, on a 4-vCPU GitHub runner and adds signed-in users to
+one room in stages. At each stage five people send four messages each at the same
+moment, and every user in the room should receive every message. Fan-out is the time
+from sending to arriving at each receiver.
+
+| Threads | Users in the room | Couldn't connect | Delivered | Fan-out p50 | Fan-out p95 |
+|---|---|---|---|---|---|
+| 100 | 100 | 0 | 100% | 302 ms | 478 ms |
+| 100 | 125 | **25** | 100% (to the 100 online) | 320 ms | 480 ms |
+| 400 | 150 | 0 | 100% | 346 ms | 508 ms |
+| 400 | 200 | 0 | 100% | 1.3 s | 1.4 s |
+| 400 | 300 | 0 | 95.3% | 6.5 s | 6.6 s |
+
+- **A hard ceiling at the thread count.** Each WebSocket holds a thread, so with 100
+  threads the 101st person could not connect at all (everyone already online was
+  unaffected). Production now runs 200.
+- **Then the broadcast.** With threads to spare, one process sending every message to
+  every socket in turn is the limit: smooth up to 150 people in one room, slow at 200.
+  A ping stayed at about 12 ms throughout, so the connections were fine and fan-out was
+  the bottleneck. The next step is several workers sharing the Socket.IO Redis message
+  queue (see below).
+
+The clients run on the same machine as the server, and the production instance is much
+smaller than the runner, so these numbers describe the design, not the live site's
+capacity.
 
 ## Deployment
 
@@ -223,7 +287,8 @@ check.
 ## Trade-offs and what I'd change at scale
 
 - **One process.** Presence, voice rooms, the match queue and rate limits live in
-  memory, so the server runs a single gunicorn worker with 200 threads. Scaling out
+  memory, so the server runs a single gunicorn worker with 200 threads (the load test
+  above shows where that ends). Scaling out
   would mean moving that state to Redis and using the Socket.IO Redis message queue.
   The pure `MatchQueue` was written so it can be swapped for a Redis-backed one.
 - **Mesh voice.** Each participant connects to every other participant, which is

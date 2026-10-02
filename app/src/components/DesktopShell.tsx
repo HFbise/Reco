@@ -159,7 +159,8 @@ export function DesktopShell() {
               name={room}
               password={roomPassword}
               dmMeta={dmMeta}
-              externalVoice={null}
+              // The shell's voice (it follows the open room), not a second one of the panel's own
+              externalVoice={room.startsWith('dm:') ? null : voice}
               onClose={closeRoom}
               onNavigateToRoom={(name) => openRoom(name)}
             />
