@@ -223,7 +223,7 @@ check.
 ## Trade-offs and what I'd change at scale
 
 - **One process.** Presence, voice rooms, the match queue and rate limits live in
-  memory, so the server runs a single gunicorn worker with 100 threads. Scaling out
+  memory, so the server runs a single gunicorn worker with 200 threads. Scaling out
   would mean moving that state to Redis and using the Socket.IO Redis message queue.
   The pure `MatchQueue` was written so it can be swapped for a Redis-backed one.
 - **Mesh voice.** Each participant connects to every other participant, which is
