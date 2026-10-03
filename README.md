@@ -32,8 +32,13 @@ free instance sleeps when idle, so the first load can take up to a minute.
   removed.
 - **Rooms and DMs:** public or password-protected rooms, invites, edits, recalls,
   emoji reactions, replies that quote the message they answer (tap the quote to jump
-  back to it), "… is typing" and online presence. The DM list shows each
-  conversation's last message and an online dot, kept live over the socket.
+  back to it), links, "… is typing" and online presence. The DM list shows each
+  conversation's last message and an online dot, kept live over the socket. Owners
+  and admins pin messages (both people do in a DM) to a bar under the header, and an
+  owner can hand the room to a member.
+- **Picking up where you left off:** a chat opens with "New messages" above the first
+  one you hadn't read (and starts there when there are many), and text you typed but
+  didn't send waits in the box, shown as a draft in the list.
 - **Messages show at once.** A sent message appears immediately with a spinner, and the
   server's acknowledgement swaps it for the stored one in place (matched by an id the
   client picks). If it isn't delivered (muted, blocked, a dropped connection, no answer
@@ -97,14 +102,19 @@ free instance sleeps when idle, so the first load can take up to a minute.
     touch*. Then both identities are revealed and a DM opens.
   - Voice matches are forced through the TURN relay (`iceTransportPolicy: 'relay'`),
     so neither side learns the other's IP address.
-  - Report ends the chat, blocks the person and files the transcript for moderators.
-    Transcripts are deleted after 7 days.
+  - Report ends the chat, blocks the person and files the transcript for moderators,
+    also after the stranger has left. A transcript can't be edited or recalled, and no
+    room can be named like one. Transcripts are deleted after 7 days.
 - **Guest demo:** visitors can browse a seeded, read-only demo room and preview the
   matching screen. Every write-type event (matching included) is rejected on the
   server, not just hidden in the UI.
-- **Moderation panel** (`/admin`): users (reset password, rename, delete), rooms
-  (kick, text and voice restrictions, recall), reports with match transcripts,
-  feedback, and TURN relay usage. A small script on the coturn host
+- **Reports and abuse limits:** anyone can report a person or a single message; the
+  report keeps what the message said at that moment. Sign-in, sign-up, reports and
+  voice events are rate-limited, an account's login locks after repeated wrong
+  passwords, and a session in use is renewed daily instead of expiring.
+- **Moderation panel** (`/admin`): users (reset password, rename, suspend for a while
+  or for good, delete), rooms (kick, text and voice restrictions, recall), reports
+  with the reported message or match transcript, feedback, and TURN relay usage. A small script on the coturn host
   (`deploy/turn/`) reads coturn's log every minute, keeps only signed-in relay
   sessions (start, end, traffic) and a count of STUN probes, and posts them to the
   server signed with the TURN shared secret.
@@ -243,11 +253,11 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 303 backend tests + 44 browser end-to-end tests
+pytest                       # 331 backend tests + 47 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=server    # backend line coverage
 
 cd app
-npm run typecheck && npm run lint && npm test     # 45 frontend unit tests
+npm run typecheck && npm run lint && npm test     # 49 frontend unit tests
 ```
 
 The backend tests start a disposable Postgres (via `pgserver`) and drive the real
