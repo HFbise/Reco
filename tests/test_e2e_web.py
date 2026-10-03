@@ -1059,6 +1059,28 @@ def test_voice_mute_deafen_leave_and_rejoin(server, browser, tmp_path, shots):
     b.close()
 
 
+def test_sharing_a_screen_shows_you_a_preview(server, browser, tmp_path, shots):
+    create_user('mo', screenname='Mo')
+    create_user('nia', screenname='Nia')
+    b, (mo, nia) = _voice_pages(browser, tmp_path, shots, ['mo', 'nia'])
+    mo.get_by_role('button', name='Share Screen').click()
+
+    playing = "() => [...document.querySelectorAll('video')].some(v => v.videoWidth > 0 && !v.paused)"
+    # Mo sees his own screen, silent (he'd hear what he shares twice), with a way to stop it
+    mo.get_by_text('Your screen').wait_for(timeout=15000)
+    mo.wait_for_function(playing, timeout=15000)
+    assert mo.evaluate("() => [...document.querySelectorAll('video')].every(v => v.muted)")
+    # and Nia sees it as Mo's
+    nia.get_by_text('Mo', exact=True).last.wait_for()
+    nia.wait_for_function(playing, timeout=15000)
+    assert nia.get_by_text('Your screen').count() == 0
+
+    mo.get_by_role('button', name='Stop Sharing Screen').first.click()
+    mo.get_by_text('Your screen').wait_for(state='detached')
+    assert mo.locator('video').count() == 0
+    b.close()
+
+
 def test_voice_comes_back_after_the_connection_drops(server, browser, tmp_path, shots):
     create_user('kai', screenname='Kai')
     create_user('lia', screenname='Lia')

@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../hooks/useT';
 import { useColors } from '../hooks/useColors';
-import { IconClose, IconMaximize, IconPictureInPicture } from './Icon';
+import { IconClose, IconMaximize, IconPictureInPicture, IconStop } from './Icon';
 
-interface VideoStream { stream: MediaStream; screenname: string; }
+/** `own`: your shared screen, shown to you as a preview (no sound) with a stop button */
+interface VideoStream { stream: MediaStream; screenname: string; own?: boolean }
 interface Props {
   streams: Record<string, VideoStream>;
   onClose: (username: string) => void;
+  /** Stop sharing your screen */
+  onStopOwn?: () => void;
 }
 
 type CardMode = 'card' | 'floater' | 'hidden';
 
-export function StreamPanel({ streams }: Props) {
+export function StreamPanel({ streams, onStopOwn }: Props) {
   const [modes, setModes] = useState<Record<string, CardMode>>({});
 
   // Sync modes when streams change: new streams default to 'card', removed streams drop out
@@ -36,21 +39,23 @@ export function StreamPanel({ streams }: Props) {
     <>
       {cardEntries.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8, background: '#0E0F12', padding: 8, minHeight: 180, flexShrink: 0 }}>
-          {cardEntries.map(([username, { stream, screenname }]) =>
+          {cardEntries.map(([username, { stream, screenname, own }]) =>
             (modes[username] ?? 'card') === 'hidden'
               ? <RewatchCard key={username} screenname={screenname} onRewatch={() => setMode(username, 'card')} />
               : <VideoCard
                   key={username}
                   screenname={screenname}
                   stream={stream}
+                  onStop={own ? onStopOwn : undefined}
                   onPopOut={() => setMode(username, 'floater')}
                   onHide={() => setMode(username, 'hidden')}
                 />
           )}
         </div>
       )}
-      {floaterEntries.map(([username, { stream, screenname }]) => (
+      {floaterEntries.map(([username, { stream, screenname, own }]) => (
         <FloaterCard
+          onStop={own ? onStopOwn : undefined}
           key={username}
           screenname={screenname}
           stream={stream}
@@ -91,26 +96,38 @@ function VideoButton({ label, onClick, children }: { label: string; onClick: () 
   return <button style={btnStyle} onClick={onClick} title={label} aria-label={label}>{children}</button>;
 }
 
+/** On your own screen's preview: stop sharing it */
+function StopButton({ onStop }: { onStop: () => void }) {
+  const t = useT();
+  return (
+    <button onClick={onStop} title={t('stop-live')} aria-label={t('stop-live')}
+      style={{ ...btnStyle, width: 'auto', padding: '0 12px', gap: 6, background: '#D93A3A', fontSize: 12, fontWeight: 800, fontFamily: 'inherit' }}>
+      <IconStop size={12} color="#FFFFFF" />{t('stop-live')}
+    </button>
+  );
+}
+
 const liveBadge: React.CSSProperties = {
   background: '#D93A3A', borderRadius: 999, padding: '2px 8px', fontSize: 11, fontWeight: 800, letterSpacing: 0.3,
 };
 
 // ── VideoCard (in-panel) ──────────────────────────────────────
 
-function VideoCard({ screenname, stream, onPopOut, onHide }: {
-  screenname: string; stream: MediaStream; onPopOut: () => void; onHide: () => void;
+function VideoCard({ screenname, stream, onStop, onPopOut, onHide }: {
+  screenname: string; stream: MediaStream; onStop?: () => void; onPopOut: () => void; onHide: () => void;
 }) {
   const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
   useVideoStream(videoRef, stream);
   return (
     <div style={{ position: 'relative', flex: 1, minWidth: 260, minHeight: 160, background: '#1A1C21', borderRadius: 16, overflow: 'hidden' }}>
-      <video ref={videoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
+      <video ref={videoRef} autoPlay playsInline muted={!!onStop} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
       <div style={{ position: 'absolute', bottom: 10, left: 12, color: 'white', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
         <span style={liveBadge}>LIVE</span>
         {screenname}
       </div>
       <div style={{ position: 'absolute', top: 8, right: 8, display: 'flex', gap: 6 }}>
+        {onStop && <StopButton onStop={onStop} />}
         <VideoButton label={t('stream-fullscreen')} onClick={() => fullscreen(videoRef.current)}><IconMaximize size={15} color="#FFFFFF" /></VideoButton>
         <VideoButton label={t('stream-pop-out')} onClick={onPopOut}><IconPictureInPicture size={15} color="#FFFFFF" /></VideoButton>
         <VideoButton label={t('close')} onClick={onHide}><IconClose size={13} color="#FFFFFF" /></VideoButton>
@@ -137,8 +154,8 @@ function RewatchCard({ screenname, onRewatch }: { screenname: string; onRewatch:
 
 // ── FloaterCard (draggable overlay) ──────────────────────────
 
-function FloaterCard({ screenname, stream, onPopIn }: {
-  screenname: string; stream: MediaStream; onPopIn: () => void;
+function FloaterCard({ screenname, stream, onStop, onPopIn }: {
+  screenname: string; stream: MediaStream; onStop?: () => void; onPopIn: () => void;
 }) {
   const t = useT();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -199,11 +216,12 @@ function FloaterCard({ screenname, stream, onPopIn }: {
       >
         <span style={{ color: '#C9CDD6', fontSize: 13, fontWeight: 700 }}>{screenname}</span>
         <div style={{ display: 'flex', gap: 6 }}>
+          {onStop && <StopButton onStop={onStop} />}
           <VideoButton label={t('stream-fullscreen')} onClick={() => fullscreen(videoRef.current)}><IconMaximize size={15} color="#FFFFFF" /></VideoButton>
           <VideoButton label={t('stream-pop-in')} onClick={onPopIn}><IconPictureInPicture size={15} color="#FFFFFF" /></VideoButton>
         </div>
       </div>
-      <video ref={videoRef} autoPlay playsInline style={{ flex: 1, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />
+      <video ref={videoRef} autoPlay playsInline muted={!!onStop} style={{ flex: 1, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />
     </div>
   );
 }

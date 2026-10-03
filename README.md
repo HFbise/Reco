@@ -226,7 +226,7 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 303 backend tests + 43 browser end-to-end tests
+pytest                       # 303 backend tests + 44 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=.    # backend line coverage
 
 cd app

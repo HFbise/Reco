@@ -394,6 +394,7 @@ export const zh = {
   'stream-pop-in': '归位',
   'stream-live': '{name} 正在直播',
   'stream-rewatch': '重新观看',
+  'stream-yours': '你的屏幕',
   'share-audio-missing': '未检测到共享音频，请勾选「共享系统音频」',
   'duration-1m': '1 分钟',
   'duration-5m': '5 分钟',

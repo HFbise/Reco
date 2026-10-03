@@ -35,13 +35,15 @@ export interface VoiceState {
   streamingAudio: boolean;
   /** Sharing a screen (video, maybe with sound) */
   streaming: boolean;
+  /** Your own shared screen, picture only, to preview what the others see */
+  localVideo: any | null;
   /** Screens shared by others: username → stream */
   remoteVideos: Record<string, { stream: any; screenname: string }>;
 }
 
 export const IDLE: VoiceState = {
   inVoice: false, members: [], muted: false, deafened: false, ping: null, micGainSupported: false,
-  streamingAudio: false, streaming: false, remoteVideos: {},
+  streamingAudio: false, streaming: false, localVideo: null, remoteVideos: {},
 };
 
 const PING_EVERY_MS = 3000;
@@ -205,7 +207,10 @@ export class VoiceSession {
     this.mesh = null;
     this.mic = null;
     getSocket().emit('voice_leave', { room: this.room });
-    this.update({ inVoice: false, muted: false, deafened: false, ping: null, micGainSupported: false, streaming: false, streamingAudio: false });
+    this.update({
+      inVoice: false, muted: false, deafened: false, ping: null, micGainSupported: false,
+      streaming: false, streamingAudio: false, localVideo: null,
+    });
   }
 
   // ── your own audio ──
@@ -285,7 +290,8 @@ export class VoiceSession {
     this.sharedSound = stream.getAudioTracks()[0] || null;
     this.mesh?.addTrack(video, stream);
     if (this.sharedSound) this.mesh?.addTrack(this.sharedSound, stream);
-    this.update({ streaming: true, streamingAudio: !!this.sharedSound });
+    // The preview has no sound: you'd hear what you share twice
+    this.update({ streaming: true, streamingAudio: !!this.sharedSound, localVideo: new MediaStream([video]) });
     getSocket().emit('stream_start', { room: this.room });
     video.onended = () => this.stopLive(true);
   }
@@ -298,7 +304,7 @@ export class VoiceSession {
       this.display = null;
     }
     this.sharedSound = null;
-    this.update({ streaming: false, streamingAudio: false });
+    this.update({ streaming: false, streamingAudio: false, localVideo: null });
     if (announce) getSocket().emit('stream_stop', { room: this.room });
   }
 

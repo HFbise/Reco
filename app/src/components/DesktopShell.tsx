@@ -42,6 +42,13 @@ export function DesktopShell() {
   // Voice follows the open room; DMs have no voice
   const voice = useVoice(room && !room.startsWith('dm:') ? room : '');
   const audioDevices = useSavedAudioDevices(voice);
+  // Screens shared in the room; yours first, so you can see what the others see
+  const streams = {
+    ...(voice.localVideoStream && currentUser
+      ? { [currentUser.username]: { stream: voice.localVideoStream, screenname: t('stream-yours'), own: true } }
+      : {}),
+    ...voice.remoteVideoStreams,
+  };
 
   function openRoom(name: string, password?: string) {
     setRoom(name);
@@ -150,8 +157,8 @@ export function DesktopShell() {
             />
           )}
 
-          {showChat && Object.keys(voice.remoteVideoStreams).length > 0 && (
-            <StreamPanel streams={voice.remoteVideoStreams} onClose={voice.closeRemoteVideoStream} />
+          {showChat && Object.keys(streams).length > 0 && (
+            <StreamPanel streams={streams} onClose={voice.closeRemoteVideoStream} onStopOwn={() => voice.stopLive()} />
           )}
           {showChat && (
             <ChatPanel

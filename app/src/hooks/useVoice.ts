@@ -34,6 +34,8 @@ export function useVoice(room: string) {
     isStreamingAudio: state.streamingAudio,
     isStreaming: state.streaming,
     remoteVideoStreams: state.remoteVideos,
+    /** Your own screen while you share it (picture only) */
+    localVideoStream: state.localVideo as MediaStream | null,
     joinVoice: () => session?.join(micDevice.current),
     leaveVoice: () => session?.leave(),
     toggleMute: () => session?.toggleMute(),
