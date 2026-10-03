@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import type { Message } from './message/types';
 import { useColors } from '../../hooks/useColors';
-import { IconPencil, IconPlus, IconReply, IconTrash } from '../Icon';
+import { IconFlag, IconPencil, IconPlus, IconReply, IconTrash } from '../Icon';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -20,6 +20,8 @@ interface Props {
   onEdit: () => void;
   onRecall: () => void;
   onReply: () => void;
+  /** Someone else's message: report it */
+  onReport?: () => void;
 }
 
 /** Mobile long-press menu: quick reactions, more emojis, edit, unsend. */
@@ -74,6 +76,10 @@ export function MessageActionsSheet(p: Props) {
                 <Action label={t('recall')} color={c.danger} icon={<IconTrash size={18} color={c.danger} />} onPress={p.onRecall} />
               )}
               </>
+            )}
+            {p.onReport && <View style={[s.divider, { backgroundColor: c.border }]} />}
+            {p.onReport && (
+              <Action label={t('report-message')} color={c.danger} icon={<IconFlag size={17} color={c.danger} />} onPress={p.onReport} />
             )}
           </View>
         </Animated.View>

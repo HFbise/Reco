@@ -165,3 +165,95 @@ def test_a_session_in_use_gets_a_fresh_token_once_a_day(monkeypatch):
     ready = events(socketio.test_client(app, auth={'token': old}), 'session_ready')[0]
     assert ready['username'] == 'alice' and ready['token'] != old
     assert auth_session.verify_token(ready['token']) == 'alice'
+
+
+# ── the site admin suspends an account ────────────────────────
+
+
+def admin():
+    web = app.test_client()
+    assert web.post('/admin/login', data={'password': 'test-admin'}).status_code == 302
+    return web
+
+
+def test_a_suspended_account_is_signed_out_and_kept_out_until_lifted():
+    create_user('alice')
+    alice = connect_as('alice')
+    web = admin()
+    web.post('/admin/users/alice/suspend', data={'days': '7', 'reason': 'spam'})
+    assert events(alice, 'session_expired') == [{}]  # every device signed out at once
+    until = query("SELECT suspended_until, suspend_reason FROM users WHERE username = 'alice'")[0]
+    assert until['suspend_reason'] == 'spam'
+
+    client = anon_client()
+    client.emit('login', {'username': 'alice', 'password': 'secret123'})
+    reply = events(client, 'login_result')[0]
+    assert reply['code'] == 'account_suspended' and reply['params']['until'] == until['suspended_until'].strftime(
+        '%Y-%m-%d'
+    )
+    client.emit('login', {'username': 'alice', 'password': 'wrong'})  # a guesser isn't told
+    assert events(client, 'login_result')[0]['code'] == 'wrong_password'
+
+    web.post('/admin/users/alice/unsuspend')
+    login('alice')
+
+
+def test_a_ban_has_no_end_and_old_tokens_stop_working():
+    create_user('alice')
+    _, token = login('alice')
+    admin().post('/admin/users/alice/suspend', data={'days': '0'})
+    assert auth_session.verify_token(token) is None
+    client = anon_client()
+    client.emit('login', {'username': 'alice', 'password': 'secret123'})
+    assert events(client, 'login_result')[0]['code'] == 'account_banned'
+    assert '永久封禁' in admin().get('/admin/users').get_data(as_text=True)
+
+
+def test_suspending_ends_a_live_match():
+    import handlers.match as match_handlers
+
+    create_user('alice')
+    create_user('bob')
+    alice, bob = connect_as('alice'), connect_as('bob')
+    for c in (alice, bob):
+        c.emit('match_enqueue', {'mode': 'text', 'tags': []})
+    assert 'bob' in match_handlers._live
+    admin().post('/admin/users/bob/suspend', data={'days': '1'})
+    assert 'bob' not in match_handlers._live and 'alice' not in match_handlers._live
+    assert events(alice, 'match_ended')[0]['reason'] == 'partner_left'
+
+
+# ── reporting a message ───────────────────────────────────────
+
+
+def test_a_reported_message_is_kept_as_it_was_said():
+    create_user('alice')
+    create_user('bob')
+    create_room('club', 'alice', members=['alice', 'bob'])
+    alice, bob = connect_as('alice'), connect_as('bob')
+    join(alice, 'club')
+    join(bob, 'club')
+    msg_id = say(bob, 'club', 'something nasty')
+    alice.emit('report_user', {'reported': 'bob', 'reason': '', 'message_id': msg_id})
+    assert events(alice, 'report_result')[0]['success']
+    bob.emit('edit_message', {'id': msg_id, 'text': 'something nice'})
+    bob.emit('recall_message', {'id': msg_id})
+    report = query('SELECT reported, room, message_id, message_text FROM reports')[0]
+    assert report == {'reported': 'bob', 'room': 'club', 'message_id': msg_id, 'message_text': 'something nasty'}
+    assert 'something nasty' in admin().get('/admin/reports').get_data(as_text=True)
+
+
+def test_only_a_message_you_can_see_by_the_person_named_can_be_reported():
+    create_user('alice')
+    create_user('bob')
+    create_user('eve')
+    create_room('club', 'alice', members=['alice', 'bob'])
+    alice, eve = connect_as('alice'), connect_as('eve')
+    join(alice, 'club')
+    msg_id = say(alice, 'club', 'members only')
+    eve.emit('report_user', {'reported': 'alice', 'reason': '', 'message_id': msg_id})  # not in the room
+    bob = connect_as('bob')
+    bob.emit('report_user', {'reported': 'eve', 'reason': '', 'message_id': msg_id})  # not eve's message
+    assert events(eve, 'report_result')[0]['code'] == 'report_failed'
+    assert events(bob, 'report_result')[0]['code'] == 'report_failed'
+    assert query('SELECT * FROM reports') == []

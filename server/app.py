@@ -247,6 +247,10 @@ def _migrate():
                 ended_by TEXT, end_reason TEXT, a_keeps BOOLEAN DEFAULT FALSE, b_keeps BOOLEAN DEFAULT FALSE,
                 dm_room TEXT)""")
             cur.execute('ALTER TABLE reports ADD COLUMN IF NOT EXISTS match_id INTEGER')
+            # A reported message: where, and what it said then (edits or a recall don't change it)
+            cur.execute('ALTER TABLE reports ADD COLUMN IF NOT EXISTS message_id INTEGER')
+            cur.execute('ALTER TABLE reports ADD COLUMN IF NOT EXISTS room TEXT')
+            cur.execute('ALTER TABLE reports ADD COLUMN IF NOT EXISTS message_text TEXT')
             cur.execute("""CREATE TABLE IF NOT EXISTS deleted_usernames (
                 username TEXT PRIMARY KEY, deleted_at TIMESTAMPTZ DEFAULT NOW())""")
             cur.execute("""CREATE TABLE IF NOT EXISTS dm_closed (

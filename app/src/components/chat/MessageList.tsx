@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { confirmReportMessage } from '../../lib/reports';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native';
 import { MessageRow } from './message/MessageRow';
 import type { Message } from './message/types';
@@ -117,6 +118,7 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
           if (!msg.reactions?.[QUICK_REACTION]?.includes(p.currentUsername ?? '')) p.onReact(msg.id, QUICK_REACTION);
         } : undefined}
         onReply={desktopActions ? () => p.onReply(msg) : undefined}
+        onReport={desktopActions && !msg.isOwn && !msg.system ? () => confirmReportMessage(msg) : undefined}
         onQuotePress={jumpTo}
         highlighted={highlighted === msg.id}
       />

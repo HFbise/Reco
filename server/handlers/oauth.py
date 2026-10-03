@@ -15,7 +15,7 @@ from auth_session import authenticated, password_fingerprint
 from db import get_db
 from extensions import socketio
 from handlers.auth import MAX_SCREENNAME_LEN, sign_in
-from moderation import USERNAME_RE, username_available
+from moderation import USERNAME_RE, suspension_reply, username_available
 from replies import fail
 from utils import SECURITY_QUESTIONS, hash_password, str_field
 
@@ -36,6 +36,10 @@ def handle_oauth_login(data):
         # A password change or rename since the ticket was issued makes it stale
         if not user or password_fingerprint(user['password']) != ticket['p']:
             fail('oauth_login_result', 'oauth_expired')
+            return
+        refused = suspension_reply(user)
+        if refused:
+            fail('oauth_login_result', *refused)
             return
         emit('oauth_login_result', sign_in(user, user['password']))
     except Exception as e:

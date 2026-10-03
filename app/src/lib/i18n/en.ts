@@ -133,6 +133,9 @@ export const en: Record<keyof typeof zh, string> = {
   'report': 'Report',
   'report-reason': 'Reason (optional)',
   'report-sent': 'Report submitted',
+  'report-message': 'Report message',
+  'report-message-confirm': 'Send this message to the moderators as a report?',
+  'srv-report_failed': "This message can't be reported",
   'report-failed': "The report couldn't be sent",
   'blocked-label': 'Blocked',
 
@@ -244,6 +247,8 @@ export const en: Record<keyof typeof zh, string> = {
   'srv-invalid_screenname': 'Display name must be 1-{max} characters',
   'srv-password_too_short': 'Password must be at least {min} characters',
   'srv-too_many_attempts': 'Too many attempts. Try again in {secs}s',
+  'srv-account_suspended': 'This account is suspended until {until}',
+  'srv-account_banned': 'This account has been banned',
   'srv-too_many_signups': 'Too many new accounts from here. Try again later',
   'srv-too_many_reports': "You've sent several reports just now. Try again in a few minutes",
   'srv-user_not_found': 'User not found',

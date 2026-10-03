@@ -52,7 +52,7 @@ form.inline { display: inline; }
 .modal-overlay.open { display: flex; }
 .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 28px; width: 360px; }
 .modal h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
-.modal input { width: 100%; margin-bottom: 14px; }
+.modal input, .modal select { width: 100%; margin-bottom: 14px; }
 .modal-btns { display: flex; gap: 8px; justify-content: flex-end; }
 .notice { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; font-size: 13px; }
 .notice-ok { background: var(--ok-bg); color: var(--ok); }

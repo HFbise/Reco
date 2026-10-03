@@ -9,6 +9,7 @@ import functools
 import hmac
 import logging
 import os
+from datetime import UTC, datetime
 from urllib.parse import quote
 
 from flask import Blueprint, redirect, render_template, request, session, url_for
@@ -19,6 +20,7 @@ import room_log
 import turn_usage
 from auth_session import end_sessions
 from db import get_db
+from handlers import match as match_handlers
 from state import LOBBY, check_login_rate, client_ip, online_users, record_login_fail, reset_login_attempts
 from utils import hash_password
 
@@ -31,6 +33,7 @@ PER_PAGE = 50
 ADMIN_ALL = 'admin-login:*'  # failed admin sign-ins from anywhere
 MIN_PASSWORD_LEN = 6
 MUTE_OPTIONS = [(600, '10 分钟'), (3600, '1 小时'), (86400, '1 天'), (0, '永久')]
+SUSPEND_OPTIONS = [(1, '1 天'), (7, '7 天'), (30, '30 天'), (0, '永久')]  # days
 RESTRICTION_LABELS = {moderation.TEXT: '禁言', moderation.VOICE: '语音禁言'}
 LOG_LABELS = {
     'kick': '踢出', 'unkick': '解封', 'mute': '禁言', 'unmute': '解除禁言', 'voice_ban': '禁止语音',
@@ -158,7 +161,8 @@ def reports():
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
-            'SELECT id, reporter, reported, reason, created_at, match_id FROM reports ORDER BY created_at DESC LIMIT 300'
+            'SELECT id, reporter, reported, reason, created_at, match_id, room, message_text FROM reports'
+            ' ORDER BY created_at DESC LIMIT 300'
         )
         rows = cur.fetchall()
     return render_template('admin/reports.html', section='reports', rows=rows)
@@ -224,20 +228,47 @@ def users():
         cur.execute(f'SELECT COUNT(*) AS c FROM users {where}', params)
         total = cur.fetchone()['c']
         cur.execute(
-            f'SELECT username, screenname, bio FROM users {where} ORDER BY username LIMIT %s OFFSET %s',
+            f'SELECT username, screenname, bio, suspended_until, suspend_reason FROM users {where}'
+            ' ORDER BY username LIMIT %s OFFSET %s',
             (*params, PER_PAGE, (page - 1) * PER_PAGE),
         )
         rows = cur.fetchall()
+    now = datetime.now(UTC)
+    for r in rows:
+        until = r['suspended_until']
+        r['suspended'] = bool(until) and until > now
+        r['banned'] = bool(until) and until >= moderation.PERMANENT
     return render_template(
         'admin/users.html',
         section='users',
         q=q,
         rows=rows,
+        suspend_options=SUSPEND_OPTIONS,
         total=total,
         page=page,
         per_page=PER_PAGE,
         page_url=lambda n: url_for('admin.users', q=q or None, page=n),
     )
+
+
+@admin_bp.route('/users/<username>/suspend', methods=['POST'])
+@login_required
+def suspend_user(username):
+    days = request.form.get('days', type=int)
+    if days not in dict(SUSPEND_OPTIONS):
+        return _back(url_for('admin.users'), error='请选择封禁时长')
+    if not moderation.suspend(username, days, (request.form.get('reason') or '').strip()):
+        return _back(url_for('admin.users'), error=f'没有用户 {username}')
+    match_handlers.drop(username)
+    return _back(url_for('admin.users'), ok=f'已封禁 {username}（{dict(SUSPEND_OPTIONS)[days]}）')
+
+
+@admin_bp.route('/users/<username>/unsuspend', methods=['POST'])
+@login_required
+def unsuspend_user(username):
+    if not moderation.unsuspend(username):
+        return _back(url_for('admin.users'), error=f'没有用户 {username}')
+    return _back(url_for('admin.users'), ok=f'已解封 {username}')
 
 
 @admin_bp.route('/users/<username>/reset-password', methods=['POST'])
