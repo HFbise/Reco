@@ -39,6 +39,13 @@ export function getSocket(): Socket {
       if (wasSignedIn) showAlert(tr('session-expired-title'), tr('session-expired-msg'));
     });
     socket.on('connect', reportVisibility);
+    // Once a day the server swaps the session token for a fresh one: keep it for next time
+    socket.on('session_ready', (data: { username?: string; token?: string }) => {
+      const user = useAuthStore.getState().currentUser;
+      if (data.token && user && !user.guest && user.username === data.username) {
+        useAuthStore.getState().setUser({ ...user, token: data.token });
+      }
+    });
     // Demo visitors tried something that needs an account
     socket.on('guest_read_only', () => showAlert(tr('srv-guest_read_only')));
     socket.on('auth_required', () => {

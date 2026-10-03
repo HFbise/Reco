@@ -56,18 +56,28 @@ def check_login_rate(username: str):
     return True, 0
 
 
-def record_login_fail(username: str):
+def record_login_fail(username: str, limit: int = 10, lock: int = 300):
+    """One more failure for `username` (or any key); at `limit` it's locked for `lock` seconds."""
     now = time.time()
     d = login_attempts.get(username, {'count': 0})
     d['count'] = d.get('count', 0) + 1
-    if d['count'] >= 10:
-        d['until'] = now + 300
+    if d['count'] >= limit:
+        d['until'] = now + lock
         d['count'] = 0
     login_attempts[username] = d
 
 
 def reset_login_attempts(username: str):
     login_attempts.pop(username, None)
+
+
+def client_ip() -> str:
+    """The visitor's address, as Render's proxy reports it (the first X-Forwarded-For hop). A
+    client can put its own value there, so limits keyed on it only slow down casual abuse;
+    whatever must hold (an account's login lockout) is keyed on something it can't change."""
+    from flask import request
+
+    return (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
 
 
 # ── System messages ───────────────────────────────────────────

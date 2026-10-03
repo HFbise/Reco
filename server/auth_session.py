@@ -14,6 +14,7 @@ import functools
 import hashlib
 import logging
 import secrets
+import time
 
 import sentry_sdk
 from flask import request
@@ -27,7 +28,8 @@ from state import hidden_sids, invisible, online_users
 
 log = logging.getLogger(__name__)
 
-TOKEN_MAX_AGE = 60 * 60 * 24 * 30  # 30 days
+TOKEN_MAX_AGE = 60 * 60 * 24 * 30  # 30 days without using Reco: sign in again
+RENEW_AFTER = 60 * 60 * 24  # a token in use is swapped for a fresh one once a day
 GUEST_TOKEN_MAX_AGE = 60 * 60 * 24  # 1 day
 
 # Demo visitors get ids like 'guest:3f9a...'. Real usernames can't contain ':',
@@ -84,6 +86,24 @@ def verify_token(token: str):
     if not row or password_fingerprint(row['password']) != payload.get('p'):
         return None
     return username
+
+
+def renewed_token(token: str) -> str | None:
+    """A fresh token for a signed-in account whose token is over RENEW_AFTER old, so someone who
+    keeps using Reco stays signed in; None if it's still new (or a guest's, or not valid)."""
+    try:
+        payload, issued = _serializer.loads(token, max_age=TOKEN_MAX_AGE, return_timestamp=True)
+    except (BadSignature, SignatureExpired):
+        return None
+    if payload.get('g') or time.time() - issued.timestamp() < RENEW_AFTER:
+        return None
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('SELECT password FROM users WHERE username = %s', (payload.get('u'),))
+        row = cur.fetchone()
+    if not row or password_fingerprint(row['password']) != payload.get('p'):
+        return None
+    return make_token(payload['u'], row['password'])
 
 
 def bind(username: str):

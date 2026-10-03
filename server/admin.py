@@ -19,7 +19,7 @@ import room_log
 import turn_usage
 from auth_session import end_sessions
 from db import get_db
-from state import LOBBY, check_login_rate, online_users, record_login_fail, reset_login_attempts
+from state import LOBBY, check_login_rate, client_ip, online_users, record_login_fail, reset_login_attempts
 from utils import hash_password
 
 log = logging.getLogger(__name__)
@@ -28,6 +28,7 @@ admin_bp = Blueprint('admin', __name__, url_prefix='/admin', template_folder='ad
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', '')
 
 PER_PAGE = 50
+ADMIN_ALL = 'admin-login:*'  # failed admin sign-ins from anywhere
 MIN_PASSWORD_LEN = 6
 MUTE_OPTIONS = [(600, '10 分钟'), (3600, '1 小时'), (86400, '1 天'), (0, '永久')]
 RESTRICTION_LABELS = {moderation.TEXT: '禁言', moderation.VOICE: '语音禁言'}
@@ -86,17 +87,18 @@ def login():
         return render_template('admin/login.html', error='后台未启用：服务器没有设置 ADMIN_PASSWORD'), 503
     if request.method == 'GET':
         return render_template('admin/login.html')
-    # Render sits behind a proxy; the first X-Forwarded-For hop is the client
-    ip = (request.headers.get('X-Forwarded-For') or request.remote_addr or '').split(',')[0].strip()
-    rate_key = f'admin-login:{ip}'
-    allowed, secs = check_login_rate(rate_key)
-    if not allowed:
+    # Per address, and across all addresses: an address can be faked in X-Forwarded-For, so only
+    # the overall limit really bounds guessing (it can lock the real admin out for a while too)
+    rate_key = f'admin-login:{client_ip()}'
+    secs = max(check_login_rate(rate_key)[1], check_login_rate(ADMIN_ALL)[1])
+    if secs:
         return render_template('admin/login.html', error=f'尝试过多，请 {secs} 秒后重试'), 429
     if hmac.compare_digest((request.form.get('password') or '').encode(), ADMIN_PASSWORD.encode()):
         reset_login_attempts(rate_key)
         session['admin_authed'] = True
         return redirect(url_for('admin.dashboard'))
     record_login_fail(rate_key)
+    record_login_fail(ADMIN_ALL, limit=30, lock=900)
     return render_template('admin/login.html', error='密码错误')
 
 

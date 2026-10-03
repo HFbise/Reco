@@ -8,11 +8,14 @@ from flask_socketio import emit
 from auth_session import authenticated, readable
 from db import get_db
 from extensions import socketio
+from replies import fail
+from state import check_msg_rate
 from utils import str_field
 
 log = logging.getLogger(__name__)
 
 MAX_REPORT_LEN = 500
+REPORTS_PER_10_MIN = 5  # each one lands in the moderators' list
 
 
 @socketio.on('report_user')
@@ -22,6 +25,9 @@ def handle_report_user(reporter, data):
     reported = str_field(data, 'reported')
     reason = str_field(data, 'reason').strip()[:MAX_REPORT_LEN]
     if not reported or reporter == reported:
+        return
+    if not check_msg_rate(f'report:{reporter}', max_msgs=REPORTS_PER_10_MIN, window=600):
+        fail('report_result', 'too_many_reports')
         return
     try:
         with get_db() as conn:
