@@ -1075,6 +1075,32 @@ def test_sharing_a_screen_shows_you_a_preview(server, browser, tmp_path, shots):
     nia.wait_for_function(playing, timeout=15000)
     assert nia.get_by_text('Your screen').count() == 0
 
+    # The strip of screens is as tall as you drag it, and stays that way on this device
+    def drag(handle, dx, dy):
+        box = handle.bounding_box()
+        mo.mouse.move(box['x'] + box['width'] / 2, box['y'] + box['height'] / 2)
+        mo.mouse.down()
+        mo.mouse.move(box['x'] + box['width'] / 2 + dx, box['y'] + box['height'] / 2 + dy, steps=5)
+        mo.mouse.up()
+
+    resize = mo.get_by_role('separator', name='Drag to resize (double-click to reset)')
+    strip = resize.locator('xpath=..')
+    before = strip.bounding_box()['height']
+    drag(resize, 0, 100)
+    mo.wait_for_function(
+        '([e, h]) => Math.abs(e.getBoundingClientRect().height - h) <= 2', arg=[strip.element_handle(), before + 100]
+    )
+    saved = "() => JSON.parse(localStorage.getItem('chat-prefs')).state"
+    assert abs(mo.evaluate(saved)['streamHeight'] - (before + 100)) <= 2
+
+    # Popped out, its window is resized from the corner
+    mo.get_by_role('button', name='Pop out').click()
+    corner = mo.get_by_role('separator', name='Drag to resize (double-click to reset)')
+    window = corner.locator('xpath=..')
+    drag(corner, 80, 60)
+    mo.wait_for_function('e => e.offsetWidth === 400 && e.offsetHeight === 270', arg=window.element_handle())
+    assert mo.evaluate(saved)['floaterSize'] == {'width': 400, 'height': 270}
+
     mo.get_by_role('button', name='Stop Sharing Screen').first.click()
     mo.get_by_text('Your screen').wait_for(state='detached')
     assert mo.locator('video').count() == 0

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useT } from '../hooks/useT';
 import { useColors } from '../hooks/useColors';
+import { FLOATER_SIZE, STREAM_HEIGHT, usePrefsStore } from '../store/prefsStore';
 import { IconClose, IconMaximize, IconPictureInPicture, IconStop } from './Icon';
 
 /** `own`: your shared screen, shown to you as a preview (no sound) with a stop button */
@@ -34,11 +36,13 @@ export function StreamPanel({ streams, onStopOwn }: Props) {
   const setMode = (u: string, m: CardMode) => setModes(prev => ({ ...prev, [u]: m }));
   const cardEntries = entries.filter(([u]) => (modes[u] ?? 'card') !== 'floater');
   const floaterEntries = entries.filter(([u]) => modes[u] === 'floater');
+  // Only "watch again" cards left: nothing to resize
+  const onlyHidden = cardEntries.every(([u]) => modes[u] === 'hidden');
 
   return (
     <>
       {cardEntries.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'row', flexWrap: 'wrap', gap: 8, background: '#0E0F12', padding: 8, minHeight: 180, flexShrink: 0 }}>
+        <DockedStrip resizable={!onlyHidden}>
           {cardEntries.map(([username, { stream, screenname, own }]) =>
             (modes[username] ?? 'card') === 'hidden'
               ? <RewatchCard key={username} screenname={screenname} onRewatch={() => setMode(username, 'card')} />
@@ -51,7 +55,7 @@ export function StreamPanel({ streams, onStopOwn }: Props) {
                   onHide={() => setMode(username, 'hidden')}
                 />
           )}
-        </div>
+        </DockedStrip>
       )}
       {floaterEntries.map(([username, { stream, screenname, own }]) => (
         <FloaterCard
@@ -67,6 +71,59 @@ export function StreamPanel({ streams, onStopOwn }: Props) {
 }
 
 // ── shared helpers ────────────────────────────────────────────
+
+const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
+
+/** Follow a drag from a pointerdown until the button is let go: `onMove` gets how far it went. */
+function dragFrom(e: React.PointerEvent, onMove: (dx: number, dy: number) => void) {
+  e.preventDefault();
+  const x = e.clientX, y = e.clientY;
+  const move = (ev: PointerEvent) => onMove(ev.clientX - x, ev.clientY - y);
+  const up = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', up);
+    document.body.style.userSelect = '';
+  };
+  document.body.style.userSelect = 'none'; // no text selected while dragging
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+}
+
+/** The strip of screens above the chat. Its bottom edge drags to make it taller or shorter
+ *  (double-click: back to the default); the height is remembered on this device. */
+function DockedStrip({ resizable, children }: { resizable: boolean; children: React.ReactNode }) {
+  const t = useT();
+  const saved = usePrefsStore((p) => p.streamHeight);
+  const setPrefs = usePrefsStore((p) => p.set);
+  const [height, setHeight] = useState(saved);
+  const fit = (h: number) => clamp(h, 140, Math.round(window.innerHeight * 0.75));
+  const shown = fit(height);
+  return (
+    <div style={{ position: 'relative', flexShrink: 0, background: '#0E0F12' }}>
+      <div style={{
+        display: 'flex', flexDirection: 'row', gap: 8, padding: 8, overflowX: 'auto', boxSizing: 'border-box',
+        ...(resizable ? { height: shown } : { minHeight: 80 }),
+      }}>
+        {children}
+      </div>
+      {resizable && (
+        <div
+          role="separator" aria-orientation="horizontal" aria-label={t('stream-resize')} title={t('stream-resize')}
+          onPointerDown={(e) => {
+            const from = shown;
+            let last = from;
+            dragFrom(e, (_dx, dy) => { last = fit(from + dy); setHeight(last); });
+            window.addEventListener('pointerup', () => setPrefs({ streamHeight: last }), { once: true });
+          }}
+          onDoubleClick={() => { setHeight(STREAM_HEIGHT); setPrefs({ streamHeight: STREAM_HEIGHT }); }}
+          style={{ position: 'absolute', left: 0, right: 0, bottom: -4, height: 8, cursor: 'row-resize', zIndex: 2, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+        >
+          <div style={{ width: 40, height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.35)' }} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 function useVideoStream(videoRef: React.RefObject<HTMLVideoElement | null>, stream: MediaStream) {
   useEffect(() => {
@@ -120,7 +177,7 @@ function VideoCard({ screenname, stream, onStop, onPopOut, onHide }: {
   const videoRef = useRef<HTMLVideoElement>(null);
   useVideoStream(videoRef, stream);
   return (
-    <div style={{ position: 'relative', flex: 1, minWidth: 260, minHeight: 160, background: '#1A1C21', borderRadius: 16, overflow: 'hidden' }}>
+    <div style={{ position: 'relative', flex: 1, minWidth: 260, background: '#1A1C21', borderRadius: 16, overflow: 'hidden' }}>
       <video ref={videoRef} autoPlay playsInline muted={!!onStop} style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }} />
       <div style={{ position: 'absolute', bottom: 10, left: 12, color: 'white', fontSize: 13, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, pointerEvents: 'none', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>
         <span style={liveBadge}>LIVE</span>
@@ -162,6 +219,27 @@ function FloaterCard({ screenname, stream, onStop, onPopIn }: {
   useVideoStream(videoRef, stream);
 
   const floaterRef = useRef<HTMLDivElement>(null);
+  // Its size: the bottom-right corner drags it bigger or smaller (remembered on this device)
+  const saved = usePrefsStore((p) => p.floaterSize);
+  const setPrefs = usePrefsStore((p) => p.set);
+  const [size, setSize] = useState(saved);
+  const fitSize = (w: number, h: number) => ({
+    width: Math.round(clamp(w, 240, window.innerWidth * 0.9)),
+    height: Math.round(clamp(h, 150, window.innerHeight * 0.85)),
+  });
+  const shown = fitSize(size.width, size.height);
+
+  function onResizeDown(e: React.PointerEvent) {
+    const el = floaterRef.current;
+    if (!el) return;
+    // Pinned by its top-left from here on, so the dragged corner follows the pointer
+    const r = el.getBoundingClientRect();
+    Object.assign(el.style, { left: r.left + 'px', top: r.top + 'px', right: 'auto', bottom: 'auto' });
+    let last = shown;
+    dragFrom(e, (dx, dy) => { last = fitSize(r.width + dx, r.height + dy); setSize(last); });
+    window.addEventListener('pointerup', () => setPrefs({ floaterSize: last }), { once: true });
+  }
+
   const listeners = useRef<{ move: (e: MouseEvent) => void; up: () => void } | null>(null);
   const drag = useRef<{ startX: number; startY: number; ox: number; oy: number } | null>(null);
 
@@ -200,11 +278,13 @@ function FloaterCard({ screenname, stream, onStop, onPopIn }: {
     }
   }, []);
 
-  return (
+  // On the page itself, not inside the middle column: there the voice column beside it would
+  // cover whatever part of it floats over that column
+  return createPortal(
     <div
       ref={floaterRef}
       style={{
-        position: 'fixed', right: 20, bottom: 20, width: 320, height: 210,
+        position: 'fixed', right: 20, bottom: 20, width: shown.width, height: shown.height,
         background: '#1A1C21', borderRadius: 16, overflow: 'hidden',
         boxShadow: '0 8px 32px rgba(0,0,0,0.5)', zIndex: 1000,
         display: 'flex', flexDirection: 'column',
@@ -221,7 +301,17 @@ function FloaterCard({ screenname, stream, onStop, onPopIn }: {
           <VideoButton label={t('stream-pop-in')} onClick={onPopIn}><IconPictureInPicture size={15} color="#FFFFFF" /></VideoButton>
         </div>
       </div>
-      <video ref={videoRef} autoPlay playsInline muted={!!onStop} style={{ flex: 1, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />
-    </div>
+      <video ref={videoRef} autoPlay playsInline muted={!!onStop} style={{ flex: 1, minHeight: 0, width: '100%', objectFit: 'contain', background: '#000', display: 'block' }} />
+      <div
+        role="separator" aria-label={t('stream-resize')} title={t('stream-resize')}
+        onPointerDown={onResizeDown}
+        onDoubleClick={() => { setSize(FLOATER_SIZE); setPrefs({ floaterSize: FLOATER_SIZE }); }}
+        style={{
+          position: 'absolute', right: 0, bottom: 0, width: 18, height: 18, cursor: 'nwse-resize',
+          background: 'linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.45) 50%, rgba(255,255,255,0.45) 60%, transparent 60%, transparent 70%, rgba(255,255,255,0.45) 70%, rgba(255,255,255,0.45) 80%, transparent 80%)',
+        }}
+      />
+    </div>,
+    document.body,
   );
 }

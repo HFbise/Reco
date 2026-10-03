@@ -397,6 +397,7 @@ export const en: Record<keyof typeof zh, string> = {
   'stream-live': '{name} is live',
   'stream-rewatch': 'Watch again',
   'stream-yours': 'Your screen',
+  'stream-resize': 'Drag to resize (double-click to reset)',
   'share-audio-missing': 'No audio was shared. Tick "Share system audio" and try again',
   'duration-1m': '1 minute',
   'duration-5m': '5 minutes',

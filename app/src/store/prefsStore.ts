@@ -19,7 +19,13 @@ interface Prefs {
   textSize: TextSize;
   /** 9:05 PM instead of 21:05 */
   hour12: boolean;
+  /** Shared screens: the docked strip's height and the pop-out window's size, as last dragged */
+  streamHeight: number;
+  floaterSize: { width: number; height: number };
 }
+
+export const STREAM_HEIGHT = 240;
+export const FLOATER_SIZE = { width: 320, height: 210 };
 
 interface PrefsState extends Prefs {
   set: (patch: Partial<Prefs>) => void;
@@ -34,6 +40,8 @@ export const usePrefsStore = create<PrefsState>()(
       enterSends: true,
       textSize: 'default',
       hour12: false,
+      streamHeight: STREAM_HEIGHT,
+      floaterSize: FLOATER_SIZE,
       set: (patch) => set(patch),
     }),
     { name: 'chat-prefs', storage: createJSONStorage(() => AsyncStorage) },
