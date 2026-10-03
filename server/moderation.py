@@ -8,6 +8,7 @@ import logging
 import re
 from datetime import UTC, datetime, timedelta
 
+import pins
 import voice_state
 from auth_session import end_sessions
 from db import get_db
@@ -87,6 +88,7 @@ def close_room(room: str):
         cur.execute('DELETE FROM rooms WHERE name = %s', (room,))
         cur.execute('DELETE FROM messages WHERE room = %s', (room,))
         cur.execute('DELETE FROM images WHERE room = %s', (room,))
+        cur.execute('DELETE FROM pinned_messages WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_invites WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_restrictions WHERE room = %s', (room,))
         cur.execute('DELETE FROM chat_prefs WHERE room = %s', (room,))
@@ -213,12 +215,18 @@ def recall(msg_id) -> bool:
             'UPDATE messages SET recalled = true WHERE id = %s AND recalled IS NOT TRUE RETURNING room', (msg_id,)
         )
         row = cur.fetchone()
-        if row:  # its photo, if any, isn't shown again: no need to keep it
+        unpinned = False
+        if row:  # its photo, if any, isn't shown again: no need to keep it; nor its pin
             cur.execute('DELETE FROM images WHERE message_id = %s', (msg_id,))
+            unpinned = pins.unpin(cur, msg_id) is not None
         conn.commit()
     if not row:
         return False
     socketio.emit('message_recalled', {'id': msg_id, 'room': row['room']}, to=row['room'])
+    if unpinned:
+        with get_db() as conn:
+            listed = pins.listed(conn.cursor(), row['room'])
+        socketio.emit('pins_updated', {'room': row['room'], 'pins': listed}, to=row['room'])
     return True
 
 

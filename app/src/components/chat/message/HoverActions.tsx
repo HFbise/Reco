@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { IconEmoji, IconFlag, IconPencil, IconReply, IconTrash } from '../../Icon';
+import { IconEmoji, IconFlag, IconPencil, IconPin, IconReply, IconTrash } from '../../Icon';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 
@@ -12,9 +12,12 @@ export interface HoverHandlers {
   onRecall?: () => void;
   /** Someone else's message: report it to the moderators */
   onReport?: () => void;
+  /** Pin it to the chat (or unpin it, when `pinned`) */
+  onPin?: () => void;
+  pinned?: boolean;
 }
 
-/** Desktop: reply / react / edit / recall / report beside a hovered bubble. Placed outside the bubble's
+/** Desktop: reply / react / edit / pin / recall / report beside a hovered bubble. Placed outside the bubble's
  *  box (absolutely), so showing them never changes how the text wraps. */
 export function HoverActions({ own, ...h }: HoverHandlers & { own: boolean }) {
   const c = useColors();
@@ -50,6 +53,11 @@ export function HoverActions({ own, ...h }: HoverHandlers & { own: boolean }) {
       {h.onEdit && (
         <TouchableOpacity style={s.button} onPress={h.onEdit} activeOpacity={0.7} accessibilityLabel={t('edit')}>
           <IconPencil size={16} color={c.textSub} />
+        </TouchableOpacity>
+      )}
+      {h.onPin && (
+        <TouchableOpacity style={s.button} onPress={h.onPin} activeOpacity={0.7} accessibilityLabel={t(h.pinned ? 'unpin-message' : 'pin-message')}>
+          <IconPin size={15} color={h.pinned ? c.accent : c.textSub} />
         </TouchableOpacity>
       )}
       {h.onRecall && (

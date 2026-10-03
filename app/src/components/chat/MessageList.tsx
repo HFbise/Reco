@@ -37,6 +37,11 @@ interface Props {
   onRetry: (msg: Message) => void;
   /** Display names of the others typing right now */
   typing: string[];
+  /** The first message that was unread when the chat opened: "New messages" goes above it */
+  unreadFrom?: number | null;
+  /** Pinned messages' ids, and pinning or unpinning one (for those who may) */
+  pinnedIds?: Set<number>;
+  onTogglePin?: (msg: Message) => void;
 }
 
 const HIGHLIGHT_MS = 1600;
@@ -70,7 +75,24 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
   }
   useImperativeHandle(ref, () => ({ jumpTo }));
 
-  function renderItem({ item }: { item: FeedItem }) {
+  /** A message, with "New messages" above the first one that was unread when the chat opened */
+  function renderItem(info: { item: FeedItem }) {
+    const row = renderRow(info);
+    const item = info.item;
+    if (p.unreadFrom == null || item._type === 'sep' || (item as Message).id !== p.unreadFrom) return row;
+    return (
+      <View>
+        <View style={s.newDivider} accessibilityRole="text" accessibilityLabel={t('new-messages')}>
+          <View style={[s.newLine, { backgroundColor: c.danger }]} />
+          <Text style={[s.newText, { color: c.danger }]}>{t('new-messages')}</Text>
+          <View style={[s.newLine, { backgroundColor: c.danger }]} />
+        </View>
+        {row}
+      </View>
+    );
+  }
+
+  function renderRow({ item }: { item: FeedItem }) {
     if (item._type === 'sep') {
       return (
         <View style={s.timeSep}>
@@ -119,6 +141,8 @@ export const MessageList = forwardRef<MessageListHandle, Props>(function Message
         } : undefined}
         onReply={desktopActions ? () => p.onReply(msg) : undefined}
         onReport={desktopActions && !msg.isOwn && !msg.system ? () => confirmReportMessage(msg) : undefined}
+        onPin={desktopActions && p.onTogglePin ? () => p.onTogglePin!(msg) : undefined}
+        pinned={p.pinnedIds?.has(msg.id)}
         onQuotePress={jumpTo}
         highlighted={highlighted === msg.id}
       />
@@ -163,6 +187,9 @@ const s = StyleSheet.create({
   timeSepText: { fontSize: 12, fontWeight: '800', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, overflow: 'hidden' },
   sysMsg: { textAlign: 'center', fontSize: 13, paddingTop: 10, paddingHorizontal: Spacing.lg },
   loadOlderBtn: { alignItems: 'center', paddingVertical: 12 },
+  newDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: Spacing.lg, marginTop: 14, marginBottom: 2 },
+  newLine: { flex: 1, height: 1, opacity: 0.5 },
+  newText: { fontSize: 12, fontWeight: '800' },
   loadOlderText: { fontSize: 13, fontWeight: '600' as any },
   inviteCard: { margin: 12, borderRadius: 12, borderWidth: 1, padding: 12, gap: 8 },
   inviteTitle: { fontSize: 13 },

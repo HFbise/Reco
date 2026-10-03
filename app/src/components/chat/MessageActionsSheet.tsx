@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, Animated, PanResponder } from 'react-native';
 import type { Message } from './message/types';
 import { useColors } from '../../hooks/useColors';
-import { IconFlag, IconPencil, IconPlus, IconReply, IconTrash } from '../Icon';
+import { IconFlag, IconPencil, IconPin, IconPlus, IconReply, IconTrash } from '../Icon';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius, Spacing } from '../../theme';
 
@@ -22,6 +22,9 @@ interface Props {
   onReply: () => void;
   /** Someone else's message: report it */
   onReport?: () => void;
+  /** Pin or unpin it (for those who may) */
+  onPin?: () => void;
+  pinned?: boolean;
 }
 
 /** Mobile long-press menu: quick reactions, more emojis, edit, unsend. */
@@ -65,6 +68,11 @@ export function MessageActionsSheet(p: Props) {
           </View>
           <View style={[s.actions, { backgroundColor: c.surface2 }]}>
             <Action label={t('reply')} color={c.text} icon={<IconReply size={18} color={c.text} />} onPress={p.onReply} />
+            {p.onPin && <View style={[s.divider, { backgroundColor: c.border }]} />}
+            {p.onPin && (
+              <Action label={t(p.pinned ? 'unpin-message' : 'pin-message')} color={c.text}
+                icon={<IconPin size={17} color={c.text} />} onPress={p.onPin} />
+            )}
             {(p.canEdit || p.canRecall) && <View style={[s.divider, { backgroundColor: c.border }]} />}
             {(p.canEdit || p.canRecall) && (
               <>

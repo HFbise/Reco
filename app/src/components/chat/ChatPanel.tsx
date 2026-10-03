@@ -1,17 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { showAlert } from '../../lib/alert';
+import { getSocket } from '../../lib/socket';
 import { confirmReportMessage } from '../../lib/reports';
 import { LOBBY_ID } from '../../lib/i18n';
 import { buildReactionQuickList, loadRecentEmojis, recordRecentEmoji } from '../../lib/recentEmojis';
 import { useAuthStore } from '../../store/authStore';
 import { usePeopleStore } from '../../store/peopleStore';
+import { useDraftStore } from '../../store/draftStore';
 import { useColors } from '../../hooks/useColors';
 import { useIsDesktop } from '../../hooks/useIsDesktop';
 import { useT } from '../../hooks/useT';
 import { useVoice } from '../../hooks/useVoice';
 import { useRoomMembers } from '../../hooks/useRoomMembers';
+import { usePins } from '../../hooks/usePins';
 import { useRoomChat, type ChatToast } from '../../hooks/useRoomChat';
 import { EmojiPicker } from '../emoji/EmojiPicker';
 import { ProfileCardHost } from '../members/ProfileCardHost';
@@ -21,6 +24,7 @@ import { ChatCard } from './ChatCard';
 import { ChatHeader } from './ChatHeader';
 import { Composer } from './Composer';
 import { MessageActionsSheet } from './MessageActionsSheet';
+import { PinnedBar } from './PinnedBar';
 import { MessageList, type MessageListHandle } from './MessageList';
 import { RightDrawer } from './RightDrawer';
 import { useJumpToMessage } from './useJumpToMessage';
@@ -31,6 +35,9 @@ import type { Message } from './message/types';
 import type { DmMeta, ExternalVoice } from './types';
 
 export type { DmMeta, ExternalVoice } from './types';
+
+// Opened with more unread messages than this: start at the first one instead of the newest
+const UNREAD_JUMP = 8;
 
 const TOAST_TEXT = {
   'muted': 'you-are-muted',
@@ -70,7 +77,16 @@ export function ChatPanel(p: Props) {
   const showPerson = useCardStore((s) => s.show);
 
   // What's being written: a new message (maybe answering one), or an edit
-  const [input, setInput] = useState('');
+  // The message box starts with what was left unsent here, and keeps it as it changes
+  const [input, setInput] = useState(() => useDraftStore.getState().drafts[name] ?? '');
+  useEffect(() => {
+    const timer = setTimeout(() => useDraftStore.getState().setDraft(name, input), 300);
+    return () => clearTimeout(timer);
+  }, [name, input]);
+  const latestInput = useRef(input);
+  latestInput.current = input;
+  // Leaving the chat within those 300 ms still keeps it
+  useEffect(() => () => useDraftStore.getState().setDraft(name, latestInput.current), [name]);
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editing, setEditing] = useState<{ id: number; text: string } | null>(null);
 
@@ -112,6 +128,26 @@ export function ChatPanel(p: Props) {
 
   const messageList = useRef<MessageListHandle>(null);
   const jumpTo = useJumpToMessage(chat, messageList, () => toast.show(t('message-too-old')));
+  // Pinned messages: owners and admins pin in a room, both people in a DM
+  const pins = usePins(name);
+  const pinnedIds = useMemo(() => new Set(pins.map((pin) => pin.id)), [pins]);
+  const canPin = !isGuest && (isDm || chat.room.myLevel >= 1);
+  const togglePin = (msg: Message) =>
+    getSocket().emit(pinnedIds.has(msg.id) ? 'unpin_message' : 'pin_message', { id: msg.id });
+  useEffect(() => {
+    const socket = getSocket();
+    const onResult = (reply: { success: boolean; code?: string }) => { if (!reply.success) toast.show(t.server(reply, 'pin-failed')); };
+    socket.on('pin_result', onResult);
+    return () => { socket.off('pin_result', onResult); };
+  }, [toast, t]);
+
+  // Opened with more unread than fit on a screen: start at the first of them
+  const startedAtUnread = useRef(false);
+  useEffect(() => {
+    if (!chat.unreadAtOpen || startedAtUnread.current) return;
+    startedAtUnread.current = true;
+    if (chat.unreadAtOpen.count > UNREAD_JUMP) jumpTo(chat.unreadAtOpen.id);
+  }, [chat.unreadAtOpen, jumpTo]);
 
   const photos = usePhotoSending({
     enabled: !isGuest,
@@ -188,6 +224,7 @@ export function ChatPanel(p: Props) {
           }, name)
           : setShowCard(true))}
       />
+      <PinnedBar pins={pins} onJumpTo={jumpTo} />
 
       <KeyboardAvoidingView style={s.body} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <MessageList
@@ -213,6 +250,9 @@ export function ChatPanel(p: Props) {
           onReply={reply}
           onRetry={chat.resend}
           typing={chat.typing}
+          unreadFrom={chat.unreadAtOpen?.id}
+          pinnedIds={pinnedIds}
+          onTogglePin={canPin ? togglePin : undefined}
         />
         <Composer
           input={input}
@@ -265,6 +305,8 @@ export function ChatPanel(p: Props) {
         onEdit={() => { if (sheetMsg) setEditing({ id: sheetMsg.id, text: sheetMsg.text }); setSheetFor(null); }}
         onRecall={() => { if (sheetMsg) chat.recall(sheetMsg.id); setSheetFor(null); }}
         onReply={() => { if (sheetMsg) reply(sheetMsg); setSheetFor(null); }}
+        onPin={sheetMsg && canPin && !sheetMsg.pending ? () => { togglePin(sheetMsg); setSheetFor(null); } : undefined}
+        pinned={!!sheetMsg && pinnedIds.has(sheetMsg.id)}
         onReport={sheetMsg && !sheetMsg.isOwn && !sheetMsg.system
           ? () => { confirmReportMessage(sheetMsg); setSheetFor(null); } : undefined}
       />

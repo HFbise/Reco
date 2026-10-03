@@ -1262,6 +1262,50 @@ def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
     phone.get_by_text('Edit Profile').wait_for()
 
 
+def test_links_new_messages_drafts_and_pins(server, browser, shots):
+    create_user('lea', screenname='Lea')
+    create_user('max', screenname='Max')
+    create_room('club', 'lea', members=['lea', 'max'])
+    lea, max_ = new_page(browser), new_page(browser)
+    shots.extend([lea, max_])
+    for page, name in ((lea, 'lea'), (max_, 'max')):
+        log_in(page, name)
+    open_room(lea, 'club')
+    open_room(max_, 'club')
+    max_.get_by_placeholder('Type a message...').fill('hello club')
+    max_.get_by_placeholder('Type a message...').press('Enter')
+    lea.get_by_text('hello club').wait_for()
+
+    # Max leaves half a sentence in the box and goes to the lobby: it waits there, listed as a draft
+    max_.get_by_placeholder('Type a message...').fill('I was going to say')
+    open_room(max_, 'Lobby')
+    max_.get_by_text('[Draft]', exact=False).wait_for()
+    assert max_.get_by_text('I was going to say', exact=False).count() == 1
+
+    # Meanwhile Lea writes, with a link
+    box = lea.get_by_placeholder('Type a message...')
+    box.fill('the plan is at https://example.com/plan.')
+    box.press('Enter')
+    for i in range(9):
+        box.fill(f'detail {i}')
+        box.press('Enter')
+        lea.wait_for_timeout(1300)  # under the send rate limit
+    # and pins the first one
+    lea.get_by_text('the plan is at', exact=False).hover()
+    lea.get_by_label('Pin', exact=True).click()
+    lea.get_by_label('Pinned message', exact=True).wait_for()
+
+    # Max comes back: his draft, "New messages" above the first one he hasn't seen, the pin
+    open_room(max_, 'club')
+    assert max_.get_by_placeholder('Type a message...').input_value() == 'I was going to say'
+    max_.get_by_label('New messages', exact=True).wait_for()
+    max_.get_by_label('Pinned message', exact=True).wait_for()
+    link = max_.locator('a[href="https://example.com/plan"]')
+    link.wait_for()
+    assert link.get_attribute('target') == '_blank' and 'noopener' in link.get_attribute('rel')
+    assert link.inner_text() == 'https://example.com/plan'  # the full stop stays outside
+
+
 def test_a_message_can_be_reported_from_beside_it(server, browser, shots):
     create_user('ivy', screenname='Ivy')
     create_user('kim', screenname='Kim')

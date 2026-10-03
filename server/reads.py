@@ -34,6 +34,24 @@ def migrate(cur):
     )
 
 
+def unread_from(cur, username: str, room: str, never_opened: int | None = None) -> dict | None:
+    """What `username` hasn't read in `room` yet: {'id': the first such message, 'count': how many},
+    or None. Asked before opening marks it all read, so the client can draw "new messages" above
+    that one (and go to it). A room never opened counts as `never_opened` (None: nothing new)."""
+    cur.execute('SELECT last_read_id FROM read_marks WHERE username = %s AND room = %s', (username, room))
+    row = cur.fetchone()
+    mark = row['last_read_id'] if row else never_opened
+    if mark is None:
+        return None
+    cur.execute(
+        'SELECT MIN(id) AS first, COUNT(*) AS n FROM messages WHERE room = %s AND id > %s AND username <> %s'
+        ' AND NOT COALESCE(system, FALSE) AND NOT COALESCE(recalled, FALSE)',
+        (room, mark, username),
+    )
+    found = cur.fetchone()
+    return {'id': found['first'], 'count': found['n']} if found['n'] else None
+
+
 def mark_read(cur, username: str, room: str, upto_id: int | None = None):
     """Move `username`'s mark in `room` to `upto_id` (default: the newest message). Never backwards."""
     if upto_id is None:

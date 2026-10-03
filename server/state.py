@@ -89,6 +89,7 @@ SYSTEM_TEXT_ZH = {
     'user_left': '{name} 离开了房间',
     'user_kicked': '{name} 被踢出了房间',
     'admin_added': '{name} 成为了管理员',
+    'owner_transferred': '{name} 成为了房主',
     'admin_removed': '{name} 被取消了管理员',
     'room_closed': '房间已被关闭',
     'match_connected': '你们通过随机匹配认识了，打个招呼吧',

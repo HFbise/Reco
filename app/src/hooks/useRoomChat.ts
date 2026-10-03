@@ -65,6 +65,9 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
 
   const [messages, setMessages] = useState<Message[]>(() => getCached(name));
   const [hasOlder, setHasOlder] = useState(false);
+  // What was unread when this chat opened (the first such message and how many): set by the first
+  // join only, since a rejoin after a reconnect finds it all read
+  const [unreadAtOpen, setUnreadAtOpen] = useState<{ id: number; count: number } | null | undefined>(undefined);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [room, setRoom] = useState<RoomInfo>({ code: '', memberCount: 0, isOwner: false, myLevel: 0, hasPassword: !!password });
   const [isTextMuted, setIsTextMuted] = useState(false);
@@ -89,6 +92,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
     const cached = getCached(name);
     setMessages(cached);
     setHasOlder(false);
+    setUnreadAtOpen(undefined);
     setIsTextMuted(false);
     setVoiceMembers([]);
     setTypists({});
@@ -113,6 +117,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
           return;
         }
         setHasOlder(!!data.has_older);
+        setUnreadAtOpen((prev) => (prev === undefined ? data.unread ?? null : prev));
         setRoom((r) => ({
           ...r,
           code: data.code || '',
@@ -122,8 +127,16 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
           hasPassword: data.has_password ?? r.hasPassword,
         }));
       },
+      // The owner or an admin changed roles (or handed the room over): what you may do follows
+      room_roles: (data) => {
+        if (!mine(data)) return;
+        const myLevel = data.owner === username ? 2 : (data.admins ?? []).includes(username) ? 1 : 0;
+        setRoom((r) => ({ ...r, isOwner: myLevel === 2, myLevel }));
+      },
       join_dm_result: (data) => {
-        if (data?.dm_room === name) setHasOlder(!!data.has_older);
+        if (data?.dm_room !== name) return;
+        setHasOlder(!!data.has_older);
+        setUnreadAtOpen((prev) => (prev === undefined ? data.unread ?? null : prev));
       },
       message: (data) => {
         // The socket sits in many rooms at once (all DMs, rooms visited this session)
@@ -366,7 +379,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
   const close = useCallback(() => getSocket().emit('close_room', { room: name }), [name]);
 
   return {
-    messages, hasOlder, loadingOlder, loadOlder,
+    messages, hasOlder, loadingOlder, loadOlder, unreadAtOpen,
     room, isTextMuted, voiceMembers,
     typing: Object.values(typists).map((v) => v.screenname),
     send, resend, notifyTyping, recall, edit, react, leave, close,
