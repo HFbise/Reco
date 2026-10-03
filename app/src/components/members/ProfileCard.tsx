@@ -13,6 +13,7 @@ import { useT } from '../../hooks/useT';
 import { showAlert } from '../../lib/alert';
 import { getAvatarColor, tint } from '../../lib/avatar';
 import { getSocket } from '../../lib/socket';
+import { reportPerson } from '../../lib/reports';
 import { ago } from '../../lib/time';
 import { MAX_VOLUME } from '../../lib/webrtc';
 import { useAuthStore } from '../../store/authStore';
@@ -132,10 +133,7 @@ export function ProfileCard({ person, room, inVoiceHere, onOpenDm, onOpenRoom, o
   }
 
   function report() {
-    const socket = getSocket();
-    socket.once('report_result', (reply: { success: boolean; code?: string }) =>
-      showAlert(reply.success ? t('report-sent') : t.server(reply, 'report-failed')));
-    socket.emit('report_user', { reported: username, reason: reason.trim() });
+    reportPerson(username, reason.trim());
     onClose();
   }
 

@@ -186,6 +186,13 @@ def on_disconnect(username: str | None, sid: str):
         _end(username, 'disconnected')
 
 
+def drop(username: str):
+    """Out of the queue and out of any match (their account was just suspended)."""
+    queue.leave(username)
+    if username in _live:
+        _end(username, 'left')
+
+
 def _enqueue(username: str, mode: str, tags: list[str]):
     _ensure_background_loop()
     ticket = Ticket(

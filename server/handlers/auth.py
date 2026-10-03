@@ -8,7 +8,7 @@ import demo
 from auth_session import authenticated, bind, end_sessions, is_guest, make_token, readable, unbind
 from db import get_db
 from extensions import socketio
-from moderation import RESERVED_USERNAMES, USERNAME_RE, delete_account
+from moderation import RESERVED_USERNAMES, USERNAME_RE, delete_account, suspension_reply
 from replies import fail
 from state import check_login_rate, check_msg_rate, client_ip, record_login_fail, reset_login_attempts
 from utils import SECURITY_QUESTIONS, hash_password, security_question_id, str_field, verify_password
@@ -131,6 +131,10 @@ def handle_login(data):
             fail('login_result', 'wrong_password')
             return
         reset_login_attempts(username)
+        refused = suspension_reply(user)
+        if refused:  # told only once the password is right: guessers learn nothing
+            fail('login_result', *refused)
+            return
         stored_hash = user['password']
         if needs_migrate:
             stored_hash = hash_password(password)

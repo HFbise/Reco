@@ -6,6 +6,7 @@ Callers are responsible for permission checks; these functions do the work
 
 import logging
 import re
+from datetime import UTC, datetime, timedelta
 
 import voice_state
 from auth_session import end_sessions
@@ -222,6 +223,47 @@ def recall(msg_id) -> bool:
 
 
 # ── Accounts ──────────────────────────────────────────────────
+
+PERMANENT = datetime(9999, 12, 31, tzinfo=UTC)  # "suspended until" for a ban with no end
+
+
+def suspend(username: str, days: int, reason: str) -> bool:
+    """The site admin suspends an account for `days` (0: for good): every device is signed out
+    and signing in is refused until then. False if there's no such user."""
+    until = PERMANENT if days <= 0 else datetime.now(UTC) + timedelta(days=days)
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE users SET suspended_until = %s, suspend_reason = %s WHERE username = %s RETURNING username',
+            (until, reason[:200] or None, username),
+        )
+        found = cur.fetchone()
+        conn.commit()
+    if found:
+        end_sessions(username)
+    return bool(found)
+
+
+def unsuspend(username: str) -> bool:
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute(
+            'UPDATE users SET suspended_until = NULL, suspend_reason = NULL WHERE username = %s RETURNING username',
+            (username,),
+        )
+        found = cur.fetchone()
+        conn.commit()
+    return bool(found)
+
+
+def suspension_reply(user: dict) -> tuple[str, dict] | None:
+    """For a suspended account signing in: the code and params to answer with, else None."""
+    until = user.get('suspended_until')
+    if not until or until <= datetime.now(UTC):
+        return None
+    if until >= PERMANENT:
+        return 'account_banned', {}
+    return 'account_suspended', {'until': until.strftime('%Y-%m-%d')}
 
 
 def username_available(cur, username: str) -> bool:

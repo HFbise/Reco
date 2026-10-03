@@ -131,6 +131,9 @@ export const zh = {
   'report': '举报',
   'report-reason': '举报原因（可选）',
   'report-sent': '举报已提交',
+  'report-message': '举报这条消息',
+  'report-message-confirm': '把这条消息作为举报提交给管理员？',
+  'srv-report_failed': '这条消息无法举报',
   'report-failed': '举报没有发出去',
   'blocked-label': '已屏蔽',
 
@@ -242,6 +245,8 @@ export const zh = {
   'srv-invalid_screenname': '显示名需为 1-{max} 个字符',
   'srv-password_too_short': '密码至少 {min} 位',
   'srv-too_many_attempts': '尝试过多，请 {secs} 秒后重试',
+  'srv-account_suspended': '这个账号已被封禁，{until} 解封',
+  'srv-account_banned': '这个账号已被永久封禁',
   'srv-too_many_signups': '这里注册的新账号太多了，请稍后再试',
   'srv-too_many_reports': '你刚刚已经举报了好几次，请过几分钟再试',
   'srv-user_not_found': '用户不存在',

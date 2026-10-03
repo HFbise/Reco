@@ -1262,6 +1262,30 @@ def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
     phone.get_by_text('Edit Profile').wait_for()
 
 
+def test_a_message_can_be_reported_from_beside_it(server, browser, shots):
+    create_user('ivy', screenname='Ivy')
+    create_user('kim', screenname='Kim')
+    ivy, kim = new_page(browser), new_page(browser)
+    shots.extend([ivy, kim])
+    for page, name in ((ivy, 'ivy'), (kim, 'kim')):
+        log_in(page, name)
+        open_room(page, 'Lobby')
+    kim.get_by_placeholder('Type a message...').fill('buy followers here')
+    kim.get_by_placeholder('Type a message...').press('Enter')
+
+    ivy.get_by_text('buy followers here').hover()
+    ivy.on('dialog', lambda d: d.accept())  # "Send this message to the moderators?", then "Report submitted"
+    ivy.get_by_label('Report message', exact=True).click()
+    deadline = time.time() + 10
+    while not query('SELECT 1 FROM reports') and time.time() < deadline:
+        time.sleep(0.2)
+    assert query('SELECT reporter, reported, message_text FROM reports') == [
+        {'reporter': 'ivy', 'reported': 'kim', 'message_text': 'buy followers here'}
+    ]
+    kim.get_by_text('buy followers here').hover()  # nobody reports their own
+    assert kim.get_by_label('Report message', exact=True).count() == 0
+
+
 def test_mention_someone_and_they_see_it(server, browser, shots):
     create_user('abe', screenname='Abe')
     create_user('bea', screenname='Bea Lee')

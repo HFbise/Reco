@@ -9,13 +9,23 @@
   </form>
   <div class="card">
     <table>
-      <tr><th>用户名</th><th>显示名</th><th>简介</th><th></th></tr>
+      <tr><th>用户名</th><th>显示名</th><th>简介</th><th>状态</th><th></th></tr>
       {% for r in rows %}
         <tr>
           <td class="mono">{{ r.username }}</td>
           <td>{{ r.screenname or '' }}</td>
           <td class="muted">{{ r.bio or '' }}</td>
           <td class="nowrap">
+            {% if r.banned %}<span class="tag tag-red" title="{{ r.suspend_reason or '' }}">永久封禁</span>
+            {% elif r.suspended %}<span class="tag tag-red" title="{{ r.suspend_reason or '' }}">封禁至 {{ r.suspended_until.strftime('%Y-%m-%d') }}</span>
+            {% endif %}
+          </td>
+          <td class="nowrap">
+            {% if r.suspended %}
+              {{ post_button(url_for('admin.unsuspend_user', username=r.username), '解封', next=request.full_path) }}
+            {% else %}
+              <button class="btn btn-ghost" data-dialog="suspend-dialog" data-action="{{ url_for('admin.suspend_user', username=r.username) }}">封禁</button>
+            {% endif %}
             {# The dialogs post to /admin/users/<name>/...; the name travels as inert data #}
             <button class="btn btn-ghost" data-dialog="reset-dialog" data-action="{{ url_for('admin.reset_user_password', username=r.username) }}">重置密码</button>
             <button class="btn btn-ghost" data-dialog="rename-dialog" data-action="{{ url_for('admin.rename_user', username=r.username) }}">改用户名</button>
@@ -23,7 +33,7 @@
           </td>
         </tr>
       {% else %}
-        {{ empty_row(4, '未找到用户') }}
+        {{ empty_row(5, '未找到用户') }}
       {% endfor %}
     </table>
   </div>
@@ -38,6 +48,22 @@
         <div class="modal-btns">
           <button type="button" class="btn btn-ghost" data-close>取消</button>
           <button type="submit" class="btn btn-primary">确认重置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="modal-overlay" id="suspend-dialog">
+    <div class="modal">
+      <h3>封禁账号</h3>
+      <p>该用户在所有设备上都会被登出，进行中的匹配会结束，封禁期间无法登录。</p>
+      <form method="post">
+        <select name="days">
+          {% for days, label in suspend_options %}<option value="{{ days }}">{{ label }}</option>{% endfor %}
+        </select>
+        <input type="text" name="reason" placeholder="原因（只有后台可见，可不填）" autocomplete="off" maxlength="200">
+        <div class="modal-btns">
+          <button type="button" class="btn btn-ghost" data-close>取消</button>
+          <button type="submit" class="btn btn-danger">确认封禁</button>
         </div>
       </form>
     </div>
@@ -67,7 +93,7 @@
       form.action = button.dataset.action;
       form.reset();
       dialog.classList.add('open');
-      setTimeout(function () { form.querySelector('input').focus(); }, 50);
+      setTimeout(function () { var first = form.querySelector('input, select'); if (first) first.focus(); }, 50);
     });
   });
   document.querySelectorAll('.modal-overlay').forEach(function (dialog) {

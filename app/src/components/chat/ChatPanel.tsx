@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { showAlert } from '../../lib/alert';
+import { confirmReportMessage } from '../../lib/reports';
 import { LOBBY_ID } from '../../lib/i18n';
 import { buildReactionQuickList, loadRecentEmojis, recordRecentEmoji } from '../../lib/recentEmojis';
 import { useAuthStore } from '../../store/authStore';
@@ -264,6 +265,8 @@ export function ChatPanel(p: Props) {
         onEdit={() => { if (sheetMsg) setEditing({ id: sheetMsg.id, text: sheetMsg.text }); setSheetFor(null); }}
         onRecall={() => { if (sheetMsg) chat.recall(sheetMsg.id); setSheetFor(null); }}
         onReply={() => { if (sheetMsg) reply(sheetMsg); setSheetFor(null); }}
+        onReport={sheetMsg && !sheetMsg.isOwn && !sheetMsg.system
+          ? () => { confirmReportMessage(sheetMsg); setSheetFor(null); } : undefined}
       />
 
       <ChatCard

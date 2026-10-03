@@ -15,6 +15,7 @@ import hashlib
 import logging
 import secrets
 import time
+from datetime import UTC, datetime
 
 import sentry_sdk
 from flask import request
@@ -81,11 +82,17 @@ def verify_token(token: str):
         return username if is_guest(username) else None
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute('SELECT password FROM users WHERE username = %s', (username,))
+        cur.execute('SELECT password, suspended_until FROM users WHERE username = %s', (username,))
         row = cur.fetchone()
-    if not row or password_fingerprint(row['password']) != payload.get('p'):
+    if not row or password_fingerprint(row['password']) != payload.get('p') or suspended(row):
         return None
     return username
+
+
+def suspended(user: dict) -> bool:
+    """Is this account (a users row with suspended_until) suspended right now?"""
+    until = user.get('suspended_until')
+    return bool(until) and until > datetime.now(UTC)
 
 
 def renewed_token(token: str) -> str | None:

@@ -65,7 +65,7 @@ export function MessageRow(p: Props) {
   const sender = { username: msg.username, screenname: msg.screenname, avatar_expression: msg.avatar_expression, avatar_color: msg.avatar_color };
   const openSender = p.onPersonPress && (() => p.onPersonPress!(sender));
   const hoverable = p.wide && Platform.OS === 'web' && !msg.recalled;
-  const hasHoverActions = !!(p.onReply || p.onReact || p.onEdit || p.onRecall);
+  const hasHoverActions = !!(p.onReply || p.onReact || p.onEdit || p.onRecall || p.onReport);
 
   const bubble = (
     <View style={[
@@ -112,7 +112,7 @@ export function MessageRow(p: Props) {
           ) : bubble}
           <Animated.Text pointerEvents="none" style={[s.pop, pop.style]}>{pop.emoji}</Animated.Text>
           {hovered && hasHoverActions && (
-            <HoverActions own={own} onReply={p.onReply} onReact={p.onReact} onEdit={p.onEdit} onRecall={p.onRecall} />
+            <HoverActions own={own} onReply={p.onReply} onReact={p.onReact} onEdit={p.onEdit} onRecall={p.onRecall} onReport={p.onReport} />
           )}
         </View>
         <Reactions reactions={msg.reactions ?? {}} me={p.me} own={own} animate={pop.live.current} onPress={p.onReactionPress} />

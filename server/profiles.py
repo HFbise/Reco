@@ -35,6 +35,9 @@ def migrate(cur):
     cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ')
     cur.execute('ALTER TABLE users ALTER COLUMN created_at SET DEFAULT NOW()')
     cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ')
+    # Suspended by the site admin until then (see moderation.suspend)
+    cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ')
+    cur.execute('ALTER TABLE users ADD COLUMN IF NOT EXISTS suspend_reason TEXT')
     cur.execute(
         'CREATE TABLE IF NOT EXISTS user_nicknames (owner TEXT NOT NULL, target TEXT NOT NULL,'
         ' nickname TEXT NOT NULL, PRIMARY KEY (owner, target))'

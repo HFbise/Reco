@@ -9,7 +9,12 @@
         <tr>
           <td class="mono">{{ r.reporter }}</td>
           <td class="mono"><a href="{{ url_for('admin.users', q=r.reported) }}">{{ r.reported }}</a></td>
-          <td>{{ r.reason or '' }}</td>
+          <td>
+            {{ r.reason or '' }}
+            {% if r.message_text is not none %}
+              <div class="pre muted">「{{ r.message_text }}」<span class="mono">{{ '私信' if r.room.startswith('dm:') else r.room }}</span></div>
+            {% endif %}
+          </td>
           <td class="mono">{{ when(r.created_at) }}</td>
           <td>{% if r.match_id %}<a href="{{ url_for('admin.match_transcript', match_id=r.match_id) }}" class="btn btn-ghost">匹配记录</a>{% endif %}</td>
           <td>{{ post_button(url_for('admin.delete_report', rid=r.id), '删除', danger=True, confirm='删除这条举报？') }}</td>

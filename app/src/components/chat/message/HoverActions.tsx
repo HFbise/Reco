@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { Platform, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { IconEmoji, IconPencil, IconReply, IconTrash } from '../../Icon';
+import { IconEmoji, IconFlag, IconPencil, IconReply, IconTrash } from '../../Icon';
 import { useColors } from '../../../hooks/useColors';
 import { useT } from '../../../hooks/useT';
 
@@ -10,9 +10,11 @@ export interface HoverHandlers {
   onReact?: (at: { pageX: number; pageY: number; height: number }) => void;
   onEdit?: () => void;
   onRecall?: () => void;
+  /** Someone else's message: report it to the moderators */
+  onReport?: () => void;
 }
 
-/** Desktop: reply / react / edit / recall beside a hovered bubble. Placed outside the bubble's
+/** Desktop: reply / react / edit / recall / report beside a hovered bubble. Placed outside the bubble's
  *  box (absolutely), so showing them never changes how the text wraps. */
 export function HoverActions({ own, ...h }: HoverHandlers & { own: boolean }) {
   const c = useColors();
@@ -53,6 +55,11 @@ export function HoverActions({ own, ...h }: HoverHandlers & { own: boolean }) {
       {h.onRecall && (
         <TouchableOpacity style={s.button} onPress={h.onRecall} activeOpacity={0.7} accessibilityLabel={t('recall')}>
           <IconTrash size={16} color={c.danger} />
+        </TouchableOpacity>
+      )}
+      {h.onReport && (
+        <TouchableOpacity style={s.button} onPress={h.onReport} activeOpacity={0.7} accessibilityLabel={t('report-message')}>
+          <IconFlag size={15} color={c.textSub} />
         </TouchableOpacity>
       )}
     </View>

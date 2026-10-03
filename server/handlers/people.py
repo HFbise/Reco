@@ -5,12 +5,13 @@ import logging
 
 from flask_socketio import emit
 
+import room_access
 from auth_session import authenticated, readable
 from db import get_db
 from extensions import socketio
 from replies import fail
 from state import check_msg_rate
-from utils import str_field
+from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
 
@@ -21,9 +22,11 @@ REPORTS_PER_10_MIN = 5  # each one lands in the moderators' list
 @socketio.on('report_user')
 @authenticated
 def handle_report_user(reporter, data):
-    """Filed for the site's moderators (the /admin panel)."""
+    """Filed for the site's moderators (the /admin panel). With `message_id`, about that message:
+    one the reporter can see, by the person reported; what it said is kept with the report."""
     reported = str_field(data, 'reported')
     reason = str_field(data, 'reason').strip()[:MAX_REPORT_LEN]
+    message_id = int_field(data, 'message_id')
     if not reported or reporter == reported:
         return
     if not check_msg_rate(f'report:{reporter}', max_msgs=REPORTS_PER_10_MIN, window=600):
@@ -32,8 +35,21 @@ def handle_report_user(reporter, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
+            room = text = None
+            if message_id:
+                cur.execute(
+                    'SELECT username, room, text, recalled FROM messages WHERE id = %s AND NOT COALESCE(system, FALSE)',
+                    (message_id,),
+                )
+                msg = cur.fetchone()
+                if not msg or msg['username'] != reported or not room_access.can_see(cur, reporter, msg['room']):
+                    fail('report_result', 'report_failed')
+                    return
+                room, text = msg['room'], msg['text']
             cur.execute(
-                'INSERT INTO reports (reporter, reported, reason) VALUES (%s, %s, %s)', (reporter, reported, reason)
+                'INSERT INTO reports (reporter, reported, reason, message_id, room, message_text)'
+                ' VALUES (%s, %s, %s, %s, %s, %s)',
+                (reporter, reported, reason, message_id or None, room, text),
             )
             conn.commit()
         emit('report_result', {'success': True})
