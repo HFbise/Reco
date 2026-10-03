@@ -102,6 +102,64 @@ def test_report_records_blocks_and_ends(pair):
     assert events(bob, 'match_ended')[0]['reason'] == 'partner_left'
 
 
+def test_a_stranger_who_left_can_still_be_reported(pair):
+    alice, bob = pair
+    match_id = events(alice, 'match_found')[0]['match_id']
+    bob.emit('match_message', {'text': 'rude thing'})
+    bob.emit('match_next', {'mode': 'text'})  # says it and is gone
+    alice.get_received()
+    alice.emit('match_report', {'reason': '', 'match_id': match_id})
+    assert events(alice, 'match_reported') == [{'match_id': match_id}]
+    alice.emit('match_report', {'reason': '', 'match_id': match_id})  # once is enough
+    assert query('SELECT reporter, reported, match_id FROM reports') == [
+        {'reporter': 'alice', 'reported': 'bob', 'match_id': match_id}
+    ]
+    assert query('SELECT blocker, blocked FROM blocks') == [{'blocker': 'alice', 'blocked': 'bob'}]
+
+
+def test_only_your_own_matches_can_be_reported(pair):
+    alice, bob = pair
+    match_id = events(alice, 'match_found')[0]['match_id']
+    alice.emit('match_leave', {})
+    create_user('eve')
+    eve = connect_as('eve')
+    eve.emit('match_report', {'reason': '', 'match_id': match_id})
+    assert events(eve, 'match_reported') == [] and query('SELECT * FROM reports') == []
+
+
+def test_a_transcript_cannot_be_edited_or_recalled(pair):
+    alice, bob = pair
+    bob.emit('match_message', {'text': 'rude thing'})
+    msg_id = events(bob, 'match_message')[0]['id']
+    bob.emit('edit_message', {'id': msg_id, 'text': 'nice thing'})
+    bob.emit('recall_message', {'id': msg_id})
+    assert query('SELECT text, recalled FROM messages WHERE id = %s', msg_id) == [
+        {'text': 'rude thing', 'recalled': False}
+    ]
+
+
+def test_no_room_can_be_named_like_a_transcript(pair):
+    alice, bob = pair
+    alice.emit('match_message', {'text': 'secret'})
+    match_id = events(alice, 'match_message')[0]['id'] and events(bob, 'match_found')[0]['match_id']
+    create_user('eve')
+    eve = connect_as('eve')
+    eve.emit('create_room', {'room': f'match:{match_id}'})
+    assert events(eve, 'create_room_result')[0]['code'] == 'invalid_room_name'
+    # one made before the name was reserved can't be opened either
+    with get_db() as conn:
+        conn.cursor().execute(
+            "INSERT INTO rooms (name, owner, members) VALUES (%s, 'eve', '{eve}')", (f'match:{match_id}',)
+        )
+        conn.commit()
+    eve.emit('join', {'room': f'match:{match_id}'})
+    assert events(eve, 'join_result')[0]['code'] == 'room_not_found'
+    eve.emit('get_rooms', {})
+    assert [r['name'] for r in events(eve, 'rooms_list')[0]['rooms']] == ['大厅']
+    eve.emit('message', {'room': f'match:{match_id}', 'text': 'hi'})
+    assert not any(m.get('text') == 'secret' for m in events(eve, 'message'))
+
+
 def test_blocked_users_are_never_matched():
     for u in ('alice', 'bob'):
         create_user(u)

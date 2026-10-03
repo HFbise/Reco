@@ -34,12 +34,14 @@ interface MatchState {
   keepRequested: boolean;
   revealed: Revealed | null;
   endReason: EndReason | null;
+  /** You reported this stranger (during the match or after it ended) */
+  reported: boolean;
   searchingSince: number;
 }
 
 const IDLE: MatchState = {
   phase: 'idle', matchId: null, mode: 'text', tags: [], sharedTags: [], stranger: null, initiator: false,
-  messages: [], strangerTyping: false, keepRequested: false, revealed: null, endReason: null, searchingSince: 0,
+  messages: [], strangerTyping: false, keepRequested: false, revealed: null, endReason: null, reported: false, searchingSince: 0,
 };
 
 /**
@@ -78,6 +80,7 @@ export function useMatch() {
       },
       match_keep_ack: () => setState((s) => ({ ...s, keepRequested: true })),
       match_revealed: (d) => setState((s) => ({ ...s, revealed: d })),
+      match_reported: (d) => setState((s) => (d.match_id === s.matchId ? { ...s, reported: true } : s)),
       match_ended: (d) => setState((s) => (s.phase === 'matched'
         ? { ...s, phase: 'ended', strangerTyping: false, endReason: d.reason ?? 'partner_left' }
         : s)),
@@ -116,7 +119,9 @@ export function useMatch() {
   }, []);
   const typing = useCallback(() => getSocket().emit('match_typing', {}), []);
   const keep = useCallback(() => getSocket().emit('match_keep', {}), []);
-  const report = useCallback((reason: string) => getSocket().emit('match_report', { reason }), []);
+  // After the match ended too: the stranger may have left the moment they said something
+  const report = useCallback((reason: string) =>
+    getSocket().emit('match_report', { reason, match_id: stateRef.current.matchId }), []);
 
   return { ...state, start, cancel, next, leave, backToStart, send, typing, keep, report };
 }

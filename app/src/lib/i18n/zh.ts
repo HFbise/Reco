@@ -301,6 +301,8 @@ export const zh = {
   'match-next': '下一个',
   'match-leave': '结束',
   'match-report': '举报',
+  'match-report-after': '举报对方',
+  'match-reported': '已举报，对方不会再匹配到你。',
   'match-report-confirm': '举报并屏蔽对方？这段对话会提交给管理员。',
   'match-typing': '对方正在输入……',
   'match-empty': '你正在和一位陌生人聊天，打个招呼吧！',

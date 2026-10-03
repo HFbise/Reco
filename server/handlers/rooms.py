@@ -156,7 +156,8 @@ def handle_join(username, data):
         with get_db() as conn:
             cur = conn.cursor()
             row = _room(cur, room)
-            if not row:
+            # A room made under a reserved name before it was reserved can't be opened
+            if not row or room_access.reserved(room):
                 fail('join_result', 'room_not_found', room=room)
                 return
             refused = room_access.admit(cur, username, row, str_field(data, 'password'))
@@ -211,8 +212,8 @@ def handle_room_subscribe(username, data):
         return
     try:
         with get_db() as conn:
-            row = _room(conn.cursor(), room)
-        if row and username in (row['members'] or []) and username not in (row['kicked'] or []):
+            allowed = room_access.can_see(conn.cursor(), username, room)
+        if allowed:
             join_room(room)
     except Exception as e:
         log.exception('room_subscribe error: %s', e)
@@ -287,7 +288,9 @@ def handle_get_rooms(username, data):
                 cur.execute('SELECT * FROM rooms WHERE name = %s', (DEMO_ROOM,))
             else:
                 cur.execute('SELECT * FROM rooms WHERE name = %s OR %s = ANY(members)', (LOBBY, username))
-            found = [r for r in cur.fetchall() if username not in (r['kicked'] or [])]
+            found = [
+                r for r in cur.fetchall() if username not in (r['kicked'] or []) and not room_access.reserved(r['name'])
+            ]
             names = [r['name'] for r in found]
             unread = {} if is_guest(username) else reads.unread_counts(cur, username, names)
             mentioned = set() if is_guest(username) else reads.mentioned_in(cur, username, names)
