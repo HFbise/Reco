@@ -6,7 +6,6 @@ __pycache__/
 index.html.bak
 .DS_Store
 Thumbs.db
-.claude/
 extract_group.py
 /package.json
 .venv/
