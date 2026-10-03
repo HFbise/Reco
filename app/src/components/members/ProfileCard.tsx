@@ -118,6 +118,13 @@ export function ProfileCard({ person, room, inVoiceHere, onOpenDm, onOpenRoom, o
     getSocket().emit(event, { room, target: username, ...extra });
   };
 
+  function makeOwner() {
+    showAlert(t('make-owner'), t('make-owner-confirm', { name: data?.nickname || screenname }), [
+      { text: t('cancel'), style: 'cancel' },
+      { text: t('make-owner'), style: 'destructive', onPress: () => moderate('transfer_owner') },
+    ]);
+  }
+
   function kick() {
     showAlert(t('confirm-kick-title'), t('confirm-kick'), [
       { text: t('cancel'), style: 'cancel' },
@@ -307,6 +314,9 @@ export function ProfileCard({ person, room, inVoiceHere, onOpenDm, onOpenRoom, o
                     <ModRow label={inRoom.level === 1 ? t('remove-admin') : t('set-as-admin')}
                       icon={<IconShield size={18} color={c.textSub} />}
                       onPress={() => moderate('set_admin', { remove: inRoom.level === 1 })} />
+                  )}
+                  {inRoom.my_level === 2 && (
+                    <ModRow label={t('make-owner')} icon={<IconCrown size={18} color={c.textSub} />} onPress={makeOwner} />
                   )}
                   {/* Chat: lift a mute, or pick how long one lasts */}
                   {inRoom.muted ? (

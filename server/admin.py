@@ -37,7 +37,7 @@ SUSPEND_OPTIONS = [(1, '1 天'), (7, '7 天'), (30, '30 天'), (0, '永久')]  #
 RESTRICTION_LABELS = {moderation.TEXT: '禁言', moderation.VOICE: '语音禁言'}
 LOG_LABELS = {
     'kick': '踢出', 'unkick': '解封', 'mute': '禁言', 'unmute': '解除禁言', 'voice_ban': '禁止语音',
-    'voice_unban': '恢复语音', 'admin_add': '设为管理员', 'admin_remove': '取消管理员', 'recall': '撤回消息',
+    'voice_unban': '恢复语音', 'admin_add': '设为管理员', 'admin_remove': '取消管理员', 'transfer_owner': '转让房主', 'recall': '撤回消息',
     'join_mode': '改加入方式', 'description': '改简介', 'announcement': '改公告',
 }  # fmt: skip
 

@@ -82,6 +82,7 @@ TABLES = [
     'chat_prefs',
     'room_log',
     'user_nicknames',
+    'pinned_messages',
     'turn_sessions',
     'turn_daily',
 ]

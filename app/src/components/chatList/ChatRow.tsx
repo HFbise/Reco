@@ -8,6 +8,7 @@ import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { Fonts, Radius } from '../../theme';
 import { useDisplayName } from '../../store/peopleStore';
+import { useDraftStore } from '../../store/draftStore';
 import { preview, type ChatEntry } from './model';
 
 interface Props {
@@ -35,6 +36,8 @@ export function ChatRow(p: Props) {
   const { entry, active } = p;
 
   const line = preview(entry.last, p.me);
+  // Unsent text left in it (not while it's open: you can see it there)
+  const draft = useDraftStore((st) => (active ? '' : st.drafts[entry.key] ?? ''));
   const previewText =
     line.kind === 'recalled' ? t('msg-recalled')
       : line.kind === 'system' ? t.system({ text: line.last.text, meta: line.last.meta })
@@ -74,7 +77,12 @@ export function ChatRow(p: Props) {
         {entry.mentioned && (
           <Text style={[s.preview, s.previewUnread, { color: c.accent }]} numberOfLines={1}>{t('mentioned-you')}</Text>
         )}
-        {!!previewText && !entry.mentioned && (
+        {!!draft && !entry.mentioned && (
+          <Text style={[s.preview, { color: c.textSub }]} numberOfLines={1}>
+            <Text style={{ color: c.danger }}>{t('draft')} </Text>{draft.replace(/\s+/g, ' ')}
+          </Text>
+        )}
+        {!!previewText && !entry.mentioned && !draft && (
           <Text style={[s.preview, { color: entry.unread > 0 ? c.text : c.textSub }, entry.unread > 0 && s.previewUnread]}
             numberOfLines={1}>
             {previewText}

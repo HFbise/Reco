@@ -26,6 +26,7 @@ import demo
 import handlers  # noqa: F401  (side effect: registers every Socket.IO event handler)
 import images
 import oauth
+import pins
 import profiles
 import reads
 import room_log
@@ -270,6 +271,7 @@ def _migrate():
             chat_prefs.migrate(cur)
             room_log.migrate(cur)
             profiles.migrate(cur)
+            pins.migrate(cur)
             turn_usage.migrate(cur)
             # The room card: shown to everyone, edited by the owner and admins
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS description TEXT')

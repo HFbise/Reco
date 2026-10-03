@@ -117,7 +117,7 @@ def _become_member(cur, username: str, row: dict) -> bool:
 
 def _send_history(cur, username: str, room: str, data: dict) -> bool:
     """The latest page (from `since`, if the client has some cached); returns whether older exists.
-    Shown means read, on every device."""
+    Shown means read, on every device (the caller asks what was new first: reads.unread_from)."""
     messages, reset = history.recent(cur, room, data.get('since'))
     if reset:
         emit('history_reset', {'room': room})
@@ -172,6 +172,7 @@ def handle_join(username, data):
             join_room(room)
             first_time = _become_member(cur, username, row)
             conn.commit()
+            unread = None if is_guest(username) or first_time else reads.unread_from(cur, username, room)
             has_older = False if data.get('skip_history') else _send_history(cur, username, room, data)
             conn.commit()
             members = room_access.members_view(cur, row)
@@ -189,6 +190,7 @@ def handle_join(username, data):
                 'is_first_join': first_time,
                 'has_older': has_older,
                 'has_password': bool(row.get('password')),
+                'unread': unread,
             },
         )
         emit('members_list', {'room': room, 'members': members}, to=room)

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Image, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
+import { Image, Linking, Platform, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { ImageViewer } from '../ImageViewer';
 import { fitImage, imageUrl } from '../../../lib/images';
 import { getAvatarColor, nameColor } from '../../../lib/avatar';
+import { splitLinks } from '../../../lib/links';
 import { splitMentions } from '../../../lib/mentions';
 import { useDisplayName } from '../../../store/peopleStore';
 import { useColors } from '../../../hooks/useColors';
@@ -63,7 +64,8 @@ export function BubbleBody({ msg, me, onQuotePress, onMentionPress }: {
       )}
       {!!msg.text && (
         <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>
-          {splitMentions(msg.text, msg.meta?.mentions, msg.meta?.everyone).map((part, i) => ('text' in part ? part.text
+          {splitMentions(msg.text, msg.meta?.mentions, msg.meta?.everyone).map((part, i) => ('text' in part
+            ? <Linked key={i} text={part.text} own={own} />
             : 'everyone' in part ? (
             // @everyone means you too (unless you wrote it)
             <Text key={i} style={[s.mention, own
@@ -88,6 +90,25 @@ export function BubbleBody({ msg, me, onQuotePress, onMentionPress }: {
   );
 }
 
+/** Plain text with its web addresses as links: a new tab on the web, the browser on phones. */
+function Linked({ text, own }: { text: string; own: boolean }) {
+  const c = useColors();
+  const parts = splitLinks(text);
+  if (parts.length === 1 && 'text' in parts[0]) return <>{text}</>;
+  return (
+    <>
+      {parts.map((part, i) => ('text' in part ? part.text : (
+        <Text key={i} style={[s.link, { color: own ? c.onAccent : c.accentText }]} accessibilityRole="link"
+          {...(Platform.OS === 'web'
+            ? { href: part.url, hrefAttrs: { target: '_blank', rel: 'noopener noreferrer' } } as any
+            : { onPress: () => Linking.openURL(part.url) })}>
+          {part.label}
+        </Text>
+      )))}
+    </>
+  );
+}
+
 /** A bubble holding only a photo gets a thin frame instead of the text padding. */
 export const photoOnly = (msg: Message) => !msg.recalled && !!msg.meta?.image && !msg.text && !msg.reply;
 
@@ -98,6 +119,7 @@ const s = StyleSheet.create({
   photo: { borderRadius: 16 },
   edited: { fontSize: 11, marginTop: 2 },
   mention: { fontWeight: String(Fonts.heavy) as any, borderRadius: 6, paddingHorizontal: 2 },
+  link: { textDecorationLine: 'underline' },
   recalled: { fontSize: 14, fontStyle: 'italic' },
   italic: { fontStyle: 'italic' },
   quote: { borderLeftWidth: 3, borderRadius: 8, paddingVertical: 5, paddingHorizontal: 9, marginBottom: 6, gap: 1 },
