@@ -337,7 +337,8 @@ def handle_recall_message(username, data):
             cur = conn.cursor()
             cur.execute('SELECT username, room, recalled, text FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
-            if not msg or msg['recalled']:
+            # A match's transcript stays as it was: it's what a report is judged on
+            if not msg or msg['recalled'] or room_access.is_match(msg['room']):
                 return
             room = msg['room']
             if msg['username'] != username:
@@ -364,7 +365,7 @@ def handle_edit_message(username, data):
             cur = conn.cursor()
             cur.execute('SELECT username, room, recalled, meta FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
-            if not msg or msg['recalled'] or msg['username'] != username:
+            if not msg or msg['recalled'] or msg['username'] != username or room_access.is_match(msg['room']):
                 return
             room = msg['room']
             # Mentions follow the new text (nobody is notified again)

@@ -303,6 +303,8 @@ export const en: Record<keyof typeof zh, string> = {
   'match-next': 'Next',
   'match-leave': 'End',
   'match-report': 'Report',
+  'match-report-after': 'Report this person',
+  'match-reported': "Reported. You won't be matched with them again.",
   'match-report-confirm': 'Report and block this person? The conversation will be sent to moderators.',
   'match-typing': 'Stranger is typing…',
   'match-empty': "You're chatting with a stranger. Say hi!",

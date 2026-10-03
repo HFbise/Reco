@@ -130,6 +130,14 @@ export function MatchView({ onOpenDm, title }: Props) {
         {ended ? (
           <View style={[s.ended, { backgroundColor: c.surface, borderColor: c.border }]}>
             <Text style={[s.endedText, { color: c.textSub }]}>{endedText}</Text>
+            {match.endReason !== 'reported' && (match.reported ? (
+              <Text style={[s.endedText, { color: c.textMuted }]}>{t('match-reported')}</Text>
+            ) : (
+              <TouchableOpacity onPress={confirmReport} style={s.reportLink} accessibilityRole="button">
+                <IconFlag size={14} color={c.danger} />
+                <Text style={[s.reportText, { color: c.danger }]}>{t('match-report-after')}</Text>
+              </TouchableOpacity>
+            ))}
             <View style={s.endedActions}>
               <Button label={t('match-back')} variant="quiet" onPress={match.backToStart} style={s.grow} />
               <Button label={t('match-again')} onPress={match.next} style={s.grow}
@@ -511,5 +519,7 @@ const s = StyleSheet.create({
   sendBtn: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   ended: { margin: 14, padding: Spacing.lg, gap: 12, borderRadius: Radius.xl, borderWidth: 1, alignItems: 'stretch' },
   endedText: { fontSize: 14, textAlign: 'center', fontWeight: String(Fonts.semibold) as any },
+  reportLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, alignSelf: 'center', paddingVertical: 4, paddingHorizontal: 8 },
+  reportText: { fontSize: 13, fontWeight: String(Fonts.bold) as any },
   endedActions: { flexDirection: 'row', gap: 10 },
 });

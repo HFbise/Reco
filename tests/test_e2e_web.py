@@ -297,6 +297,31 @@ def test_random_match_text_chat_then_both_keep_in_touch(server, browser, shots):
     erin.get_by_text("You're now connected with Dave", exact=False).wait_for(timeout=10000)
 
 
+def test_a_stranger_who_left_can_still_be_reported(server, browser, shots):
+    create_user('fay', screenname='Fay')
+    create_user('gus', screenname='Gus')
+    fay, gus = new_page(browser), new_page(browser)
+    shots.extend([fay, gus])
+    for page, name in ((fay, 'fay'), (gus, 'gus')):
+        log_in(page, name)
+        page.get_by_role('tab', name='Match').click()
+        page.get_by_role('tab', name='Entertainment').click()
+        page.get_by_role('checkbox', name='Music').click()
+        page.get_by_text('Start matching', exact=True).click()
+    for page in (fay, gus):
+        page.get_by_label('You both like: Music').wait_for(timeout=10000)
+
+    gus.get_by_placeholder('Type a message...').fill('something rude')
+    gus.get_by_placeholder('Type a message...').press('Enter')
+    fay.get_by_text('something rude').wait_for(timeout=10000)
+    gus.get_by_role('tab', name='Chats').click()  # and gone
+
+    fay.on('dialog', lambda d: d.accept())  # "Report and block this person?"
+    fay.get_by_role('button', name='Report this person').click(timeout=10000)
+    fay.get_by_text("Reported. You won't be matched with them again.").wait_for()
+    assert query('SELECT reporter, reported FROM reports') == [{'reporter': 'fay', 'reported': 'gus'}]
+
+
 def test_guest_sees_matching_as_a_preview_that_asks_to_sign_up(server, browser, demo_room, shots):
     page = new_page(browser)
     shots.append(page)

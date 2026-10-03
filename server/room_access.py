@@ -19,6 +19,9 @@ from utils import hash_password, verify_password
 
 CODE_DIGITS = 6
 MAX_NAME_LEN = 32
+# Names that aren't rooms: 'dm:alice:bob' is a DM, 'match:<id>' a random match's transcript
+# (kept with real identities for moderators, so it must never be readable as a room)
+RESERVED_PREFIXES = ('dm:', 'match:')
 
 
 def new_code(cur) -> str:
@@ -30,9 +33,17 @@ def new_code(cur) -> str:
             return code
 
 
+def reserved(name) -> bool:
+    return isinstance(name, str) and name.lower().startswith(RESERVED_PREFIXES)
+
+
+def is_match(room) -> bool:
+    """A random match's transcript ('match:<id>')."""
+    return isinstance(room, str) and room.startswith('match:')
+
+
 def valid_name(name: str) -> bool:
-    # 'dm:' is reserved for direct-message rooms
-    return bool(name) and len(name) <= MAX_NAME_LEN and not name.lower().startswith('dm:')
+    return bool(name) and len(name) <= MAX_NAME_LEN and not reserved(name)
 
 
 def _inside(username: str, row: dict) -> bool:
@@ -113,6 +124,8 @@ def can_see(cur, username: str, room: str) -> bool:
     participants = dm_participants(room)
     if participants is not None:
         return username in participants
+    if reserved(room):  # a room made under such a name before it was reserved
+        return False
     cur.execute('SELECT members, kicked FROM rooms WHERE name = %s', (room,))
     row = cur.fetchone()
     if not row or username in (row['kicked'] or []):

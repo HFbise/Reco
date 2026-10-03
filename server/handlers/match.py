@@ -27,6 +27,7 @@ from handlers.auth import LOGO_EXPRESSIONS
 from matching import MODES, MatchQueue, Ticket, normalize_tags
 from replies import fail
 from state import check_msg_rate, emit_system_msg, hidden_sids
+from utils import int_field, str_field
 
 log = logging.getLogger(__name__)
 
@@ -242,7 +243,7 @@ def handle_match_leave(username, data):
 @authenticated
 def handle_match_message(username, data):
     side = _mine(username)
-    text = (data.get('text') or '').strip()[:MAX_MESSAGE_LEN]
+    text = str_field(data, 'text').strip()[:MAX_MESSAGE_LEN]
     if not side or not text:
         return
     if not check_msg_rate(username):
@@ -336,20 +337,35 @@ def handle_match_keep(username, data):
 @socketio.on('match_report')
 @authenticated
 def handle_match_report(username, data):
-    """Report the stranger: recorded with the transcript, blocked from now on, match ended."""
+    """Report the stranger: recorded with the transcript, blocked from now on, match ended.
+    Also after the match is over (they may have left the moment they said something): then
+    `match_id` names it, and it must be one of yours from the last RETENTION_DAYS."""
     side = _mine(username)
-    if not side:
-        return
-    reason = (data.get('reason') or '').strip()[:500]
+    reason = str_field(data, 'reason').strip()[:500]
     with get_db() as conn:
         cur = conn.cursor()
-        cur.execute(
-            'INSERT INTO reports (reporter, reported, reason, match_id) VALUES (%s, %s, %s, %s)',
-            (username, side.partner, reason, side.match_id),
-        )
-        cur.execute(
-            'INSERT INTO blocks (blocker, blocked) VALUES (%s, %s) ON CONFLICT DO NOTHING', (username, side.partner)
-        )
+        if side:
+            match_id, partner = side.match_id, side.partner
+        else:
+            match_id = int_field(data, 'match_id')
+            cur.execute(
+                'SELECT user_a, user_b FROM matches WHERE id = %s AND %s IN (user_a, user_b)'
+                ' AND started_at > NOW() - make_interval(days => %s)',
+                (match_id, username, RETENTION_DAYS),
+            )
+            row = cur.fetchone()
+            if not row:
+                return
+            partner = row['user_b'] if row['user_a'] == username else row['user_a']
+        cur.execute('SELECT 1 FROM reports WHERE reporter = %s AND match_id = %s', (username, match_id))
+        if not cur.fetchone():  # once per match is enough
+            cur.execute(
+                'INSERT INTO reports (reporter, reported, reason, match_id) VALUES (%s, %s, %s, %s)',
+                (username, partner, reason, match_id),
+            )
+        cur.execute('INSERT INTO blocks (blocker, blocked) VALUES (%s, %s) ON CONFLICT DO NOTHING', (username, partner))
         conn.commit()
-    _end(username, 'reported')
-    emit('match_ended', {'reason': 'reported'})
+    emit('match_reported', {'match_id': match_id})
+    if side:
+        _end(username, 'reported')
+        emit('match_ended', {'reason': 'reported'})
