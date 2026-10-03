@@ -1,0 +1,2 @@
+# /etc/cron.d/reco-turn: post TURN usage to Reco every minute (see reco_turn_report.py)
+* * * * * root /usr/bin/python3 /usr/local/bin/reco-turn-report 2>>/var/log/turnserver/report-errors.log

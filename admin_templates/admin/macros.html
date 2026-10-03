@@ -31,3 +31,17 @@
 {%- endmacro %}
 
 {% macro when(dt, fmt='%Y-%m-%d %H:%M') -%}{{ dt.strftime(fmt) if dt else '' }}{%- endmacro %}
+
+{# 1536 -> "1.5 KB" #}
+{% macro size(n) -%}
+  {%- set units = ['B', 'KB', 'MB', 'GB', 'TB'] -%}
+  {%- set ns = namespace(v=n or 0, i=0) -%}
+  {%- for _ in units[1:] -%}{%- if ns.v >= 1024 -%}{%- set ns.v = ns.v / 1024 -%}{%- set ns.i = ns.i + 1 -%}{%- endif -%}{%- endfor -%}
+  {{ ('%d' % ns.v) if ns.i == 0 else ('%.1f' % ns.v) }} {{ units[ns.i] }}
+{%- endmacro %}
+
+{# 3725 seconds -> "1:02:05" #}
+{% macro duration(seconds) -%}
+  {%- set s = (seconds or 0) | int -%}
+  {{ '%d:%02d:%02d' % (s // 3600, s % 3600 // 60, s % 60) }}
+{%- endmacro %}

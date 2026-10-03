@@ -1,0 +1,20 @@
+# /etc/logrotate.d/reco-turn
+# The reporter empties turn.log every minute; this only matters if it stops running.
+/var/log/turnserver/turn.log {
+    daily
+    maxsize 200M
+    rotate 2
+    compress
+    missingok
+    notifempty
+    copytruncate
+    su turnserver turnserver
+}
+
+/var/log/turnserver/report-errors.log {
+    weekly
+    rotate 4
+    compress
+    missingok
+    notifempty
+}

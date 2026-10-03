@@ -101,8 +101,11 @@ free instance sleeps when idle, so the first load can take up to a minute.
   matching screen. Every write-type event (matching included) is rejected on the
   server, not just hidden in the UI.
 - **Moderation panel** (`/admin`): users (reset password, rename, delete), rooms
-  (kick, text and voice restrictions, recall), reports with match transcripts, and
-  feedback.
+  (kick, text and voice restrictions, recall), reports with match transcripts,
+  feedback, and TURN relay usage. A small script on the coturn host
+  (`deploy/turn/`) reads coturn's log every minute, keeps only signed-in relay
+  sessions (start, end, traffic) and a count of STUN probes, and posts them to the
+  server signed with the TURN shared secret.
 - **Polish:** English and Chinese UI (server errors are sent as codes and translated
   on the client), a quiet dark mode, a responsive layout (nav rail plus three columns
   on desktop, tabs on mobile), touch gestures on phones (swipe back, swipe for the
@@ -221,7 +224,7 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 292 backend tests + 43 browser end-to-end tests
+pytest                       # 300 backend tests + 43 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=.    # backend line coverage
 
 cd app

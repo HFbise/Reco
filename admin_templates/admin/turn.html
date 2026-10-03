@@ -1,0 +1,62 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import empty_row, when, size, duration, pages %}
+{% block body %}
+  <h2>TURN 语音中继
+    {% if stats.reported_at is none %}
+      <span class="tag tag-red">还没收到过上报</span>
+    {% elif stats.silent_minutes > 5 %}
+      <span class="tag tag-red">已 {{ stats.silent_minutes }} 分钟没有上报</span>
+    {% else %}
+      <span class="tag tag-green">上报正常</span>
+    {% endif %}
+  </h2>
+  <p class="muted">TURN 服务器每分钟上报一次。只统计用 Reco 凭证登录的中继会话；直连成功的通话不经过这里。日期按 UTC。</p>
+  <div class="stats">
+    {% for value, label in [
+      (stats.live, '正在中继'), (stats.week_sessions, '7 天会话'), (stats.week_users, '7 天用户'),
+      (size(stats.week_relay_bytes), '7 天中继流量'), (stats.peak, '30 天最高同时'),
+    ] %}
+      <div class="stat"><div class="stat-num">{{ value }}</div><div class="stat-label">{{ label }}</div></div>
+    {% endfor %}
+  </div>
+
+  <h2>按天 <span class="count">最近 30 天</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>日期</th><th>会话</th><th>用户</th><th>最高同时</th><th>中继流量</th><th>客户端流量</th><th>STUN 请求</th></tr>
+      {% for d in stats.days if d.sessions or d.peak or d.stun %}
+        <tr>
+          <td class="mono">{{ d.day }}</td>
+          <td>{{ d.sessions }}</td>
+          <td>{{ d.users }}</td>
+          <td>{{ d.peak }}</td>
+          <td>{{ size(d.relay_bytes) }}</td>
+          <td>{{ size(d.client_bytes) }}</td>
+          <td>{{ d.stun }}</td>
+        </tr>
+      {% else %}
+        {{ empty_row(7, '暂无数据') }}
+      {% endfor %}
+    </table>
+  </div>
+
+  <h2>会话 <span class="count">共 {{ total }} 个</span></h2>
+  <div class="card">
+    <table>
+      <tr><th>用户</th><th>开始</th><th>时长</th><th>中继流量</th><th>客户端流量</th><th>结束原因</th></tr>
+      {% for s in sessions %}
+        <tr>
+          <td class="mono">{{ s.username }}</td>
+          <td class="mono">{{ when(s.started_at) }}</td>
+          <td class="mono">{{ duration(((s.ended_at or s.last_seen) - s.started_at).total_seconds()) }}</td>
+          <td>{{ size(s.relay_bytes) }}</td>
+          <td>{{ size(s.client_bytes) }}</td>
+          <td class="muted">{% if s.ended_at %}{{ s.reason or '' }}{% else %}<span class="tag tag-blue">进行中</span>{% endif %}</td>
+        </tr>
+      {% else %}
+        {{ empty_row(6, '暂无会话') }}
+      {% endfor %}
+    </table>
+  </div>
+  {{ pages(page, total, per_page, page_url) }}
+{% endblock %}

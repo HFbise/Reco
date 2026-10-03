@@ -1,5 +1,5 @@
 """The site admin panel (/admin): numbers, feedback, reports with match transcripts, users
-(reset password, rename, delete) and rooms (kick, mute, voice-ban, recall, close).
+(reset password, rename, delete), rooms (kick, mute, voice-ban, recall, close) and TURN usage.
 
 Signed in with ADMIN_PASSWORD (a session cookie, SameSite=Lax). Pages are Jinja templates in
 admin_templates/admin/, which escape everything they show; the views only gather data.
@@ -15,6 +15,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 
 import moderation
 import room_log
+import turn_usage
 from auth_session import end_sessions
 from db import get_db
 from state import LOBBY, check_login_rate, online_users, record_login_fail, reset_login_attempts
@@ -180,6 +181,27 @@ def match_transcript(match_id):
         )
         messages = cur.fetchall()
     return render_template('admin/match.html', section='reports', match_id=match_id, match=match, messages=messages)
+
+
+@admin_bp.route('/turn')
+@login_required
+def turn():
+    """Voice relay usage, as the TURN host reports it (see turn_usage.py)."""
+    page = _page_number()
+    with get_db() as conn:
+        cur = conn.cursor()
+        stats = turn_usage.overview(cur)
+        sessions, total = turn_usage.recent(cur, PER_PAGE, (page - 1) * PER_PAGE)
+    return render_template(
+        'admin/turn.html',
+        section='turn',
+        stats=stats,
+        sessions=sessions,
+        total=total,
+        page=page,
+        per_page=PER_PAGE,
+        page_url=lambda n: url_for('admin.turn', page=n),
+    )
 
 
 # ── users ─────────────────────────────────────────────────────

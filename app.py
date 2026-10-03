@@ -29,6 +29,7 @@ import oauth
 import profiles
 import reads
 import room_log
+import turn_usage
 import voice_state
 import webpush
 from admin import admin_bp
@@ -43,6 +44,7 @@ app.register_blueprint(images.bp)
 app.register_blueprint(client_errors.bp)
 app.register_blueprint(oauth.bp)
 app.register_blueprint(webpush.bp)
+app.register_blueprint(turn_usage.bp)
 
 # ── Web app (Expo web build, served as a single-page app) ─────
 DIST_DIR = os.path.join(os.path.dirname(__file__), 'app', 'dist')
@@ -258,6 +260,7 @@ def _migrate():
             chat_prefs.migrate(cur)
             room_log.migrate(cur)
             profiles.migrate(cur)
+            turn_usage.migrate(cur)
             # The room card: shown to everyone, edited by the owner and admins
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS description TEXT')
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS announcement TEXT')

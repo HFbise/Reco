@@ -11,7 +11,7 @@
     <div class="topbar-left">
       <h1>Reco Admin</h1>
       <nav>
-        {% for endpoint, label in [('dashboard', '概览'), ('feedback', '反馈'), ('reports', '举报'), ('users', '用户'), ('rooms', '房间')] %}
+        {% for endpoint, label in [('dashboard', '概览'), ('feedback', '反馈'), ('reports', '举报'), ('users', '用户'), ('rooms', '房间'), ('turn', 'TURN')] %}
           <a href="{{ url_for('admin.' + endpoint) }}" class="{{ 'active' if section == endpoint }}">{{ label }}</a>
         {% endfor %}
       </nav>

@@ -43,6 +43,7 @@ form.inline { display: inline; }
 .tag { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 600; }
 .tag-blue { background: var(--accent-bg); color: #6ea1ff; }
 .tag-red { background: var(--danger-bg); color: #ff7b7d; }
+.tag-green { background: var(--ok-bg); color: var(--ok); }
 .pre { white-space: pre-wrap; word-break: break-all; max-width: 500px; line-height: 1.5; }
 .mono { font-family: monospace; font-size: 12px; color: var(--muted); }
 .logout { color: var(--muted); font-size: 13px; }
