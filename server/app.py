@@ -207,6 +207,12 @@ def _migrate():
                 screenname TEXT, text TEXT NOT NULL, time TEXT,
                 created_at TIMESTAMPTZ DEFAULT NOW())""")
             cur.execute('CREATE INDEX IF NOT EXISTS messages_room_created_idx ON messages(room, created_at)')
+            # Someone's DMs, by either name in 'dm:<a>:<b>' (see handlers/dms.py: get_dms)
+            for part in (2, 3):
+                cur.execute(
+                    f'CREATE INDEX IF NOT EXISTS messages_dm_part{part}_idx'
+                    f" ON messages (split_part(room, ':', {part})) INCLUDE (room) WHERE room LIKE 'dm:%'"  # no params: one %
+                )
             cur.execute('ALTER TABLE messages ADD COLUMN IF NOT EXISTS meta JSONB')
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS password TEXT')
             cur.execute('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS owner TEXT')
