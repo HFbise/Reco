@@ -34,28 +34,28 @@ def handle_get_dms(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            # Exact match on the two name parts ('_' in LIKE is a wildcard, so a
-            # prefix pattern would also match other people's DMs). A closed DM
-            # stays hidden until a newer message arrives.
+            # Their DMs come from two partial indexes, one per name in 'dm:<a>:<b>' (an exact
+            # match: '_' in LIKE is a wildcard, so a prefix pattern would also match other
+            # people's DMs); each DM's newest message then from (room, created_at). A closed
+            # DM stays hidden until a newer message arrives.
             cur.execute(
                 'SELECT d.room, u.username, u.screenname, u.avatar_expression, u.avatar_color,'
                 ' last.id AS last_id, last.username AS last_from, last.text AS last_text,'
                 ' last.recalled AS last_recalled, last.system AS last_system, last.meta AS last_meta FROM ('
-                '   SELECT m.room, MAX(m.created_at) AS last_at FROM messages m'
-                "   WHERE m.room LIKE 'dm:%%' AND %s IN (split_part(m.room, ':', 2), split_part(m.room, ':', 3))"
-                '   GROUP BY m.room'
+                "   SELECT room FROM messages WHERE room LIKE 'dm:%%' AND split_part(room, ':', 2) = %s"
+                "   UNION SELECT room FROM messages WHERE room LIKE 'dm:%%' AND split_part(room, ':', 3) = %s"
                 ' ) d'
                 " JOIN users u ON u.username = CASE WHEN split_part(d.room, ':', 2) = %s"
                 "   THEN split_part(d.room, ':', 3) ELSE split_part(d.room, ':', 2) END"
                 ' LEFT JOIN dm_closed c ON c.username = %s AND c.dm_room = d.room'
                 # The newest message, for the preview line under the name
                 ' CROSS JOIN LATERAL ('
-                '   SELECT id, username, text, recalled, system, meta FROM messages'
+                '   SELECT id, username, text, recalled, system, meta, created_at FROM messages'
                 '   WHERE room = d.room ORDER BY created_at DESC, id DESC LIMIT 1'
                 ' ) last'
-                " WHERE d.last_at > COALESCE(c.closed_at, '-infinity'::timestamptz)"
-                ' ORDER BY d.last_at DESC',
-                (username, username, username),
+                " WHERE last.created_at > COALESCE(c.closed_at, '-infinity'::timestamptz)"
+                ' ORDER BY last.created_at DESC',
+                (username, username, username, username),
             )
             rows = cur.fetchall()
             unread = reads.unread_counts(cur, username, [r['room'] for r in rows])

@@ -48,24 +48,55 @@ def tokens_for(usernames) -> list:
         return [r['token'] for r in cur.fetchall()]
 
 
+EXPO_BATCH = 100  # Expo's limit per request: a bigger batch fails as a whole
+
+
+def _forget_tokens(tokens: list):
+    """Devices Expo says are gone (the app was uninstalled or its push permission revoked)."""
+    if not tokens:
+        return
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute('DELETE FROM push_tokens WHERE token = ANY(%s)', (tokens,))
+        conn.commit()
+
+
+def _post_batch(batch: list, title: str, body: str, data: dict | None) -> list:
+    """Send one batch; returns the tokens Expo reported as no longer registered."""
+    payload = json.dumps(
+        [{'to': t, 'title': title, 'body': body, 'data': data or {}, 'sound': 'default'} for t in batch]
+    ).encode('utf-8')
+    req = _req.Request(
+        'https://exp.host/--/api/v2/push/send',
+        data=payload,
+        headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
+        method='POST',
+    )
+    with _req.urlopen(req, timeout=5) as response:
+        tickets = json.loads(response.read() or b'{}').get('data') or []
+    # One ticket per message, in the order sent
+    return [
+        token
+        for token, ticket in zip(batch, tickets, strict=False)
+        if isinstance(ticket, dict) and (ticket.get('details') or {}).get('error') == 'DeviceNotRegistered'
+    ]
+
+
 def send_push(tokens: list, title: str, body: str, data: dict = None):
-    """Fire-and-forget Expo push notification."""
+    """Fire-and-forget Expo push notification, in batches Expo accepts."""
     if not tokens:
         return
 
     def _worker():
+        gone = []
+        for start in range(0, len(tokens), EXPO_BATCH):
+            try:
+                gone += _post_batch(tokens[start : start + EXPO_BATCH], title, body, data)
+            except Exception as e:
+                log.exception('push error: %s', e)
         try:
-            payload = json.dumps(
-                [{'to': t, 'title': title, 'body': body, 'data': data or {}, 'sound': 'default'} for t in tokens]
-            ).encode('utf-8')
-            req = _req.Request(
-                'https://exp.host/--/api/v2/push/send',
-                data=payload,
-                headers={'Content-Type': 'application/json', 'Accept': 'application/json'},
-                method='POST',
-            )
-            _req.urlopen(req, timeout=5)
+            _forget_tokens(gone)
         except Exception as e:
-            log.exception('push error: %s', e)
+            log.exception('push token cleanup error: %s', e)
 
     threading.Thread(target=_worker, daemon=True).start()
