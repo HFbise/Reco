@@ -9,7 +9,7 @@ const pick = (except?: string) => {
   return choices[Math.floor(Math.random() * choices.length)];
 };
 
-// The logo wears one of its faces (logo/asset/R_*.svg; the R_F_ ones are for avatars only),
+// The logo wears one of its faces (design/asset/R_*.svg; the R_F_ ones are for avatars only),
 // picked when the app loads: a different mood per visit.
 const FIRST_FACE = pick();
 

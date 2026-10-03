@@ -167,9 +167,9 @@ flowchart LR
 - **Replies are codes, not strings.** For example, `fail('join', 'wrong_password')`.
   The client's i18n layer turns them into text, and a test checks that every server
   code has a translation.
-- **The match queue is pure logic** (`matching.py`, with an injectable clock and no
+- **The match queue is pure logic** (`server/matching.py`, with an injectable clock and no
   I/O), so pairing rules are unit-tested directly. The Socket.IO layer
-  (`handlers/match.py`) only relays events between the two sides of a match.
+  (`server/handlers/match.py`) only relays events between the two sides of a match.
 
 ## Tech stack
 
@@ -181,6 +181,23 @@ flowchart LR
 | Data | PostgreSQL (Supabase in production) |
 | Infra | Render (web service), coturn (TURN), Sentry (optional), Expo push |
 | Tests | pytest with a throwaway Postgres, Playwright e2e, `node --test` for frontend logic, ruff, ESLint, tsc, GitHub Actions |
+
+## Project layout
+
+```text
+app/                 Expo app (web, iOS, Android): screens, components, hooks, stores, i18n
+server/              Flask + Socket.IO backend
+  app.py             app setup, schema migrations, HTTP routes
+  handlers/          Socket.IO events: auth, rooms, messages, DMs, voice, match, profile
+  admin.py           the /admin panel (Jinja templates in admin_templates/)
+  *.py               one module per concern: moderation, mentions, reads, images, webpush, oauth, ...
+tests/               pytest (backend and Playwright end-to-end), plus gunicorn smoke and load tests
+deploy/turn/         on the coturn host: the TURN usage reporter, its cron entry and log rotation
+design/              logo and avatar face sources (SVG, PNG, PDF)
+docs/screenshots/    the pictures in this README
+wsgi.py              production entry point (`gunicorn wsgi:app`, settings in gunicorn.conf.py)
+build.sh             Render's build: Python dependencies, then the Expo web export
+```
 
 ## Running locally
 
@@ -227,7 +244,7 @@ The schema is created and migrated automatically on startup.
 pip install -r requirements-dev.txt
 python -m playwright install chromium
 pytest                       # 303 backend tests + 44 browser end-to-end tests
-pytest --ignore=tests/test_e2e_web.py --cov=.    # backend line coverage
+pytest --ignore=tests/test_e2e_web.py --cov=server    # backend line coverage
 
 cd app
 npm run typecheck && npm run lint && npm test     # 45 frontend unit tests

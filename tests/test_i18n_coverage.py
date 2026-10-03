@@ -25,7 +25,8 @@ def keys(block):
 
 def server_error_codes():
     codes = set()
-    for path in glob.glob(os.path.join(ROOT, 'handlers', '*.py')) + [os.path.join(ROOT, 'moderation.py')]:
+    server = os.path.join(ROOT, 'server')
+    for path in glob.glob(os.path.join(server, 'handlers', '*.py')) + [os.path.join(server, 'moderation.py')]:
         codes |= set(re.findall(r"fail\('\w+', '(\w+)'", read(path)))
     return codes
 

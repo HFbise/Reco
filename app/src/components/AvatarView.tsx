@@ -2,7 +2,7 @@ import { View } from 'react-native';
 import Svg, { Path, Circle, Ellipse, Line } from 'react-native-svg';
 import { getAvatarColor } from '../lib/avatar';
 
-// Faces the logo wears too (logo/asset/R_<name>.svg)
+// Faces the logo wears too (design/asset/R_<name>.svg)
 export const LOGO_EXPRESSIONS = ['Smile', 'Laugh', 'BigLaugh', 'Angi', 'Sad', 'Em'] as const;
 // Every face an avatar can pick: the logo's plus the avatar-only ones (R_F_<name>.svg; 'o.O' is keyed 'oO').
 // Same list as handlers/auth.py AVATAR_EXPRESSIONS.

@@ -12,7 +12,8 @@ import tempfile
 import pytest
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, ROOT)
+SERVER = os.path.join(ROOT, 'server')
+sys.path.insert(0, SERVER)  # the backend (pyproject's pytest pythonpath does too; scripts need it)
 
 _pg = None
 if not os.environ.get('TEST_DATABASE_URL'):

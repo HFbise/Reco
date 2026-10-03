@@ -16,7 +16,7 @@ import pytest
 
 sync_api = pytest.importorskip('playwright.sync_api')
 
-from conftest import ROOT, create_room, create_user, get_db, query  # noqa: E402
+from conftest import ROOT, SERVER, create_room, create_user, get_db, query  # noqa: E402
 
 import demo  # noqa: E402
 
@@ -37,7 +37,7 @@ def server():
         VAPID_PRIVATE_KEY='e2e',
     )
     proc = subprocess.Popen(
-        [sys.executable, 'app.py'], cwd=ROOT, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        [sys.executable, 'app.py'], cwd=SERVER, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
     deadline = time.time() + 60
     while time.time() < deadline:

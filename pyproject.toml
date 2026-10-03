@@ -1,5 +1,6 @@
 [tool.ruff]
 line-length = 120
+src = [".", "server"]  # the backend's modules import each other by name from server/
 target-version = "py311"
 extend-exclude = ["app", "extract_group.py"]
 
@@ -13,11 +14,12 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["E402"]   # conftest must set env vars before importing the app
-"app.py" = ["E402"]    # load_dotenv() / logging setup must run before app imports
-"wsgi.py" = ["E402"]
+"server/app.py" = ["E402"]    # load_dotenv() / logging setup must run before app imports
+"wsgi.py" = ["E402"]          # server/ goes on sys.path first
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["server"]
 
 [tool.ruff.format]
 quote-style = "single"

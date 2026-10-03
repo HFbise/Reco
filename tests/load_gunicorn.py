@@ -32,7 +32,7 @@ MESSAGES_EACH = 4  # the server allows 8 per 10 s per person
 WAIT = 15  # seconds for a message burst to arrive everywhere
 
 os.environ.setdefault('SECRET_KEY', 'load')
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'server'))
 
 import psycopg2  # noqa: E402
 import socketio  # noqa: E402
