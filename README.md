@@ -44,7 +44,7 @@ free instance sleeps when idle, so the first load can take up to a minute.
   refers to (people in the room only) and stores that with the message, so every
   client shows it as @DisplayName. A message that mentions you is highlighted, the room
   says "Mentioned you" in your list until you read it, and you're notified even in a
-  room you muted.
+  room you muted. A room's owner and admins can also @everyone.
 - **Profile cards:** tap anyone's avatar, name or @mention, a DM's title, or a member in
   the list. A card shows their bio, when they joined, when they were last online (as
   you could see it: someone who hides their status still counts as online to the person
@@ -221,11 +221,11 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 287 backend tests + 42 browser end-to-end tests
+pytest                       # 292 backend tests + 43 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=.    # backend line coverage
 
 cd app
-npm run typecheck && npm run lint && npm test     # 42 frontend unit tests
+npm run typecheck && npm run lint && npm test     # 45 frontend unit tests
 ```
 
 The backend tests start a disposable Postgres (via `pgserver`) and drive the real

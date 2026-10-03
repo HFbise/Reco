@@ -63,7 +63,14 @@ export function BubbleBody({ msg, me, onQuotePress, onMentionPress }: {
       )}
       {!!msg.text && (
         <Text style={[s.text, textSize, { color: own ? c.onAccent : c.text }, !!image && s.caption]}>
-          {splitMentions(msg.text, msg.meta?.mentions).map((part, i) => ('text' in part ? part.text : (
+          {splitMentions(msg.text, msg.meta?.mentions, msg.meta?.everyone).map((part, i) => ('text' in part ? part.text
+            : 'everyone' in part ? (
+            // @everyone means you too (unless you wrote it)
+            <Text key={i} style={[s.mention, own
+              ? { backgroundColor: 'rgba(255,255,255,0.2)', color: c.onAccent } : { backgroundColor: c.sunny, color: c.sunnyText }]}>
+              @{t('mention-everyone')}
+            </Text>
+          ) : (
             // @Screenname; you, in the sunny color
             <Text key={i} onPress={onMentionPress && (() => onMentionPress(part.username, part.screenname))} suppressHighlighting
               accessibilityRole={onMentionPress ? 'link' : undefined}

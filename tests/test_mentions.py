@@ -5,6 +5,7 @@ from conftest import connect_as, create_room, create_user, events, get_db, query
 
 import handlers.messages
 import mentions
+import moderation
 import webpush
 
 
@@ -94,6 +95,51 @@ def test_editing_a_message_updates_who_it_mentions(club):
     assert query('SELECT meta FROM messages')[0]['meta'] is None
 
 
+def make_admin(room, username):
+    with get_db() as conn:
+        conn.cursor().execute('UPDATE rooms SET admins = admins || %s WHERE name = %s', ([username], room))
+        conn.commit()
+
+
+def test_owners_and_admins_can_mention_everyone(club):
+    make_admin('club', 'carol')
+    alice, bob, carol = connect_as('alice'), connect_as('bob'), connect_as('carol')
+    for c in (alice, bob, carol):
+        join(c, 'club')
+    assert say(alice, 'club', '@everyone meeting at 6')['meta'] == {'everyone': True}
+    assert say(carol, 'club', '@everyone and @bob')['meta'] == {'everyone': True, 'mentions': {'bob': 'Bobby'}}
+    assert say(bob, 'club', '@everyone hi')['meta'] is None  # a plain member
+
+
+def test_no_everyone_in_the_lobby_or_a_dm(club):
+    alice = connect_as('alice')
+    join(alice, '大厅')
+    with get_db() as conn:
+        conn.cursor().execute("UPDATE rooms SET owner = 'alice' WHERE name = '大厅'")
+        conn.commit()
+    assert say(alice, '大厅', '@everyone hi')['meta'] is None
+    alice.emit('join_dm', {'dm_room': 'dm:alice:bob'})
+    assert say(alice, 'dm:alice:bob', '@everyone hi')['meta'] is None
+
+
+def test_everyone_is_not_a_username():
+    with get_db() as conn:
+        assert not moderation.username_available(conn.cursor(), 'everyone')
+
+
+def test_editing_adds_or_drops_everyone(club):
+    alice = connect_as('alice')
+    join(alice, 'club')
+    msg = say(alice, 'club', 'meeting at 6')
+    alice.emit('edit_message', {'id': msg['id'], 'text': '@everyone meeting at 6'})
+    edited = events(alice, 'message_edited')[-1]
+    assert edited['everyone'] and edited['mentions'] == {}
+    assert query('SELECT meta FROM messages')[0]['meta'] == {'everyone': True}
+    alice.emit('edit_message', {'id': msg['id'], 'text': 'meeting at 7'})
+    assert not events(alice, 'message_edited')[-1]['everyone']
+    assert query('SELECT meta FROM messages')[0]['meta'] is None
+
+
 # ── "mentioned you" in the list ───────────────────────────────
 
 
@@ -169,3 +215,17 @@ def test_no_mention_push_when_turned_off_blocked_or_watching(club, pushes):
     connect_as('erin')  # has Reco open on screen
     say(alice, 'club', '@erin look')
     assert web == []
+
+
+def test_everyone_tells_every_member_but_the_sender(club, pushes):
+    web, phone = pushes
+    with get_db() as conn:
+        conn.cursor().execute("INSERT INTO chat_prefs (username, room, muted) VALUES ('carol', 'club', TRUE)")
+        conn.commit()
+    alice = connect_as('alice')
+    join(alice, 'club')
+    say(alice, 'club', '@everyone meeting at 6')
+    assert web == [(['bob', 'carol'], 'mention', {'name': 'Alice', 'room': 'club'})]  # muted or not
+    assert phone == [(['bob', 'carol'], 'Alice mentioned you in club')]
+    assert rooms_list(connect_as('bob'))['club']['mentioned']
+    assert not rooms_list(alice)['club']['mentioned']

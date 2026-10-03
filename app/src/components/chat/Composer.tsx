@@ -6,7 +6,7 @@ import { IconBan, IconClose, IconEmoji, IconImage, IconPencil, IconReply, IconSe
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { isSendKey } from '../../lib/keys';
-import { activeMention, applyMention, matchMembers, type Mentionable } from '../../lib/mentions';
+import { EVERYONE, activeMention, applyMention, matchMembers, offersEveryone, type Mentionable } from '../../lib/mentions';
 import { usePeopleStore } from '../../store/peopleStore';
 import { usePrefsStore } from '../../store/prefsStore';
 import { Fonts, Radius, Spacing } from '../../theme';
@@ -33,6 +33,8 @@ interface Props {
   /** People who can be @mentioned (rooms; none in DMs), and you */
   mentionable?: Mentionable[];
   me?: string;
+  /** The room's owner or an admin: @everyone is offered too */
+  canMentionEveryone?: boolean;
 }
 
 // The message box starts one line tall and grows with what's typed, up to a limit
@@ -60,7 +62,11 @@ export function Composer(p: Props) {
   // Found by the name you know them by too
   const nicknames = usePeopleStore((st) => st.nicknames);
   const suggestions = mention && mention.start !== dismissedAt
-    ? matchMembers(p.mentionable!.map((m) => ({ ...m, screenname: nicknames[m.username] || m.screenname })), mention.query, p.me)
+    ? [
+      ...(p.canMentionEveryone && offersEveryone(mention.query, t('mention-everyone'))
+        ? [{ username: EVERYONE, screenname: t('mention-everyone') }] : []),
+      ...matchMembers(p.mentionable!.map((m) => ({ ...m, screenname: nicknames[m.username] || m.screenname })), mention.query, p.me),
+    ]
     : [];
   const picking = suggestions.length > 0;
   useEffect(() => { setHighlighted(0); }, [mention?.start, mention?.query]);

@@ -1,13 +1,15 @@
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { AvatarView } from '../AvatarView';
+import { IconUsers } from '../Icon';
 import { useColors } from '../../hooks/useColors';
 import { useT } from '../../hooks/useT';
 import { useDisplayName } from '../../store/peopleStore';
-import type { Mentionable } from '../../lib/mentions';
+import { EVERYONE, type Mentionable } from '../../lib/mentions';
 import { Fonts, Radius } from '../../theme';
 
 /** People to @mention, over the message box while an @name is being typed. Arrow keys move
- *  the highlight, Enter or Tab picks (handled by the composer); a click or tap picks too. */
+ *  the highlight, Enter or Tab picks (handled by the composer); a click or tap picks too.
+ *  @everyone, when offered, comes first. */
 export function MentionPicker({ people, highlighted, onPick, onHover }: {
   people: Mentionable[];
   highlighted: number;
@@ -22,14 +24,19 @@ export function MentionPicker({ people, highlighted, onPick, onHover }: {
       accessibilityLabel={t('mention-someone')}>
       {people.map((m, i) => {
         const on = i === highlighted;
+        const all = m.username === EVERYONE;
         return (
           <TouchableOpacity key={m.username} onPress={() => onPick(m)} activeOpacity={0.8}
             {...({ onMouseEnter: () => onHover(i) } as any)}
             accessibilityRole="menuitem" accessibilityState={{ selected: on }} accessibilityLabel={`${m.screenname} @${m.username}`}
             style={[s.row, on && { backgroundColor: c.accentBg }]}>
-            <AvatarView expression={m.avatar_expression} color={m.avatar_color} username={m.username} screenname={m.screenname} size={28} />
-            <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{name(m.username, m.screenname)}</Text>
-            <Text style={[s.handle, { color: c.textMuted }]} numberOfLines={1}>@{m.username}</Text>
+            {all ? (
+              <View style={[s.everyone, { backgroundColor: c.sunny }]}><IconUsers size={16} color={c.sunnyText} /></View>
+            ) : (
+              <AvatarView expression={m.avatar_expression} color={m.avatar_color} username={m.username} screenname={m.screenname} size={28} />
+            )}
+            <Text style={[s.name, { color: c.text }]} numberOfLines={1}>{all ? `@${m.screenname}` : name(m.username, m.screenname)}</Text>
+            <Text style={[s.handle, { color: c.textMuted }]} numberOfLines={1}>{all ? t('mention-everyone-hint') : `@${m.username}`}</Text>
           </TouchableOpacity>
         );
       })}
@@ -43,6 +50,7 @@ const s = StyleSheet.create({
     shadowColor: '#161A23', shadowOpacity: 0.12, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 6,
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 42, paddingHorizontal: 10, borderRadius: Radius.md },
+  everyone: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   name: { flexShrink: 1, fontSize: 15, fontWeight: String(Fonts.bold) as any },
   handle: { flexShrink: 1, fontSize: 13 },
 });

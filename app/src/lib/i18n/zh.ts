@@ -552,6 +552,8 @@ export const zh = {
   'settings-volume': '音量',
   'settings-devices': '设备',
   'mention-someone': '提到某人',
+  'mention-everyone': '所有人',
+  'mention-everyone-hint': '通知这个房间里的所有人',
   'mentioned-you': '[有人@我]',
   'settings-push-mentions': '@我',
   'settings-push-mentions-hint': '有人在房间里@你，即使那个房间开了免打扰',

@@ -1,8 +1,12 @@
 /**
  * @mentions, as pure functions (tested in __tests__/mentions.test.ts). A message holds
  * @username; the server lists who that really named in meta.mentions ({username: screenname}),
- * and the bubble shows each of those as @Screenname (see mentions.py on the server).
+ * and the bubble shows each of those as @Screenname (see mentions.py on the server). A room's
+ * owner and admins can also write @everyone, which the server marks with meta.everyone.
  */
+
+/** The name that @mentions a whole room (no account can have it) */
+export const EVERYONE = 'everyone';
 
 export interface Mentionable {
   username: string;
@@ -51,20 +55,21 @@ export function matchMembers(members: Mentionable[], query: string, me: string |
   return scored.slice(0, limit).map(([, m]) => m);
 }
 
-export type Segment = { text: string } | { username: string; screenname: string };
+export type Segment = { text: string } | { username: string; screenname: string } | { everyone: true };
 
 /** The message text in pieces: plain text, and the @mentions the server confirmed. */
-export function splitMentions(text: string, mentions: Record<string, string> | undefined): Segment[] {
-  if (!mentions || !Object.keys(mentions).length) return [{ text }];
+export function splitMentions(text: string, mentions: Record<string, string> | undefined, everyone = false): Segment[] {
+  if (!everyone && (!mentions || !Object.keys(mentions).length)) return [{ text }];
   const out: Segment[] = [];
   const re = /(^|[^A-Za-z0-9_@.])@([A-Za-z0-9_]{3,20})(?![A-Za-z0-9_])/g;
   let last = 0;
   for (let m = re.exec(text); m; m = re.exec(text)) {
     const username = m[2].toLowerCase();
-    if (!(username in mentions)) continue;
+    const all = everyone && username === EVERYONE;
+    if (!all && !(mentions && username in mentions)) continue;
     const at = m.index + m[1].length;
     if (at > last) out.push({ text: text.slice(last, at) });
-    out.push({ username, screenname: mentions[username] });
+    out.push(all ? { everyone: true } : { username, screenname: mentions![username] });
     last = at + 1 + m[2].length;
   }
   if (last < text.length) out.push({ text: text.slice(last) });
@@ -72,15 +77,26 @@ export function splitMentions(text: string, mentions: Record<string, string> | u
 }
 
 /** A message's meta after an edit changed who it mentions */
-export function withMentions<M extends { mentions?: Record<string, string> }>(
-  meta: M | null | undefined, mentions: Record<string, string> | undefined,
+export function withMentions<M extends { mentions?: Record<string, string>; everyone?: boolean }>(
+  meta: M | null | undefined, mentions: Record<string, string> | undefined, everyone = false,
 ): M | null {
-  const { mentions: _old, ...rest } = (meta ?? {}) as M;
-  const next = { ...rest, ...(mentions && Object.keys(mentions).length ? { mentions } : {}) } as M;
+  const { mentions: _old, everyone: _all, ...rest } = (meta ?? {}) as M;
+  const next = {
+    ...rest,
+    ...(mentions && Object.keys(mentions).length ? { mentions } : {}),
+    ...(everyone ? { everyone: true } : {}),
+  } as M;
   return Object.keys(next).length ? next : null;
 }
 
-/** Does this message @mention `me`? */
+/** Does this message @mention `me` (by name, or @everyone)? */
 export function mentionsMe(meta: any, me: string | undefined): boolean {
-  return !!me && !!meta?.mentions && me in meta.mentions;
+  return !!me && (!!meta?.everyone || (!!meta?.mentions && me in meta.mentions));
+}
+
+/** Whether to offer @everyone for what's typed after @: it starts the word, or its name in
+ *  the app's language (so "所" finds 所有人). */
+export function offersEveryone(query: string, label: string): boolean {
+  const q = query.toLowerCase();
+  return EVERYONE.startsWith(q) || label.toLowerCase().startsWith(q);
 }

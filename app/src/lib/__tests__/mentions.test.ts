@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { activeMention, applyMention, matchMembers, mentionsMe, splitMentions } from '../mentions';
+import { activeMention, applyMention, matchMembers, mentionsMe, offersEveryone, splitMentions, withMentions } from '../mentions';
 
 test('a mention is being typed after an @ at the start or after a space', () => {
   assert.deepEqual(activeMention('@', 1), { start: 0, query: '' });
@@ -44,4 +44,28 @@ test('only mentions the server confirmed become chips', () => {
   assert.equal(mentionsMe({ mentions }, 'bob'), true);
   assert.equal(mentionsMe({ mentions }, 'carol'), false);
   assert.equal(mentionsMe(null, 'bob'), false);
+});
+
+test('@everyone is a chip only when the server marked the message', () => {
+  assert.deepEqual(splitMentions('@everyone meeting', undefined, true), [{ everyone: true }, { text: ' meeting' }]);
+  assert.deepEqual(splitMentions('@everyone and @bob', { bob: 'Bobby' }, true), [
+    { everyone: true }, { text: ' and ' }, { username: 'bob', screenname: 'Bobby' },
+  ]);
+  assert.deepEqual(splitMentions('@everyone meeting', undefined, false), [{ text: '@everyone meeting' }]);
+  assert.equal(mentionsMe({ everyone: true }, 'carol'), true);
+  assert.equal(mentionsMe({ everyone: true }, undefined), false);
+});
+
+test('@everyone is offered for its own word or its name in the app language', () => {
+  assert.equal(offersEveryone('', '所有人'), true);
+  assert.equal(offersEveryone('Ev', '所有人'), true);
+  assert.equal(offersEveryone('所', '所有人'), true);
+  assert.equal(offersEveryone('bo', 'everyone'), false);
+});
+
+test('an edit sets or drops who a message mentions, keeping the rest', () => {
+  const image = { id: 'x', w: 1, h: 1 };
+  assert.deepEqual(withMentions({ image, mentions: { bob: 'Bobby' } }, {}, true), { image, everyone: true });
+  assert.deepEqual(withMentions({ everyone: true }, { bob: 'Bobby' }), { mentions: { bob: 'Bobby' } });
+  assert.equal(withMentions({ everyone: true }, {}), null);
 });

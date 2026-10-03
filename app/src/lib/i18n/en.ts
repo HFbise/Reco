@@ -554,6 +554,8 @@ export const en: Record<keyof typeof zh, string> = {
   'settings-volume': 'Volume',
   'settings-devices': 'Devices',
   'mention-someone': 'Mention someone',
+  'mention-everyone': 'everyone',
+  'mention-everyone-hint': 'Notify everyone in this room',
   'mentioned-you': '[Mentioned you]',
   'settings-push-mentions': '@mentions',
   'settings-push-mentions-hint': 'Someone @mentions you in a room, even one you muted',

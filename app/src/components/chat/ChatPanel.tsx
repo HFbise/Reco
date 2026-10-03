@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { showAlert } from '../../lib/alert';
+import { LOBBY_ID } from '../../lib/i18n';
 import { buildReactionQuickList, loadRecentEmojis, recordRecentEmoji } from '../../lib/recentEmojis';
 import { useAuthStore } from '../../store/authStore';
 import { usePeopleStore } from '../../store/peopleStore';
@@ -230,6 +231,7 @@ export function ChatPanel(p: Props) {
           uploading={photos.uploading}
           mentionable={name.startsWith('dm:') ? undefined : members}
           me={me?.username}
+          canMentionEveryone={canModerate && name !== LOBBY_ID}
         />
       </KeyboardAvoidingView>
 

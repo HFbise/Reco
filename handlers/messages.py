@@ -150,9 +150,7 @@ def _send(username: str, data: dict, client_id: str | None) -> dict:
             meta = {}
             if image:
                 meta['image'] = image
-            mentioned = mentions.find(cur, room, text)
-            if mentioned:
-                meta['mentions'] = mentioned
+            meta.update(mentions.meta_for(cur, room, text, username))
             msg['meta'] = meta or None
             cur.execute(
                 'INSERT INTO messages (room, username, screenname, text, time, reply_to, meta)'
@@ -225,24 +223,27 @@ def _send(username: str, data: dict, client_id: str | None) -> dict:
         return {'ok': True, 'id': msg['id']}
 
     try:
-        _notify_room(username, msg, mentioned, preview)
+        _notify_room(username, msg, preview)
     except Exception as e:
         log.exception('push notify error: %s', e)
     return {'ok': True, 'id': msg['id']}
 
 
-def _notify_room(sender: str, msg: dict, mentioned: dict, preview: str):
-    """Phones of offline members get a push (unless they muted the room). People @mentioned are
-    told even in a muted room, on the web too, unless they turned mention notifications off.
-    Nobody hears about someone they've blocked."""
+def _notify_room(sender: str, msg: dict, preview: str):
+    """Phones of offline members get a push (unless they muted the room). People @mentioned
+    (everyone, for @everyone) are told even in a muted room, on the web too, unless they turned
+    mention notifications off. Nobody hears about someone they've blocked."""
     room = msg['room']
+    meta = msg.get('meta') or {}
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute('SELECT blocker FROM blocks WHERE blocked = %s', (sender,))
         blocking = {r['blocker'] for r in cur.fetchall()}
-        tagged = profiles.wants_push(cur, [u for u in mentioned if u != sender and u not in blocking], 'mentions')
         cur.execute('SELECT m FROM rooms, unnest(members) AS m WHERE name = %s AND m <> %s', (room, sender))
-        offline = [r['m'] for r in cur.fetchall() if r['m'] not in online_users and r['m'] not in blocking]
+        members = [r['m'] for r in cur.fetchall()]
+        mentioned = members if meta.get('everyone') else meta.get('mentions') or {}
+        tagged = profiles.wants_push(cur, [u for u in mentioned if u != sender and u not in blocking], 'mentions')
+        offline = [u for u in members if u not in online_users and u not in blocking]
         offline = [u for u in offline if u not in tagged]  # they get the mention instead
         muted = chat_prefs.muted_by(cur, room, offline)
         offline = [u for u in offline if u not in muted]
@@ -361,21 +362,30 @@ def handle_edit_message(username, data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            cur.execute('SELECT username, room, recalled FROM messages WHERE id = %s', (msg_id,))
+            cur.execute('SELECT username, room, recalled, meta FROM messages WHERE id = %s', (msg_id,))
             msg = cur.fetchone()
             if not msg or msg['recalled'] or msg['username'] != username:
                 return
             room = msg['room']
             # Mentions follow the new text (nobody is notified again)
-            mentioned = mentions.find(cur, room, new_text)
+            tags = mentions.meta_for(cur, room, new_text, username)
+            meta = {k: v for k, v in (msg['meta'] or {}).items() if k not in ('mentions', 'everyone')} | tags
             cur.execute(
-                "UPDATE messages SET text = %s, edited = true, meta = CASE WHEN %s::jsonb = '{}'::jsonb"
-                " THEN NULLIF(COALESCE(meta, '{}'::jsonb) - 'mentions', '{}'::jsonb)"
-                " ELSE COALESCE(meta, '{}'::jsonb) || jsonb_build_object('mentions', %s::jsonb) END WHERE id = %s",
-                (new_text, json.dumps(mentioned), json.dumps(mentioned), msg_id),
+                'UPDATE messages SET text = %s, edited = true, meta = %s WHERE id = %s',
+                (new_text, json.dumps(meta) if meta else None, msg_id),
             )
             conn.commit()
-        emit('message_edited', {'id': msg_id, 'text': new_text, 'room': room, 'mentions': mentioned}, to=room)
+        emit(
+            'message_edited',
+            {
+                'id': msg_id,
+                'text': new_text,
+                'room': room,
+                'mentions': tags.get('mentions', {}),
+                'everyone': bool(tags.get('everyone')),
+            },
+            to=room,
+        )
     except Exception as e:
         log.exception('edit_message error: %s', e)
 

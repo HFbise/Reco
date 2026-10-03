@@ -17,7 +17,8 @@ log = logging.getLogger(__name__)
 
 # Usernames end up inside DM room ids ('dm:alice:bob') and admin-panel URLs
 USERNAME_RE = re.compile(r'^[a-z0-9_]{3,20}$')
-RESERVED_USERNAMES = {'system', 'admin'}  # 'system' authors system messages; 'admin' is not a chat account
+# 'system' authors system messages; 'admin' is not a chat account; @everyone means a whole room
+RESERVED_USERNAMES = {'system', 'admin', 'everyone'}
 
 
 def dm_room_id(a: str, b: str) -> str:

@@ -1224,6 +1224,39 @@ def test_mention_someone_and_they_see_it(server, browser, shots):
     assert bea.get_by_text('[Mentioned you]').count() == 0
 
 
+def test_the_owner_mentions_everyone(server, browser, shots):
+    create_user('ada', screenname='Ada')
+    create_user('bo', screenname='Bo')
+    create_room('crew', 'ada', members=['ada', 'bo'])
+    ada, bo = new_page(browser), new_page(browser)
+    shots.extend([ada, bo])
+    log_in(bo, 'bo')
+    open_room(bo, 'crew')
+    # A plain member isn't offered @everyone
+    box = bo.get_by_placeholder('Type a message...')
+    box.click()
+    box.press_sequentially('@ev')
+    bo.wait_for_timeout(300)
+    assert bo.get_by_role('menu', name='Mention someone').count() == 0
+    box.fill('')
+
+    log_in(ada, 'ada')
+    open_room(ada, 'crew')
+    box = ada.get_by_placeholder('Type a message...')
+    box.click()
+    box.press_sequentially('@ev')
+    picker = ada.get_by_role('menu', name='Mention someone')
+    picker.get_by_text('Notify everyone in this room').wait_for()
+    box.press('Enter')
+    assert box.input_value() == '@everyone '
+    box.press_sequentially('standup in 5')
+    box.press('Enter')
+
+    chip = bo.get_by_text('@everyone', exact=True)
+    chip.wait_for()
+    assert chip.evaluate('e => getComputedStyle(e).backgroundColor') == 'rgb(255, 176, 32)'  # sunny: it means him
+
+
 def test_messages_show_right_after_a_reload_both_ways(server, browser, shots):
     """The cached history once shared its list with the screen: after a reload, new messages
     (yours and theirs) were stored but not shown until the next reload."""

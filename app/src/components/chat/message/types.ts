@@ -17,6 +17,8 @@ export interface Message {
     image?: { id: string; w: number; h: number };
     /** Who it @mentions: username → display name (see lib/mentions) */
     mentions?: Record<string, string>;
+    /** @everyone (from the room's owner or an admin) */
+    everyone?: boolean;
   } | null;
   avatar_expression?: string;
   avatar_color?: string;

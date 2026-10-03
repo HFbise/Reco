@@ -177,7 +177,7 @@ export function useRoomChat({ name, password, onRemoved, onJoinFailed, onToast }
         if (!mine(data)) return;
         const quoteText = String(data.text).slice(0, QUOTE_LEN);
         // Who it mentions follows the new text
-        const edited = (m: Message) => ({ text: data.text, edited: true, meta: withMentions(m.meta, data.mentions) });
+        const edited = (m: Message) => ({ text: data.text, edited: true, meta: withMentions(m.meta, data.mentions, data.everyone) });
         patchCached(name, data.id, edited);
         patchCachedQuotes(name, data.id, { text: quoteText });
         setMessages((prev) => prev.map((m) => (
