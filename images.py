@@ -1,13 +1,14 @@
 """Photos in chats.
 
 Kept in Postgres (BYTEA) rather than object storage: no extra service or credentials, and
-at portfolio scale it's plenty. Browsers shrink photos to ~1600 px before upload, and the
-server takes at most MAX_BYTES. At real scale these would move to object storage + a CDN
-(see the README's trade-offs).
+at portfolio scale it's plenty. Browsers shrink photos to 1280 px WebP (JPEG on Safari)
+before upload, and the server takes at most MAX_BYTES. Nothing is kept that can't be seen:
+recalling a message or closing a room deletes its photos, and purge() clears uploads never
+sent and photos whose message is gone. At real scale these would move to object storage +
+a CDN (see the README's trade-offs).
 
 An upload is private until its owner sends it in a message; from then on anyone with the
-link (the id is 128 random bits) can load it, the way chat apps serve attachments. Recalling
-the message takes the image down.
+link (the id is 128 random bits) can load it, the way chat apps serve attachments.
 """
 
 import secrets
@@ -24,6 +25,7 @@ bp = Blueprint('images', __name__)
 MAX_BYTES = 2 * 1024 * 1024
 MAX_SIDE = 10_000
 UPLOADS_PER_MINUTE = 10
+UNSENT_FOR = 3600  # seconds an upload may wait to be sent before it's deleted
 _recent_uploads: dict[str, list[float]] = {}
 
 CREATE = """CREATE TABLE IF NOT EXISTS images (
@@ -166,3 +168,21 @@ def attach(cur, image_id, username: str, room: str) -> dict | None:
 
 def link(cur, image_id: str, message_id: int, room: str):
     cur.execute('UPDATE images SET message_id = %s, room = %s WHERE id = %s', (message_id, room, image_id))
+
+
+def purge(cur) -> int:
+    """Delete photos nobody can see: uploads not sent within UNSENT_FOR, and photos whose
+    message was recalled or deleted (a closed room, an expired match transcript). How many."""
+    cur.execute(
+        'DELETE FROM images i WHERE (i.message_id IS NULL AND i.created_at < NOW() - make_interval(secs => %s))'
+        ' OR (i.message_id IS NOT NULL AND NOT EXISTS ('
+        '   SELECT 1 FROM messages m WHERE m.id = i.message_id AND NOT COALESCE(m.recalled, FALSE)))',
+        (UNSENT_FOR,),
+    )
+    return cur.rowcount
+
+
+def storage(cur) -> int:
+    """Bytes of photo data stored."""
+    cur.execute('SELECT COALESCE(SUM(octet_length(data)), 0) AS n FROM images')
+    return cur.fetchone()['n']

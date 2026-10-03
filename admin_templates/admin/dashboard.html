@@ -1,8 +1,9 @@
 {% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import size %}
 {% block body %}
   <h2>概览</h2>
   <div class="stats">
-    {% for value, label in [(online, '当前在线'), (users, '注册用户'), (rooms, '聊天室'), (messages, '消息总数'), (feedback, '用户反馈'), (reports, '举报记录')] %}
+    {% for value, label in [(online, '当前在线'), (users, '注册用户'), (rooms, '聊天室'), (messages, '消息总数'), (feedback, '用户反馈'), (reports, '举报记录'), (size(image_bytes), '图片占用')] %}
       <div class="stat"><div class="stat-num">{{ value }}</div><div class="stat-label">{{ label }}</div></div>
     {% endfor %}
   </div>

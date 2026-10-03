@@ -255,6 +255,8 @@ def test_sending_a_photo(server, browser, shots, tmp_path):
     )
     shown.click()  # opens the viewer
     uma.get_by_label('Close').first.wait_for()
+    # Chromium writes WebP: about half the size of the JPEG it used to be
+    assert query('SELECT mime FROM images') == [{'mime': 'image/webp'}]
 
 
 def test_chinese_browser_gets_chinese_ui(server, browser, shots):

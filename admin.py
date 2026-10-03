@@ -13,6 +13,7 @@ from urllib.parse import quote
 
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
+import images
 import moderation
 import room_log
 import turn_usage
@@ -123,7 +124,10 @@ def dashboard():
         ):
             cur.execute(sql)
             counts[key] = cur.fetchone()['c']
-    return render_template('admin/dashboard.html', section='dashboard', online=len(online_users), **counts)
+        image_bytes = images.storage(cur)
+    return render_template(
+        'admin/dashboard.html', section='dashboard', online=len(online_users), image_bytes=image_bytes, **counts
+    )
 
 
 @admin_bp.route('/feedback')

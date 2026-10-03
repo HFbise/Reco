@@ -71,10 +71,12 @@ free instance sleeps when idle, so the first load can take up to a minute.
 - **Unread counts that follow you:** the server keeps a read mark per person and room,
   so a badge cleared on the phone is cleared on the laptop too. Marks move when a
   chat is opened and while new messages arrive on screen, never backwards.
-- **Photos:** pick a file or paste a screenshot. The browser shrinks it to 1600 px
-  and re-encodes it as JPEG (which drops EXIF, location included) before upload; the
-  server checks the type and size from the file's own bytes, caps it at 2 MB, and
-  serves it only once sent, until the message is recalled.
+- **Photos:** pick a file or paste a screenshot. The browser shrinks it to 1280 px
+  and re-encodes it as WebP, or JPEG where the browser can't write WebP (either way
+  EXIF is dropped, location included), before upload; the server checks the type and
+  size from the file's own bytes, caps it at 2 MB, and serves it only once sent.
+  Nothing is stored that can't be seen: recalling a message or closing a room deletes
+  its photos, and an hourly job clears uploads never sent.
 - **Message history:** the most recent page loads on join, and older messages load on
   demand. Clients that reconnect after missing more than a page get a clean reset
   instead of a gap.
@@ -298,8 +300,8 @@ check.
   fine for small rooms. Larger rooms would need an SFU such as LiveKit or mediasoup.
 - **Photos in Postgres.** Images are stored as `BYTEA` next to the messages: no
   extra service or credentials, and plenty at this scale since browsers shrink them
-  first. With real traffic they would move to object storage (S3, R2) behind a CDN,
-  with the database keeping only the key.
+  first and unseen ones are deleted. With real traffic they would move to object
+  storage (S3, R2) behind a CDN, with the database keeping only the key.
 - **Search is a plain `ILIKE`** over one chat's messages (wildcards escaped), newest
   first, 30 at a time. Fine for chats of this size; with real volume it would move to
   Postgres full-text search or a `pg_trgm` index.

@@ -14,6 +14,8 @@ concurrency (each WebSocket holds one thread while connected).
 import encodings.idna  # noqa: F401
 
 from app import _migrate, app  # noqa: F401  (importing app registers every handler)
+from handlers.match import start_housekeeping
 
 'reco.example'.encode('idna')  # prime the codec cache
 _migrate()
+start_housekeeping()  # hourly: expired match transcripts, photos nobody can see

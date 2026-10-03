@@ -2,9 +2,10 @@ import { Platform } from 'react-native';
 import { SERVER_URL } from './config';
 import { useAuthStore } from '../store/authStore';
 
-/** Photos are shrunk in the browser before upload: long side at most this, as JPEG */
-const MAX_SIDE = 1600;
-const JPEG_QUALITY = 0.85;
+/** Photos are shrunk in the browser before upload: long side at most this, as WebP (or JPEG
+ *  where the browser can't write WebP). Plenty for a chat bubble and the full-size viewer. */
+const MAX_SIDE = 1280;
+const QUALITY = 0.8;
 /** The server's limit (images.MAX_BYTES) */
 export const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
 
@@ -30,8 +31,9 @@ export function pickImageFile(): Promise<File | null> {
 }
 
 /**
- * Shrink a photo to MAX_SIDE and re-encode it as JPEG (which also drops EXIF, location
- * included). GIFs are sent as they are, so they keep moving.
+ * Shrink a photo to MAX_SIDE and re-encode it (which also drops EXIF, location included).
+ * WebP is about a third smaller than JPEG at the same quality; Safari can't encode it and
+ * hands back a PNG instead, so then it's JPEG. GIFs are sent as they are, so they keep moving.
  */
 async function shrink(file: File): Promise<Blob> {
   if (file.type === 'image/gif') return file;
@@ -46,8 +48,12 @@ async function shrink(file: File): Promise<Blob> {
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
   bitmap.close?.();
-  return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error('encode'))), 'image/jpeg', JPEG_QUALITY));
+  const encode = (type: string) => new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, type, QUALITY));
+  const webp = await encode('image/webp');
+  if (webp?.type === 'image/webp') return webp;
+  const jpeg = await encode('image/jpeg');
+  if (!jpeg) throw new Error('encode');
+  return jpeg;
 }
 
 /** Shrink and upload one image. The result is attached to a message by sending its id. */

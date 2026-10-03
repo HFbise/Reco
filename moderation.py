@@ -85,6 +85,7 @@ def close_room(room: str):
         cur = conn.cursor()
         cur.execute('DELETE FROM rooms WHERE name = %s', (room,))
         cur.execute('DELETE FROM messages WHERE room = %s', (room,))
+        cur.execute('DELETE FROM images WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_invites WHERE room = %s', (room,))
         cur.execute('DELETE FROM room_restrictions WHERE room = %s', (room,))
         cur.execute('DELETE FROM chat_prefs WHERE room = %s', (room,))
@@ -211,6 +212,8 @@ def recall(msg_id) -> bool:
             'UPDATE messages SET recalled = true WHERE id = %s AND recalled IS NOT TRUE RETURNING room', (msg_id,)
         )
         row = cur.fetchone()
+        if row:  # its photo, if any, isn't shown again: no need to keep it
+            cur.execute('DELETE FROM images WHERE message_id = %s', (msg_id,))
         conn.commit()
     if not row:
         return False

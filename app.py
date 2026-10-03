@@ -307,7 +307,7 @@ def _migrate():
             except Exception as e:
                 conn.rollback()
                 log.exception('demo seed failed: %s', e)
-        match_handlers.purge_expired()  # 7-day retention for match transcripts
+        match_handlers.purge_expired()  # 7-day retention for match transcripts, unseen photos
     except Exception as e:
         log.exception('migration failed: %s', e)
 

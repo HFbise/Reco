@@ -10,13 +10,13 @@ Match messages are stored for 7 days (evidence for reports) and then deleted.
 import logging
 import random
 import threading
-import time
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from flask import request
 from flask_socketio import emit
 
+import images
 import moderation
 import profiles
 import webpush
@@ -65,30 +65,42 @@ _loop_started = False
 
 
 def _ensure_background_loop():
-    """Pair people who became matchable by waiting, and purge expired transcripts."""
+    """Pair people who became matchable by waiting."""
     global _loop_started
     if _loop_started:
         return
     _loop_started = True
 
     def loop():
-        last_purge = 0.0
         while True:
             socketio.sleep(SWEEP_EVERY)
             try:
                 for a, b in queue.sweep():
                     _start(a, b)
-                if time.monotonic() - last_purge > PURGE_EVERY:
-                    purge_expired()
-                    last_purge = time.monotonic()
             except Exception as e:
                 log.exception('match loop error: %s', e)
 
     socketio.start_background_task(loop)
 
 
+def start_housekeeping():
+    """purge_expired every PURGE_EVERY for as long as the server runs (started by wsgi.py;
+    startup runs it once too, in app._migrate)."""
+
+    def loop():
+        while True:
+            socketio.sleep(PURGE_EVERY)
+            try:
+                purge_expired()
+            except Exception as e:
+                log.exception('housekeeping error: %s', e)
+
+    socketio.start_background_task(loop)
+
+
 def purge_expired():
-    """Delete match transcripts (and the match records) older than RETENTION_DAYS."""
+    """Delete match transcripts (and the match records) older than RETENTION_DAYS, then the
+    photos nobody can see any more (see images.purge)."""
     with get_db() as conn:
         cur = conn.cursor()
         cur.execute(
@@ -96,6 +108,7 @@ def purge_expired():
             (RETENTION_DAYS,),
         )
         cur.execute('DELETE FROM matches WHERE started_at < NOW() - make_interval(days => %s)', (RETENTION_DAYS,))
+        images.purge(cur)
         conn.commit()
 
 

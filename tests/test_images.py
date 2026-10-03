@@ -4,7 +4,7 @@ import struct
 import zlib
 
 import pytest
-from conftest import app, connect_as, create_room, create_user, events, login
+from conftest import app, connect_as, create_room, create_user, events, get_db, login, query
 
 import images
 
@@ -108,6 +108,7 @@ def test_a_photo_message_reaches_the_room_and_the_image_can_be_loaded():
     # History carries it too; recalling the message takes the image down
     alice.emit('recall_message', {'id': got['id']})
     assert app.test_client().get(f'/img/{image_id}').status_code == 404
+    assert query('SELECT id FROM images') == []  # and it isn't kept
 
 
 def test_you_cannot_send_someone_elses_upload_or_reuse_one():
@@ -134,3 +135,46 @@ def test_image_ids_that_are_not_ids_are_simply_not_found():
     assert client.get('/img/' + 'z' * 32).status_code == 404
     assert client.get('/img/' + 'A' * 32).status_code == 404
     assert client.get('/img/short').status_code == 404
+
+
+# ── space: nothing is kept that can't be seen ─────────────────
+
+
+def test_closing_a_room_deletes_its_photos():
+    create_user('alice')
+    create_room('club', owner='alice', members=['alice'])
+    _, token = login('alice')
+    image_id = upload(token, png()).get_json()['id']
+    alice = joined('alice', 'club')
+    alice.emit('message', {'room': 'club', 'text': '', 'image': image_id})
+    assert query('SELECT id FROM images') == [{'id': image_id}]
+    alice.emit('close_room', {'room': 'club'})
+    assert events(alice, 'close_room_result')[0]['success']
+    assert query('SELECT id FROM images') == []
+
+
+def test_purge_clears_unsent_uploads_and_photos_of_gone_messages():
+    create_user('alice')
+    create_room('club', owner='alice', members=['alice'])
+    _, token = login('alice')
+    shown, fresh, stale, orphan = (upload(token, png()).get_json()['id'] for _ in range(4))
+    alice = joined('alice', 'club')
+    for image_id in (shown, orphan):
+        alice.emit('message', {'room': 'club', 'text': '', 'image': image_id})
+    with get_db() as conn:
+        cur = conn.cursor()
+        cur.execute("UPDATE images SET created_at = NOW() - INTERVAL '2 hours' WHERE id = %s", (stale,))
+        cur.execute('DELETE FROM messages WHERE id = (SELECT message_id FROM images WHERE id = %s)', (orphan,))
+        assert images.purge(cur) == 2
+        conn.commit()
+    assert sorted(r['id'] for r in query('SELECT id FROM images')) == sorted([shown, fresh])
+
+
+def test_the_admin_dashboard_shows_photo_storage():
+    create_user('alice')
+    _, token = login('alice')
+    upload(token, png())
+    web = app.test_client()
+    web.post('/admin/login', data={'password': 'test-admin'})
+    page = web.get('/admin/dashboard').get_data(as_text=True)
+    assert f'{len(png())} B</div><div class="stat-label">图片占用' in page
