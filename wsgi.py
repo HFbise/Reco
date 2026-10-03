@@ -1,4 +1,5 @@
-"""Production entry point.
+"""Production entry point: the backend lives in server/, this file and gunicorn.conf.py stay
+at the root because that's where Render runs the start command from.
 
     gunicorn wsgi:app        (settings in gunicorn.conf.py)
 
@@ -12,6 +13,11 @@ concurrency (each WebSocket holds one thread while connected).
 # first lookup failed and every request then raised "unknown encoding: idna".
 # Importing it explicitly here fails loudly with the real reason instead.
 import encodings.idna  # noqa: F401
+import os
+import sys
+
+# server/ first: the root also holds app/ (the frontend), which `import app` must not find
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'server'))
 
 from app import _migrate, app  # noqa: F401  (importing app registers every handler)
 from handlers.match import start_housekeeping

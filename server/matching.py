@@ -23,7 +23,9 @@ from pathlib import Path
 
 MODES = ('text', 'voice')
 MAX_TAGS = 5
-_CATALOG = json.loads((Path(__file__).parent / 'app' / 'src' / 'lib' / 'matchTags.json').read_text(encoding='utf-8'))
+_CATALOG = json.loads(
+    (Path(__file__).resolve().parent.parent / 'app' / 'src' / 'lib' / 'matchTags.json').read_text(encoding='utf-8')
+)
 TAGS = frozenset(tag for category in _CATALOG['categories'] for tag in category['tags'])
 RELAX_AFTER = 10.0  # seconds
 
