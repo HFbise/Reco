@@ -95,12 +95,21 @@ def shows_online(cur, username: str) -> bool:
 
 
 def may_message(cur, sender: str, recipient: str, dm_room: str) -> bool:
-    """May `sender` send in their DM with `recipient`? Always once the chat has begun
-    (anything in it, including a match's "you're connected"); before that, it's up to
-    the recipient: anyone, people sharing a room with them (not the lobby), or nobody."""
+    """May `sender` send in their DM with `recipient`? Never to themselves or to an account that
+    doesn't exist (any more). Always once the chat has begun (anything in it, including a match's
+    "you're connected"); before that, only under the DM's one id ('dm:<a>:<b>', names sorted:
+    another spelling would be a second chat with the same person), and as the recipient
+    allows: anyone, people sharing a room with them (not the lobby), or nobody."""
+    if sender == recipient:
+        return False
+    cur.execute('SELECT 1 FROM users WHERE username = %s', (recipient,))
+    if not cur.fetchone():
+        return False
     cur.execute('SELECT 1 FROM messages WHERE room = %s LIMIT 1', (dm_room,))
     if cur.fetchone():
         return True
+    if dm_room != _dm_room(sender, recipient):
+        return False
     rule = get(cur, recipient)['dm_from']
     if rule == 'everyone':
         return True

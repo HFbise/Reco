@@ -10,7 +10,7 @@ from db import get_db
 from extensions import socketio
 from moderation import RESERVED_USERNAMES, USERNAME_RE, delete_account
 from replies import fail
-from state import check_login_rate, record_login_fail, reset_login_attempts
+from state import check_login_rate, check_msg_rate, client_ip, record_login_fail, reset_login_attempts
 from utils import SECURITY_QUESTIONS, hash_password, security_question_id, str_field, verify_password
 
 log = logging.getLogger(__name__)
@@ -39,6 +39,16 @@ def sign_in(user: dict, stored_hash: str) -> dict:
     }
 
 
+SIGNUPS_PER_HOUR = 5  # from one address: slows down scripted sign-ups
+# Wrong passwords from one address, across usernames, before it waits (a soft limit: see client_ip)
+IP_FAILS = 30
+
+
+def _first_lock(*keys) -> int:
+    """Seconds until the longest of these locks ends; 0 if none is locked."""
+    return max((check_login_rate(k)[1] for k in keys), default=0)
+
+
 @socketio.on('register')
 def handle_register(data):
     username = str_field(data, 'username').strip().lower()
@@ -62,6 +72,9 @@ def handle_register(data):
         return
     if not security_q or not security_a:
         fail('register_result', 'missing_fields')
+        return
+    if not check_msg_rate(f'register:{client_ip()}', max_msgs=SIGNUPS_PER_HOUR, window=3600):
+        fail('register_result', 'too_many_signups')
         return
     try:
         with get_db() as conn:
@@ -93,8 +106,10 @@ def handle_login(data):
         fail('login_result', 'missing_fields')
         return
 
-    allowed, secs = check_login_rate(username)
-    if not allowed:
+    # Two locks: the account's (the one that holds) and the address's (trying many usernames)
+    ip_key = f'login-ip:{client_ip()}'
+    secs = _first_lock(username, ip_key)
+    if secs:
         fail('login_result', 'too_many_attempts', {'secs': secs})
         return
     try:
@@ -103,6 +118,7 @@ def handle_login(data):
             cur.execute('SELECT * FROM users WHERE LOWER(username) = %s', (username,))
             user = cur.fetchone()
         if not user:
+            record_login_fail(ip_key, limit=IP_FAILS)
             fail('login_result', 'user_not_found')
             return
         if not user['has_password']:
@@ -111,6 +127,7 @@ def handle_login(data):
         ok, needs_migrate = verify_password(user['password'], password)
         if not ok:
             record_login_fail(username)
+            record_login_fail(ip_key, limit=IP_FAILS)
             fail('login_result', 'wrong_password')
             return
         reset_login_attempts(username)
@@ -211,8 +228,8 @@ def handle_get_security_question(data):
         with get_db() as conn:
             cur = conn.cursor()
             cur.execute(
-                'SELECT security_question, has_password FROM users WHERE username = %s',
-                (str_field(data, 'username').strip(),),
+                'SELECT security_question, has_password FROM users WHERE LOWER(username) = %s',
+                (str_field(data, 'username').strip().lower(),),
             )
             user = cur.fetchone()
         if not user:
@@ -234,16 +251,21 @@ def handle_reset_password(data):
     try:
         with get_db() as conn:
             cur = conn.cursor()
-            username = str_field(data, 'username').strip()
+            # Usernames are kept in lower case; one typed with capitals still finds it (as at login)
+            username = str_field(data, 'username').strip().lower()
             answer = str_field(data, 'answer').strip().lower()
             new_password = str_field(data, 'new_password')
-            rate_key = f'reset:{username.lower()}'
-            allowed, secs = check_login_rate(rate_key)
-            if not allowed:
+            rate_key = f'reset:{username}'
+            ip_key = f'reset-ip:{client_ip()}'
+            secs = _first_lock(rate_key, ip_key)
+            if secs:
                 fail('reset_password_result', 'too_many_attempts', {'secs': secs})
                 return
-            cur.execute('SELECT security_answer, has_password FROM users WHERE username = %s', (username,))
+            cur.execute(
+                'SELECT username, security_answer, has_password FROM users WHERE LOWER(username) = %s', (username,)
+            )
             user = cur.fetchone()
+            username = user['username'] if user else username
             if user and not user['has_password']:
                 fail('reset_password_result', 'no_password')
                 return
@@ -252,6 +274,7 @@ def handle_reset_password(data):
             )
             if not ok:
                 record_login_fail(rate_key)
+                record_login_fail(ip_key, limit=IP_FAILS)
                 fail('reset_password_result', 'wrong_answer')
                 return
             reset_login_attempts(rate_key)

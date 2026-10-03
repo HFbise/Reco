@@ -132,9 +132,11 @@ export function ProfileCard({ person, room, inVoiceHere, onOpenDm, onOpenRoom, o
   }
 
   function report() {
-    getSocket().emit('report_user', { reported: username, reason: reason.trim() });
+    const socket = getSocket();
+    socket.once('report_result', (reply: { success: boolean; code?: string }) =>
+      showAlert(reply.success ? t('report-sent') : t.server(reply, 'report-failed')));
+    socket.emit('report_user', { reported: username, reason: reason.trim() });
     onClose();
-    showAlert(t('report-sent'));
   }
 
   function saveNickname() {

@@ -368,6 +368,12 @@ def handle_edit_message(username, data):
             if not msg or msg['recalled'] or msg['username'] != username or room_access.is_match(msg['room']):
                 return
             room = msg['room']
+            # Only where you could still send it: not after being kicked, while muted, or blocked
+            if not room_access.can_see(cur, username, room) or moderation.is_muted(room, username):
+                return
+            participants = dm_participants(room)
+            if participants and moderation.blocked_either_way(cur, *participants):
+                return
             # Mentions follow the new text (nobody is notified again)
             tags = mentions.meta_for(cur, room, new_text, username)
             meta = {k: v for k, v in (msg['meta'] or {}).items() if k not in ('mentions', 'everyone')} | tags

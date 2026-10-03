@@ -4,7 +4,7 @@ from flask import request
 from flask_socketio import emit
 
 import voice_state
-from auth_session import bind, new_guest, readable, unbind, verify_token
+from auth_session import bind, new_guest, readable, renewed_token, unbind, verify_token
 from extensions import socketio
 from state import hidden_sids
 
@@ -25,7 +25,9 @@ def handle_connect(auth=None):
         return
     if username:
         bind(username)
-        emit('session_ready', {'username': username})
+        # A day-old token is swapped for a new one: in use, a session doesn't run out
+        renewed = renewed_token(token)
+        emit('session_ready', {'username': username, **({'token': renewed} if renewed else {})})
     else:
         emit('session_expired', {})
 

@@ -9,6 +9,7 @@ import voice_state
 from auth_session import authenticated, dm_participants, in_room
 from db import get_db
 from extensions import socketio
+from state import check_msg_rate
 
 log = logging.getLogger(__name__)
 
@@ -42,13 +43,15 @@ def _to_peer(event: str, username: str, data: dict):
         emit(event, data, to=sid)
 
 
-def _to_room(event: str, username: str, data: dict, include_self: bool = True):
-    """Voice status (mute, speaking, streams) for everyone in the room, stamped with the real sender."""
-    room = data.get('room')
+SPEAKING_PER_10S = 40  # "started talking" events; a real voice changes a few times a second at most
+
+
+def _to_room(event: str, username: str, room, include_self: bool = True, **fields):
+    """Voice status (mute, speaking, streams) for everyone in the room: the room, the real sender
+    and the event's own fields, never whatever else a client put in."""
     if not in_room(room):
         return
-    data['username'] = username
-    emit(event, data, to=room, include_self=include_self)
+    emit(event, {'room': room, 'username': username, **fields}, to=room, include_self=include_self)
 
 
 def _enter(username: str, room) -> bool:
@@ -99,17 +102,25 @@ def handle_voice_ice(username, data):
 @socketio.on('voice_mute_status')
 @authenticated
 def handle_voice_mute(username, data):
-    if isinstance(data.get('muted'), bool) and in_room(data.get('room')):
-        voice_state.set_flag(data['room'], username, 'isMuted', data['muted'])
-    _to_room('voice_mute_status', username, data)
+    room, muted = data.get('room'), data.get('muted')
+    if not isinstance(muted, bool) or not in_room(room):
+        return
+    voice_state.set_flag(room, username, 'isMuted', muted)
+    _to_room('voice_mute_status', username, room, muted=muted)
 
 
 @socketio.on('voice_speaking')
 @authenticated
 def handle_voice_speaking(username, data):
-    if isinstance(data.get('speaking'), bool) and in_room(data.get('room')):
-        voice_state.set_flag(data['room'], username, 'isSpeaking', data['speaking'])
-    _to_room('voice_speaking', username, data)
+    room, speaking = data.get('room'), data.get('speaking')
+    if not isinstance(speaking, bool) or not in_room(room):
+        return
+    # Each one goes to the whole room: a client sending them nonstop is cut off. "Stopped" always
+    # gets through, so nobody is left showing as talking.
+    if speaking and not check_msg_rate(f'speaking:{username}', max_msgs=SPEAKING_PER_10S, window=10):
+        return
+    voice_state.set_flag(room, username, 'isSpeaking', speaking)
+    _to_room('voice_speaking', username, room, speaking=speaking)
 
 
 @socketio.on('ping_check')
@@ -126,8 +137,7 @@ def handle_stream_start(username, data):
         return
     screenname = _profile(username)['screenname']
     voice_state.start_stream(room, username, screenname)
-    data['screenname'] = screenname
-    _to_room('stream_start', username, data, include_self=False)
+    _to_room('stream_start', username, room, include_self=False, screenname=screenname)
 
 
 @socketio.on('stream_stop')
@@ -136,16 +146,16 @@ def handle_stream_stop(username, data):
     room = data.get('room')
     if in_room(room):
         voice_state.stop_stream(room, username)
-    _to_room('stream_stop', username, data, include_self=False)
+    _to_room('stream_stop', username, room, include_self=False)
 
 
 @socketio.on('stream_audio_start')
 @authenticated
 def handle_stream_audio_start(username, data):
-    _to_room('stream_audio_start', username, data, include_self=False)
+    _to_room('stream_audio_start', username, data.get('room'), include_self=False)
 
 
 @socketio.on('stream_audio_stop')
 @authenticated
 def handle_stream_audio_stop(username, data):
-    _to_room('stream_audio_stop', username, data, include_self=False)
+    _to_room('stream_audio_stop', username, data.get('room'), include_self=False)

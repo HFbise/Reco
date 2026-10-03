@@ -127,13 +127,13 @@ export class VoiceSession {
         showAlert(tr('voice-banned-title'), tr('voice-banned-msg'));
       },
       pong_check: (data) => this.update({ ping: Date.now() - data.t }),
-      stream_start: (data) => this.patchMember(data.username, { isLive: true }),
+      stream_start: (data) => { if (data.room === this.room) this.patchMember(data.username, { isLive: true }); },
       stream_stop: (data) => {
         this.patchMember(data.username, { isLive: false });
         this.dropRemoteVideo(data.username);
       },
-      stream_audio_start: (data) => this.patchMember(data.username, { isStreamingAudio: true }),
-      stream_audio_stop: (data) => this.patchMember(data.username, { isStreamingAudio: false }),
+      stream_audio_start: (data) => { if (data.room === this.room) this.patchMember(data.username, { isStreamingAudio: true }); },
+      stream_audio_stop: (data) => { if (data.room === this.room) this.patchMember(data.username, { isStreamingAudio: false }); },
       // Back from a dropped connection: the server forgot us, so join again from scratch
       connect: () => {
         if (!this.state.inVoice || !this.mesh) return;
