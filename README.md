@@ -38,7 +38,9 @@ on a small free instance, so the first load can take a few seconds.
   owner can hand the room to a member.
 - **Picking up where you left off:** a chat opens with "New messages" above the first
   one you hadn't read (and starts there when there are many), and text you typed but
-  didn't send waits in the box, shown as a draft in the list.
+  didn't send waits in the box, shown as a draft in the list. The chat list itself is
+  kept on the device and shown at once; the server then answers "unchanged" when the
+  list held still matches its fingerprint, with only who's online sent fresh.
 - **Messages show at once.** A sent message appears immediately with a spinner, and the
   server's acknowledgement swaps it for the stored one in place (matched by an id the
   client picks). If it isn't delivered (muted, blocked, a dropped connection, no answer
@@ -261,7 +263,7 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 333 backend tests + 47 browser end-to-end tests
+pytest                       # 337 backend tests + 48 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=server    # backend line coverage
 
 cd app

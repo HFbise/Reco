@@ -62,8 +62,13 @@ def browser():
         b.close()
 
 
+# Every browser context a test opens, closed when the test ends (see `shots`)
+_contexts = []
+
+
 def new_page(browser, locale='en-US'):
     context = browser.new_context(locale=locale, viewport={'width': 1280, 'height': 800})
+    _contexts.append(context)
     return context.new_page()
 
 
@@ -89,13 +94,20 @@ def demo_room():
 
 @pytest.fixture
 def shots(request):
-    """Screenshots of every page a test opened, kept when it fails (e2e-failures/)."""
+    """Screenshots of every page a test opened, kept when it fails (e2e-failures/). Then the
+    test's pages are closed: each one holds a socket to the dev server, and dozens left open
+    by earlier tests made a later one's page time out loading."""
     pages = []
     yield pages
     if request.node.rep_call.failed if hasattr(request.node, 'rep_call') else False:
         os.makedirs(os.path.join(ROOT, 'e2e-failures'), exist_ok=True)
         for i, page in enumerate(pages):
             page.screenshot(path=os.path.join(ROOT, 'e2e-failures', f'{request.node.name}-{i}.png'))
+    while _contexts:
+        try:
+            _contexts.pop().close()
+        except Exception:
+            pass  # already closed with its browser
 
 
 def test_guest_demo_is_read_only(server, browser, demo_room, shots):
@@ -339,6 +351,7 @@ def test_long_messages_wrap_on_a_phone(server, browser, demo_room, shots):
     context = browser.new_context(
         viewport={'width': 320, 'height': 640}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     page.goto(URL)
@@ -366,6 +379,7 @@ def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, sho
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     log_in(page, 'frank')
@@ -401,6 +415,7 @@ def test_swiping_right_in_a_chat_goes_back_to_the_list(server, browser, shots):
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     log_in(page, 'hana')
@@ -449,6 +464,7 @@ def _phone(browser):
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     return context.new_page()
 
 
@@ -1260,6 +1276,35 @@ def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
     assert query("SELECT 1 FROM users WHERE username = 'val' AND dm_from = 'rooms'")
     phone.get_by_label('Back', exact=True).click()
     phone.get_by_text('Edit Profile').wait_for()
+
+
+def test_the_chat_list_is_kept_and_only_sent_again_when_it_changed(server, browser, shots):
+    create_user('ned', screenname='Ned')
+    create_room('garden', 'ned', members=['ned'])
+    page = new_page(browser)
+    shots.append(page)
+    lists = []  # what the server answered to get_rooms, frame by frame
+    page.on(
+        'websocket',
+        lambda ws: ws.on(
+            'framereceived',
+            lambda frame: lists.append(frame) if isinstance(frame, str) and 'rooms_list' in frame else None,
+        ),
+    )
+    log_in(page, 'ned')
+    page.get_by_text('garden', exact=True).wait_for()
+    deadline = time.time() + 5  # saved a moment after it last changed
+    while 'chat-list:ned' not in page.evaluate('Object.keys(localStorage)') and time.time() < deadline:
+        page.wait_for_timeout(200)
+    assert '"unchanged"' not in lists[0]
+
+    lists.clear()
+    page.reload()
+    page.get_by_text('garden', exact=True).wait_for()
+    deadline = time.time() + 10
+    while not lists and time.time() < deadline:
+        page.wait_for_timeout(200)
+    assert '"unchanged":true' in lists[0].replace(' ', '')  # the list held was still the list
 
 
 def test_links_new_messages_drafts_and_pins(server, browser, shots):

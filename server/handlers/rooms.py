@@ -20,7 +20,7 @@ from demo import DEMO_ROOM
 from extensions import socketio
 from replies import fail
 from state import LOBBY, check_msg_rate, emit_system_msg, get_level, online_users
-from utils import hash_password, str_field
+from utils import digest, hash_password, str_field
 
 log = logging.getLogger(__name__)
 
@@ -282,7 +282,8 @@ def handle_close_room(requester, data):
 @readable
 def handle_get_rooms(username, data):
     """Your rooms (the lobby first), with unread counts, unread @mentions of you, and your pins and
-    mutes. Guests: the demo room."""
+    mutes. Guests: the demo room. A client that already holds this very list (its `digest`, from
+    last time) is told {unchanged: true} instead of being sent it again."""
     try:
         with get_db() as conn:
             cur = conn.cursor()
@@ -314,7 +315,11 @@ def handle_get_rooms(username, data):
             # Live messages for every room in the list (unread counts, @mentions), opened or not
             for r in rooms:
                 join_room(r['name'])
-        emit('rooms_list', {'rooms': rooms})
+        fingerprint = digest(rooms)
+        if data.get('digest') == fingerprint:
+            emit('rooms_list', {'unchanged': True, 'digest': fingerprint})
+        else:
+            emit('rooms_list', {'rooms': rooms, 'digest': fingerprint})
     except Exception as e:
         log.exception('get_rooms error: %s', e)
         emit('rooms_list', {'rooms': []})

@@ -1,4 +1,6 @@
+import hashlib
 import hmac
+import json
 
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -50,3 +52,9 @@ def str_field(data, key: str) -> str:
 def int_field(data, key: str, default: int = 0) -> int:
     value = data.get(key) if isinstance(data, dict) else None
     return value if isinstance(value, int) and not isinstance(value, bool) else default
+
+
+def digest(data) -> str:
+    """A short fingerprint of JSON-able data: a client holding a list with this fingerprint
+    already has exactly this list (see get_rooms / get_dms)."""
+    return hashlib.sha256(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:20]

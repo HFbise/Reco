@@ -9,6 +9,7 @@ from auth_session import authenticated, dm_participants, readable
 from db import get_db
 from extensions import socketio
 from state import appears_online
+from utils import digest
 
 log = logging.getLogger(__name__)
 
@@ -78,7 +79,14 @@ def handle_get_dms(username, data):
                     **prefs.get(r['room'], chat_prefs.DEFAULT),
                 }
             )
-        emit('dms_list', {'dms': dms})
+        # Who is online changes all the time: it's left out of the fingerprint and always sent, so
+        # an unchanged list still has fresh online dots
+        online = {d['other_username']: d['online'] for d in dms}
+        fingerprint = digest([{k: v for k, v in d.items() if k != 'online'} for d in dms])
+        if data.get('digest') == fingerprint:
+            emit('dms_list', {'unchanged': True, 'digest': fingerprint, 'online': online})
+        else:
+            emit('dms_list', {'dms': dms, 'digest': fingerprint})
     except Exception as e:
         log.exception('get_dms error: %s', e)
         emit('dms_list', {'dms': []})
