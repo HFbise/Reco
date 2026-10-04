@@ -1262,6 +1262,35 @@ def test_on_a_phone_settings_is_a_page_off_the_me_tab(server, browser, shots):
     phone.get_by_text('Edit Profile').wait_for()
 
 
+def test_the_chat_list_is_kept_and_only_sent_again_when_it_changed(server, browser, shots):
+    create_user('ned', screenname='Ned')
+    create_room('garden', 'ned', members=['ned'])
+    page = new_page(browser)
+    shots.append(page)
+    lists = []  # what the server answered to get_rooms, frame by frame
+    page.on(
+        'websocket',
+        lambda ws: ws.on(
+            'framereceived',
+            lambda frame: lists.append(frame) if isinstance(frame, str) and 'rooms_list' in frame else None,
+        ),
+    )
+    log_in(page, 'ned')
+    page.get_by_text('garden', exact=True).wait_for()
+    deadline = time.time() + 5  # saved a moment after it last changed
+    while 'chat-list:ned' not in page.evaluate('Object.keys(localStorage)') and time.time() < deadline:
+        page.wait_for_timeout(200)
+    assert '"unchanged"' not in lists[0]
+
+    lists.clear()
+    page.reload()
+    page.get_by_text('garden', exact=True).wait_for()
+    deadline = time.time() + 10
+    while not lists and time.time() < deadline:
+        page.wait_for_timeout(200)
+    assert '"unchanged":true' in lists[0].replace(' ', '')  # the list held was still the list
+
+
 def test_links_new_messages_drafts_and_pins(server, browser, shots):
     create_user('lea', screenname='Lea')
     create_user('max', screenname='Max')
