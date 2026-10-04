@@ -11,3 +11,4 @@ extract_group.py
 .venv/
 .pytest_cache/
 e2e-failures/
+.coverage

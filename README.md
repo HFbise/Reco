@@ -6,10 +6,10 @@ Socket.IO backend handles realtime traffic, and Postgres stores the data.
 
 **Live demo:** https://chat-5wg8.onrender.com. Click **"Take a look first"** to open a
 read-only demo room without an account; the **Match** tab shows the matching screen
-too (starting a match needs an account, since it pairs you with real people). The
-free instance sleeps when idle, so the first load can take up to a minute.
+too (starting a match needs an account, since it pairs you with real people). It runs
+on a small free instance, so the first load can take a few seconds.
 
-![Desktop: a group room with a voice channel going and an @mention](docs/screenshots/desktop-room.png)
+![Desktop: a group room with a voice channel going, a pinned message, new messages since your last visit, a link and an @mention](docs/screenshots/desktop-room.png)
 
 | Random match (desktop) | Random match (phone) | Chats with DM previews (phone) |
 |---|---|---|
@@ -113,8 +113,9 @@ free instance sleeps when idle, so the first load can take up to a minute.
   voice events are rate-limited, an account's login locks after repeated wrong
   passwords, and a session in use is renewed daily instead of expiring.
 - **Moderation panel** (`/admin`): users (reset password, rename, suspend for a while
-  or for good, lift a login lock, delete), rooms (kick, text and voice restrictions, recall), reports
-  with the reported message or match transcript, feedback, and TURN relay usage. A small script on the coturn host
+  or for good, lift a login lock, delete), rooms (kick, text and voice restrictions,
+  recall), reports with the reported message or match transcript, feedback, current
+  login locks, photo storage, and TURN relay usage. A small script on the coturn host
   (`deploy/turn/`) reads coturn's log every minute, keeps only signed-in relay
   sessions (start, end, traffic) and a count of STUN probes, and posts them to the
   server signed with the TURN shared secret.
@@ -174,6 +175,13 @@ flowchart LR
   acknowledgement (`{ok, id}` or `{ok: false, code}`) and the broadcast carries the
   sender's client id, so the client can show a message before the server has it and
   resend it safely.
+- **Evidence stays as it was.** A report keeps the text of the reported message at that
+  moment, and a match transcript can't be edited or recalled by its sender, so editing
+  or deleting something after it's reported changes nothing for the moderators. No room
+  can be named like a transcript (`match:<id>`).
+- **Limits are keyed on what a client can't change.** Wrong passwords lock the account;
+  limits per address (the first `X-Forwarded-For` hop, which a client can fake) are
+  only a second, softer layer, and failed admin sign-ins have an overall cap too.
 - **Replies are codes, not strings.** For example, `fail('join', 'wrong_password')`.
   The client's i18n layer turns them into text, and a test checks that every server
   code has a translation.
@@ -261,16 +269,18 @@ npm run typecheck && npm run lint && npm test     # 49 frontend unit tests
 ```
 
 The backend tests start a disposable Postgres (via `pgserver`) and drive the real
-Socket.IO server with test clients; they cover 88% of the backend's lines. The
+Socket.IO server with test clients; they cover 90% of the backend's lines. The
 end-to-end tests serve the production web build (`cd app && npx expo export -p web`
 first) and use Playwright to cover flows such as:
 
 - two browsers exchanging messages live, and messages showing right after a reload
 - a message that wasn't delivered, sent again with a tap
-- @mentioning someone, and their list saying so
+- @mentioning someone (and @everyone), and their list saying so
+- links, pinned messages, a draft waiting in its chat, "New messages" on return
 - a profile card opened from a message, taking a nickname
-- voice: mute, deafen, leave and rejoin, coming back after the connection drops, and
-  an admin removing someone
+- reporting a message, and a stranger who has already left
+- voice: mute, deafen, leave and rejoin, coming back after the connection drops, an
+  admin removing someone, and sharing a screen (with your own preview)
 - the guest demo staying read-only
 - two strangers matching, chatting and both choosing to keep in touch
 
@@ -312,9 +322,10 @@ Render builds with `./build.sh` (backend dependencies, then the web app into
 `app/dist`, which is not committed) and runs `gunicorn wsgi:app`, with
 `gunicorn.conf.py` supplying the settings. CI runs the same production build on
 every push, so a change that wouldn't build never reaches the host.
-`wsgi.py` runs migrations on boot. Flask serves the Expo web build from `app/dist`,
-so the app and the API share one origin. `/health` checks the database for Render's health
-check.
+`wsgi.py` runs migrations on boot and starts an hourly cleanup (expired match
+transcripts, photos nobody can see). Flask serves the Expo web build from `app/dist`,
+so the app and the API share one origin. `/health` checks the database for Render's
+health check. Changes reach `main` through pull requests that CI must pass first.
 
 ## Trade-offs and what I'd change at scale
 
@@ -339,6 +350,20 @@ check.
   exposing IP addresses to anonymous partners.
 - **Retention.** Match transcripts exist only so reports can be reviewed. A
   background job deletes them after 7 days.
+
+## Before a public launch
+
+Reco is complete as a portfolio project. These are left out on purpose, and would
+come first if it opened to the public:
+
+- **Email**: an own domain, email verification and password reset by email, instead
+  of security questions.
+- **Terms and safety**: terms of service, a full privacy policy and an age gate, and
+  automated moderation of uploaded images, which stranger matching with photos needs.
+- **Operations**: a staging environment, tested database backups and restores, and a
+  second TURN server.
+- **Scale**: the steps in the trade-offs above (Redis and several workers, an SFU,
+  object storage), once real traffic asks for them.
 
 ## License
 
