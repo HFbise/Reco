@@ -71,6 +71,18 @@ def reset_login_attempts(username: str):
     login_attempts.pop(username, None)
 
 
+def login_locks() -> list[dict]:
+    """Every lock in force now ({key, until, seconds}), the one ending last first: for the admin
+    panel, which can lift them (reset_login_attempts)."""
+    now = time.time()
+    locks = [
+        {'key': key, 'until': d['until'], 'seconds': int(d['until'] - now)}
+        for key, d in list(login_attempts.items())
+        if d.get('until', 0) > now
+    ]
+    return sorted(locks, key=lambda lock: -lock['until'])
+
+
 def client_ip() -> str:
     """The visitor's address, as Render's proxy reports it (the first X-Forwarded-For hop). A
     client can put its own value there, so limits keyed on it only slow down casual abuse;

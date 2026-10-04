@@ -16,11 +16,15 @@
           <td>{{ r.screenname or '' }}</td>
           <td class="muted">{{ r.bio or '' }}</td>
           <td class="nowrap">
+            {% if r.locked %}<span class="tag tag-blue">登录已锁定</span>{% endif %}
             {% if r.banned %}<span class="tag tag-red" title="{{ r.suspend_reason or '' }}">永久封禁</span>
             {% elif r.suspended %}<span class="tag tag-red" title="{{ r.suspend_reason or '' }}">封禁至 {{ r.suspended_until.strftime('%Y-%m-%d') }}</span>
             {% endif %}
           </td>
           <td class="nowrap">
+            {% if r.locked %}
+              {{ post_button(url_for('admin.clear_lock'), '解除锁定', fields={'username': r.username}, next=request.full_path) }}
+            {% endif %}
             {% if r.suspended %}
               {{ post_button(url_for('admin.unsuspend_user', username=r.username), '解封', next=request.full_path) }}
             {% else %}

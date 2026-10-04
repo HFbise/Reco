@@ -113,7 +113,7 @@ free instance sleeps when idle, so the first load can take up to a minute.
   voice events are rate-limited, an account's login locks after repeated wrong
   passwords, and a session in use is renewed daily instead of expiring.
 - **Moderation panel** (`/admin`): users (reset password, rename, suspend for a while
-  or for good, delete), rooms (kick, text and voice restrictions, recall), reports
+  or for good, lift a login lock, delete), rooms (kick, text and voice restrictions, recall), reports
   with the reported message or match transcript, feedback, and TURN relay usage. A small script on the coturn host
   (`deploy/turn/`) reads coturn's log every minute, keeps only signed-in relay
   sessions (start, end, traffic) and a count of STUN probes, and posts them to the
@@ -253,7 +253,7 @@ The schema is created and migrated automatically on startup.
 ```bash
 pip install -r requirements-dev.txt
 python -m playwright install chromium
-pytest                       # 331 backend tests + 47 browser end-to-end tests
+pytest                       # 333 backend tests + 47 browser end-to-end tests
 pytest --ignore=tests/test_e2e_web.py --cov=server    # backend line coverage
 
 cd app

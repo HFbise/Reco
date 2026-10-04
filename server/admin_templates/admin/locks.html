@@ -1,0 +1,23 @@
+{% extends 'admin/base.html' %}
+{% from 'admin/macros.html' import post_button, empty_row, duration %}
+{% block body %}
+  <h2>登录锁定 <span class="count">共 {{ rows|length }} 条</span>
+    {% if rows %}{{ post_button(url_for('admin.clear_lock'), '全部解除', confirm='解除全部锁定？') }}{% endif %}
+  </h2>
+  <p class="muted">密码或安全问题答错太多次时会临时锁定，到时间自动解除。锁定只存在内存里，服务重启后也会清空。后台自己被全局锁定时无法从这里解除，只能等 15 分钟或重启服务。</p>
+  <div class="card">
+    <table>
+      <tr><th>类型</th><th>对象</th><th>剩余</th><th></th></tr>
+      {% for r in rows %}
+        <tr>
+          <td>{{ r.kind }}</td>
+          <td class="mono">{{ r.who }}</td>
+          <td class="mono">{{ duration(r.seconds) }}</td>
+          <td>{{ post_button(url_for('admin.clear_lock'), '解除', fields={'key': r.key}) }}</td>
+        </tr>
+      {% else %}
+        {{ empty_row(4, '当前没有锁定') }}
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}
