@@ -21,7 +21,15 @@ import turn_usage
 from auth_session import end_sessions
 from db import get_db
 from handlers import match as match_handlers
-from state import LOBBY, check_login_rate, client_ip, online_users, record_login_fail, reset_login_attempts
+from state import (
+    LOBBY,
+    check_login_rate,
+    client_ip,
+    login_locks,
+    online_users,
+    record_login_fail,
+    reset_login_attempts,
+)
 from utils import hash_password
 
 log = logging.getLogger(__name__)
@@ -214,6 +222,58 @@ def turn():
     )
 
 
+# ── login locks ───────────────────────────────────────────────
+
+# How each kind of lock key reads in the panel (see handlers/auth.py and login() above)
+LOCK_KINDS = [
+    ('login-ip:', '登录（地址）'),
+    ('reset-ip:', '找回密码（地址）'),
+    ('reset:', '找回密码（账号）'),
+    ('admin-login:', '后台登录（地址）'),
+]
+
+
+def _describe_lock(key: str) -> tuple[str, str]:
+    """(kind, who) for a lock key: an account's own lock is just its username."""
+    if key == ADMIN_ALL:
+        return '后台登录（全部）', '所有地址'
+    for prefix, label in LOCK_KINDS:
+        if key.startswith(prefix):
+            return label, key[len(prefix) :]
+    return '登录（账号）', key
+
+
+def _user_lock_keys(username: str) -> list[str]:
+    return [username, f'reset:{username}']
+
+
+@admin_bp.route('/locks')
+@login_required
+def locks():
+    """Who is locked out of signing in right now (wrong passwords), and lifting it."""
+    rows = [{**lock, **dict(zip(('kind', 'who'), _describe_lock(lock['key']), strict=True))} for lock in login_locks()]
+    return render_template('admin/locks.html', section='locks', rows=rows)
+
+
+@admin_bp.route('/locks/clear', methods=['POST'])
+@login_required
+def clear_lock():
+    """One lock (`key`), an account's locks (`username`), or all of them (neither)."""
+    key, username = request.form.get('key'), (request.form.get('username') or '').strip()
+    if key:
+        reset_login_attempts(key)
+        done = '已解除这条锁定'
+    elif username:
+        for k in _user_lock_keys(username):
+            reset_login_attempts(k)
+        done = f'已解除 {username} 的登录锁定'
+    else:
+        for lock in login_locks():
+            reset_login_attempts(lock['key'])
+        done = '已解除全部锁定'
+    return _back(url_for('admin.locks'), ok=done)
+
+
 # ── users ─────────────────────────────────────────────────────
 
 
@@ -234,7 +294,9 @@ def users():
         )
         rows = cur.fetchall()
     now = datetime.now(UTC)
+    locked = {lock['key'] for lock in login_locks()}
     for r in rows:
+        r['locked'] = any(k in locked for k in _user_lock_keys(r['username']))
         until = r['suspended_until']
         r['suspended'] = bool(until) and until > now
         r['banned'] = bool(until) and until >= moderation.PERMANENT

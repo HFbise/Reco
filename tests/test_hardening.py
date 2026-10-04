@@ -257,3 +257,39 @@ def test_only_a_message_you_can_see_by_the_person_named_can_be_reported():
     assert events(eve, 'report_result')[0]['code'] == 'report_failed'
     assert events(bob, 'report_result')[0]['code'] == 'report_failed'
     assert query('SELECT * FROM reports') == []
+
+
+# ── the admin lifts a lock ────────────────────────────────────
+
+
+def test_the_admin_sees_and_lifts_an_account_lock():
+    create_user('alice')
+    client = anon_client()
+    for _ in range(10):
+        client.emit('login', {'username': 'alice', 'password': 'wrong'})
+    client.emit('login', {'username': 'alice', 'password': 'secret123'})
+    assert events(client, 'login_result')[-1]['code'] == 'too_many_attempts'
+
+    web = admin()
+    assert '登录已锁定' in web.get('/admin/users?q=alice').get_data(as_text=True)
+    page = web.get('/admin/locks').get_data(as_text=True)
+    assert '登录（账号）' in page and 'alice' in page
+    web.post('/admin/locks/clear', data={'username': 'alice'})
+    login('alice')
+    assert '当前没有锁定' in web.get('/admin/locks').get_data(as_text=True)
+
+
+def test_one_lock_or_all_of_them_can_be_lifted():
+    create_user('bob')
+    client = anon_client()
+    for _ in range(10):  # locks bob's account
+        client.emit('login', {'username': 'bob', 'password': 'wrong'})
+    for i in range(20):  # and, with those, 30 failures from this address
+        client.emit('login', {'username': f'guess{i}', 'password': 'x'})
+    web = admin()
+    page = web.get('/admin/locks').get_data(as_text=True)
+    assert '登录（地址）' in page and '共 2 条' in page
+    web.post('/admin/locks/clear', data={'key': 'bob'})
+    assert '共 1 条' in web.get('/admin/locks').get_data(as_text=True)
+    web.post('/admin/locks/clear', data={})
+    assert '当前没有锁定' in web.get('/admin/locks').get_data(as_text=True)
