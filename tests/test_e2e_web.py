@@ -62,8 +62,13 @@ def browser():
         b.close()
 
 
+# Every browser context a test opens, closed when the test ends (see `shots`)
+_contexts = []
+
+
 def new_page(browser, locale='en-US'):
     context = browser.new_context(locale=locale, viewport={'width': 1280, 'height': 800})
+    _contexts.append(context)
     return context.new_page()
 
 
@@ -89,13 +94,20 @@ def demo_room():
 
 @pytest.fixture
 def shots(request):
-    """Screenshots of every page a test opened, kept when it fails (e2e-failures/)."""
+    """Screenshots of every page a test opened, kept when it fails (e2e-failures/). Then the
+    test's pages are closed: each one holds a socket to the dev server, and dozens left open
+    by earlier tests made a later one's page time out loading."""
     pages = []
     yield pages
     if request.node.rep_call.failed if hasattr(request.node, 'rep_call') else False:
         os.makedirs(os.path.join(ROOT, 'e2e-failures'), exist_ok=True)
         for i, page in enumerate(pages):
             page.screenshot(path=os.path.join(ROOT, 'e2e-failures', f'{request.node.name}-{i}.png'))
+    while _contexts:
+        try:
+            _contexts.pop().close()
+        except Exception:
+            pass  # already closed with its browser
 
 
 def test_guest_demo_is_read_only(server, browser, demo_room, shots):
@@ -339,6 +351,7 @@ def test_long_messages_wrap_on_a_phone(server, browser, demo_room, shots):
     context = browser.new_context(
         viewport={'width': 320, 'height': 640}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     page.goto(URL)
@@ -366,6 +379,7 @@ def test_back_on_a_phone_closes_the_chat_instead_of_leaving(server, browser, sho
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     log_in(page, 'frank')
@@ -401,6 +415,7 @@ def test_swiping_right_in_a_chat_goes_back_to_the_list(server, browser, shots):
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     page = context.new_page()
     shots.append(page)
     log_in(page, 'hana')
@@ -449,6 +464,7 @@ def _phone(browser):
     context = browser.new_context(
         viewport={'width': 390, 'height': 780}, has_touch=True, is_mobile=True, locale='en-US'
     )
+    _contexts.append(context)
     return context.new_page()
 
 
